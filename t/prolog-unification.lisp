@@ -1,0 +1,13 @@
+(in-package #:cl-tty-kit/test)
+
+(defun test-prolog-unification ()
+    (flet ((unified (left right)
+             (let ((bindings (tty-prolog:unify left right)))
+               (and (not (eq bindings tty-prolog:+fail+))
+                   (tty-prolog:subst-bindings bindings left)))))
+    (is-equal '(a b) (unified '(?x b) '(a ?y)))
+    (is-equal '(a a) (unified '(?x ?x) '(a a)))
+    (is-fail (tty-prolog:unify '(?x ?x) '(a b))
+             "distinct constants cannot bind one variable twice")
+    (is-fail (tty-prolog:unify '?x '(f ?x))
+             "the occurs check rejects an infinite term")))
