@@ -1,0 +1,26 @@
+# Compiled Lisp output
+*.fasl
+*.fas
+*.lx64fsl
+*.lx32fsl
+*.dx64fsl
+*.dx32fsl
+*.abcl
+
+# ASDF / build caches
+.cache/
+system-index.txt
+
+# SBCL sb-cover HTML output (regenerate with scripts/coverage.lisp)
+/coverage/
+
+# Saved cores and executables
+*.core
+cl-tty-kit
+!cl-tty-kit.asd
+
+# Editor and OS noise
+*~
+\#*\#
+.\#*
+.DS_Store
