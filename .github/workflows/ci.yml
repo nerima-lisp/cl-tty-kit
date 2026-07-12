@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SBCL (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y sbcl
+
+      - name: Install SBCL (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sbcl
+
+      - name: Report SBCL version
+        run: sbcl --version
+
+      - name: Run full verification gate
+        run: sbcl --script scripts/verify.lisp
+
+      - name: Check diff hygiene
+        run: git diff --check
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SBCL
+        run: sudo apt-get update && sudo apt-get install -y sbcl
+
+      - name: Generate coverage report
+        run: sbcl --script scripts/coverage.lisp
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: error
