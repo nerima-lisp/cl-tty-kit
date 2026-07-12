@@ -8,7 +8,6 @@ trim_trailing_whitespace = true
 
 [*.{lisp,asd}]
 indent_style = space
-indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false
