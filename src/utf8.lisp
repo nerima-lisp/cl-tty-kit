@@ -99,3 +99,43 @@
 (defun %utf8-octets-to-string (vector)
   (with-output-to-string (stream)
     (%utf8-write-decoded-octets vector stream)))
+
+(defun %octet-input-p (input)
+  "Return true when INPUT should be decoded as UTF-8 octets, not characters.
+Both `(unsigned-byte 8)` vectors and general vectors whose elements are integers
+(such as the literal #(97 98 99)) count as octet input; strings and character
+vectors do not."
+  (and (vectorp input)
+       (not (stringp input))
+       (or (subtypep (array-element-type input) '(unsigned-byte 8))
+           (and (plusp (length input))
+                (integerp (aref input 0))))))
+
+(defun %utf8-incomplete-tail-start (vector)
+  "Return the start index of an incomplete trailing UTF-8 multibyte sequence in
+VECTOR, or NIL when VECTOR ends on a character boundary. Only a genuinely
+truncated final sequence is reported; complete or invalid bytes end the scan so
+the caller decodes (and validates) them normally."
+  (let ((length (length vector)))
+    (loop for index from (1- length) downto (max 0 (- length 3))
+          for octet = (aref vector index)
+          do (cond
+               ((< octet #x80)
+                (return nil))
+               ((%utf8-continuation-octet-p octet))
+               (t
+                (let ((rule (%utf8-leading-byte-rule octet)))
+                  (return
+                    (when (and rule (< (- length index) (third rule)))
+                      index)))))
+          finally (return nil))))
+
+(defun %utf8-decode-prefix (vector)
+  "Decode the complete UTF-8 prefix of octet VECTOR.
+Return two values: the decoded string and a fresh octet vector holding any
+incomplete trailing multibyte sequence (empty when VECTOR ends on a boundary).
+Genuinely invalid octets in the prefix still signal INVALID-UTF8-SEQUENCE."
+  (let* ((tail (%utf8-incomplete-tail-start vector))
+         (boundary (or tail (length vector))))
+    (values (%utf8-octets-to-string (subseq vector 0 boundary))
+            (subseq vector boundary))))

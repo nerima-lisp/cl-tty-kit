@@ -33,3 +33,6 @@
 
 (defun %solve-parent (database goal)
   (tty-prolog:solutions database goal '?p))
+
+(defun %solve-result (database goal)
+  (tty-prolog:solutions database goal '?result))

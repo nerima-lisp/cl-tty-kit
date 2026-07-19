@@ -145,7 +145,7 @@
               (let ((output
               (%capture-terminal-session-output ()
                         (handler-case
-                            (is nil)
+                            (error "boom")
                           (error ()
                             (setf failed t))))))
                 (is failed)
@@ -166,7 +166,7 @@
               (%capture-terminal-session-output (:bracketed-paste t
                                                          :keyboard-enhancements 11)
                         (handler-case
-                            (is nil)
+                            (error "boom")
                           (error ()
                             (setf failed t))))))
                 (is failed)

@@ -55,16 +55,16 @@
 
 (defun %emit-screen-row (screen y emit)
   (loop for x from 0 below (screen-width screen) do
-    (emit `(:cell ,(screen-cell screen x y))))
+    (funcall emit `(:cell ,(screen-cell screen x y))))
   (unless (%screen-last-row-p screen y)
-    (emit '(:newline))))
+    (funcall emit '(:newline))))
 
 (defun %screen-render-commands (screen)
   (with-render-commands (emit finish)
     (emit `(:string ,(ansi-clear-screen)))
     (emit '(:cursor 1 1))
     (loop for y from 0 below (screen-height screen) do
-      (%emit-screen-row screen y emit))
+      (%emit-screen-row screen y #'emit))
     (finish)))
 
 (defun %cursor-render-commands (cursor)

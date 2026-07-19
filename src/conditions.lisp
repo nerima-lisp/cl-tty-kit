@@ -11,7 +11,7 @@
       `(define-tty-kit-condition ,name ,superclasses
          ,slots
          ,documentation
-         ,@report-spec)
+         (:report ,(second report-spec)))
       (destructuring-bind (format-string &rest format-args) report-spec
         `(define-tty-kit-condition ,name ,superclasses
            ,slots
@@ -97,6 +97,64 @@
   "PTY operation ~A failed: ~A."
   (pty-operation-failed-operation condition)
   (pty-operation-failed-reason condition))
+
+(dolist (documentation-entry
+         '((unsupported-feature-feature
+            "Return the feature keyword that is unavailable in this implementation.")
+           (invalid-utf8-sequence-position
+            "Return the octet position within the input where UTF-8 decoding failed.")
+           (invalid-utf8-sequence-octet
+            "Return the offending octet, or NIL when the failure has no single octet.")
+           (invalid-utf8-sequence-reason
+            "Return the keyword describing why the UTF-8 sequence was rejected.")
+           (screen-index-out-of-bounds-screen
+            "Return the screen whose bounds the offending coordinate exceeded.")
+           (screen-index-out-of-bounds-x
+            "Return the X coordinate that fell outside the screen bounds.")
+           (screen-index-out-of-bounds-y
+            "Return the Y coordinate that fell outside the screen bounds.")
+           (screen-index-out-of-bounds-width
+            "Return the width of the screen that reported the out-of-bounds access.")
+           (screen-index-out-of-bounds-height
+            "Return the height of the screen that reported the out-of-bounds access.")
+           (screen-dimensions-invalid-width
+            "Return the width value that failed screen-dimension validation.")
+           (screen-dimensions-invalid-height
+            "Return the height value that failed screen-dimension validation.")
+           (cursor-parameter-invalid-parameter
+            "Return the name of the cursor parameter that was rejected.")
+           (cursor-parameter-invalid-value
+            "Return the rejected value supplied for the cursor parameter.")
+           (cursor-parameter-invalid-expected
+            "Return a description of the contract the cursor parameter must satisfy.")
+           (unsupported-code-point-code-point
+            "Return the Unicode code point that cannot be represented.")
+           (raw-mode-operation-failed-operation
+            "Return the raw-mode operation keyword that failed.")
+           (raw-mode-operation-failed-fd
+            "Return the file descriptor whose raw-mode operation failed.")
+           (raw-mode-operation-failed-reason
+            "Return the underlying condition that caused the raw-mode failure.")
+           (pty-operation-failed-operation
+            "Return the PTY operation keyword that failed.")
+           (pty-operation-failed-pty
+            "Return the PTY object involved in the failure, or NIL for spawn failures.")
+           (pty-operation-failed-reason
+            "Return the underlying condition that caused the PTY failure.")))
+  (destructuring-bind (reader documentation) documentation-entry
+    (setf (documentation reader 'function) documentation)))
+
+;; Internal (unexported) guard condition: it inherits from the exported
+;; TTY-KIT-ERROR so callers can catch it by base type, but it is not part of the
+;; documented public symbol set.
+(define-formatted-tty-kit-condition input-buffer-exceeded (tty-kit-error)
+  ((limit :initarg :limit :reader input-buffer-exceeded-limit)
+   (size :initarg :size :reader input-buffer-exceeded-size))
+  "Raised when an input decoder's buffered, still-undecoded tail grows past its
+configured limit, which bounds memory use when decoding untrusted input."
+  "Input decoder buffer of ~D units exceeds the ~D unit limit."
+  (input-buffer-exceeded-size condition)
+  (input-buffer-exceeded-limit condition))
 
 (defun %signal-invalid-utf8-sequence (position octet reason)
   (error 'invalid-utf8-sequence

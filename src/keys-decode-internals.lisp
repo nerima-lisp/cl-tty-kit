@@ -27,11 +27,29 @@
 (defun %kitty-function-key (code)
   (%lookup-event-code code +kitty-function-keys+))
 
-(defun %plain-key-event (ch)
-  (values (%key-event :character ch nil) 1))
+(defun %plain-key-event (ch &optional modifiers)
+  "Decode a single non-escape character CH into a KEY-EVENT plus consumed count.
+Control bytes map to their named special keys (:ENTER, :TAB, :BACKSPACE, ...) or
+Ctrl-letter events (:CONTROL-A ... :CONTROL-Z); everything else becomes a
+:CHARACTER event. MODIFIERS are attached to the resulting event."
+  (let* ((code (char-code ch))
+         (special (or (%lookup-event-code code +control-key-codes+)
+                      (%lookup-event-code code +control-letter-events+))))
+    (if special
+        (values (%key-event :special special modifiers) 1)
+        (values (%key-event :character ch modifiers) 1))))
 
 (defun %esc-o-event (final)
   (%lookup-event-code final +esc-o-events+ :test #'char=))
+
+(defun %csi-final-index (string start limit)
+  "Return the index of the CSI final byte (0x40-0x7E) at or after START.
+Parameter and intermediate bytes precede it; NIL means the CSI sequence has no
+terminating byte within [START, LIMIT), i.e. it is still incomplete."
+  (loop for index from start below limit
+        when (<= #x40 (char-code (aref string index)) #x7E)
+          do (return index)
+        finally (return nil)))
 
 (defun %parse-esc-prefixed (string start)
   (let ((limit (length string)))
@@ -39,15 +57,15 @@
       (let ((prefix (aref string (1+ start))))
         (cond
           ((char= prefix #\[)
-           (let ((final-index (1- limit)))
-             (when (<= (+ start 2) final-index)
+           (let ((final-index (%csi-final-index string (+ start 2) limit)))
+             (when final-index
                (let ((final (aref string final-index)))
                  (handler-case
                      (multiple-value-bind (code modifier validp)
                          (%parse-csi-body string (+ start 2) final-index)
                        (when validp
                          (values (%decode-csi-event code modifier final)
-                                 limit)))
+                                 (- (1+ final-index) start))))
                    (unsupported-code-point ()
                      (values nil nil)))))))
           ((char= prefix #\O)
@@ -57,20 +75,27 @@
                  (let ((code (%esc-o-event final)))
                    (when code
                      (values (%key-event :special code nil)
-                             (1+ final-index))))))))
+                             (- (1+ final-index) start))))))))
           (t
-           (%plain-key-event prefix)))))))
+           (values (nth-value 0 (%plain-key-event prefix '(:alt)))
+                   2)))))))
 
 (defun %csi-u-event (code modifier)
+  ;; An empty CSI-u parameter body (e.g. the sequence `ESC [ u`) yields a NIL
+  ;; CODE. Return NIL so the caller falls back to ordinary decoding instead of
+  ;; letting a comparison against NIL raise an uncaught TYPE-ERROR on untrusted
+  ;; input.
   (let* ((modifiers (%csi-modifiers modifier))
-         (special (%kitty-function-key code)))
+         (special (and (integerp code) (%kitty-function-key code))))
     (cond
       (special
        (%key-event :special special modifiers))
-      ((<= 0 code #x10FFFF)
+      ((and (integerp code) (<= 0 code #x10FFFF))
        (%key-event :character (%code-point-character code) modifiers))
+      ((integerp code)
+       (error 'unsupported-code-point :code-point code))
       (t
-       (error 'unsupported-code-point :code-point code)))))
+       nil))))
 
 (defun %parse-csi-integer (string start end)
   (when (< start end)

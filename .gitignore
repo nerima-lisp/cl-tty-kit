@@ -11,6 +11,10 @@
 .cache/
 system-index.txt
 
+# clweb tangle/weave output for the literate contrib (regenerate from *.clw)
+/contrib/literate/*.lisp
+/contrib/literate/*.tex
+
 # SBCL sb-cover HTML output (regenerate with scripts/coverage.lisp)
 /coverage/
 

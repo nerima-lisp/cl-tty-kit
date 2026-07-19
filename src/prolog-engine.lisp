@@ -128,6 +128,11 @@
                                        fail)))))
 
 (defun %prove (db goal bindings state succeed fail)
+  ;; A non-compound goal term -- an unbound variable, number, or bare atom that
+  ;; can reach here through call/1, findall/3, or a variable goal in and/or -- is
+  ;; not provable. Fail gracefully instead of crashing in GOAL-RELATION.
+  (when (not (consp goal))
+    (return-from %prove (funcall fail)))
   (let* ((resolved-goal (subst-bindings bindings goal))
          (goal-key (%normalized-term resolved-goal))
          (primitive (%relation-primitive db (goal-relation goal))))

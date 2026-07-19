@@ -11,7 +11,7 @@
     (vector (subseq input start end))))
 
 (defun %event-signatures-of (events)
-  (mapcar #'%event-signature events))
+  (mapcar #'%key-event-signature events))
 
 (defun %chunk-eof-flags (chunks eof)
   (let ((flags (copy-list eof)))
@@ -70,7 +70,7 @@
   (let* ((example (symbol-function
                    (load-example-symbol example-file)))
          (events (funcall example)))
-    (is (equal (mapcar #'%event-signature events) expected)
+    (is (equal (mapcar #'%key-event-signature events) expected)
         message)))
 
 (defun %decode-input-chunks (chunks &key collect-bracketed-paste eof)
@@ -137,7 +137,12 @@
   (let ((decoder (make-input-decoder)))
     (is (null (decode-input-chunk decoder "")))
     (is (null (decode-input-chunk decoder #())))
-    (is (null (flush-input-decoder decoder)))))
+    (is (null (flush-input-decoder decoder))))
+  (let ((decoder (make-input-decoder :collect-bracketed-paste t :max-pending 8)))
+    (decode-input-chunk decoder (concatenate 'string (string #\Esc) "[200~"))
+    (signals (tty-kit-error condition)
+        (decode-input-chunk decoder "0123456789")
+      (declare (ignore condition)))))
 
 (defun %test-streaming-input-cases ()
   (do-test-case-bind (case +streaming-input-cases+

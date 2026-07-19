@@ -36,10 +36,10 @@
               next-x))))
 
 (defun %emit-diff-cursor (emit x y)
-  (emit `(:cursor ,(1+ y) ,(1+ x))))
+  (funcall emit `(:cursor ,(1+ y) ,(1+ x))))
 
 (defun %emit-diff-clear-line (emit)
-  (emit '(:clear-line 0)))
+  (funcall emit '(:clear-line 0)))
 
 (defun %emit-diff-run (screen previous x y emit)
   (multiple-value-bind (run-string next-x)
@@ -47,13 +47,13 @@
     (unless (> next-x x)
       (error "Diff run did not advance at (~D,~D)" x y))
     (%emit-diff-cursor emit x y)
-    (emit `(:string ,run-string))
+    (funcall emit `(:string ,run-string))
     next-x))
 
 (defun %diff-render-commands (screen previous)
   (with-render-commands (emit finish)
     (do ((y 0 (1+ y)))
-        ((>= y (screen-height screen)) (finish))
+        ((>= y (screen-height screen)))
       (do ((x 0))
           ((>= x (screen-width screen)))
         (let ((current (screen-cell screen x y))
@@ -62,11 +62,11 @@
             ((%cell-equal-p current old)
              (incf x))
             ((%clear-to-end-of-line-p screen x y)
-             (%emit-diff-cursor emit x y)
-             (%emit-diff-clear-line emit)
+             (%emit-diff-cursor #'emit x y)
+             (%emit-diff-clear-line #'emit)
              (setf x (screen-width screen)))
             (t
-             (setf x (%emit-diff-run screen previous x y emit)))))))
+             (setf x (%emit-diff-run screen previous x y #'emit)))))))
     (finish)))
 
 (defun %render-command-length (command)

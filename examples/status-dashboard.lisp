@@ -24,7 +24,7 @@
          (cursor-2 (cl-tty-kit:make-cursor :x 22 :y 3))
          (cursor-3 (cl-tty-kit:make-cursor :x 15 :y 4)))
     (cl-tty-kit:screen-write-string frame-3 0 4 "press q to quit")
-    (cl-tty-kit:with-terminal-session-output (stream :stream stream)
+    (cl-tty-kit::with-terminal-session-output (stream :stream stream)
       (write-string (cl-tty-kit:render-frame frame-1 cursor-1) stream)
       (write-string (cl-tty-kit:render-frame-diff frame-2 frame-1 cursor-2) stream)
       (write-string (cl-tty-kit:render-frame-diff frame-3 frame-2 cursor-3) stream))))

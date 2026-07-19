@@ -19,6 +19,14 @@
     (merge-pathnames #P"../"
                      (uiop:pathname-directory-pathname *load-truename*)))))
 
+;; ASDF has no reason to know where this project lives unless something tells
+;; it, so callers used to have to export CL_SOURCE_REGISTRY before running any
+;; script. Register the project tree here instead, so `sbcl --script
+;; scripts/verify.lisp` (and test.lisp, coverage.lisp) work from a plain
+;; checkout with no environment setup.
+(asdf/source-registry:initialize-source-registry
+ `(:source-registry (:tree ,(namestring *project-root*)) :inherit-configuration))
+
 (defparameter *support-source-files*
   '("scripts/example-files.lisp"))
 

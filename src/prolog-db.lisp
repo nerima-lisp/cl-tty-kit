@@ -11,8 +11,11 @@
   (relations (make-hash-table :test 'eq) :type hash-table))
 
 (defstruct (relation-entry (:constructor %make-relation-entry) (:copier nil))
-  "A relation entry keeps clauses and an optional primitive implementation apart."
+  "A relation entry keeps clauses and an optional primitive implementation apart.
+CLAUSES-TAIL points at the last clause cons so ADD-CLAUSE appends in O(1) while
+preserving definition order."
   (clauses '() :type list)
+  (clauses-tail nil :type list)
   (primitive nil))
 
 (defun clause-head (clause) (first clause))
@@ -34,12 +37,14 @@
          (relation (goal-relation (clause-head stored-clause))))
     (unless (and (symbolp relation) (not (variable-p relation)))
       (error "Clause head must start with a relation symbol: ~S" clause))
-    (let ((entry (%ensure-relation-entry db relation)))
+    (let ((entry (%ensure-relation-entry db relation))
+          (cell (list stored-clause)))
       (when (relation-entry-primitive entry)
         (error "Relation ~S is a primitive and cannot take clauses." relation))
-      (setf (relation-entry-clauses entry)
-            (append (relation-entry-clauses entry)
-                    (list stored-clause))))
+      (if (relation-entry-clauses-tail entry)
+          (setf (cdr (relation-entry-clauses-tail entry)) cell)
+          (setf (relation-entry-clauses entry) cell))
+      (setf (relation-entry-clauses-tail entry) cell))
     relation))
 
 (defun add-primitive (db relation function)
@@ -57,3 +62,18 @@ branch-local search STATE, a success CONTINUATION, and a failure CONTINUATION."
   "Define a primitive relation with the canonical engine calling convention."
   `(defun ,name (,db ,args ,bindings ,state ,succeed ,fail)
      ,@body))
+
+(defun make-clause-db ()
+  "Create and return a fresh, empty clause database."
+  (%make-clause-db))
+
+(defmacro define-clauses (db &body clauses)
+  "Add each CLAUSE to DB and return DB, evaluated once, for chaining.
+Each CLAUSE is an unquoted (HEAD . BODY) list such as
+  ((parent abraham isaac))
+or
+  ((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b))."
+  (let ((database (gensym "DB")))
+    `(let ((,database ,db))
+       ,@(mapcar (lambda (clause) `(add-clause ,database ',clause)) clauses)
+       ,database)))
