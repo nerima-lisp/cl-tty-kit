@@ -60,3 +60,30 @@ jobs:
           name: coverage-report
           path: coverage/
           if-no-files-found: error
+
+  # Best-effort: exercises contrib/, which pulls Quicklisp plus the
+  # vendor/ git submodules (takeokunn/cl-prolog, takeokunn/cl-weave). Kept
+  # separate from `verify` and allowed to fail so that submodule/network
+  # flakiness never blocks a core merge, per contrib/README.md's policy
+  # that contrib is opt-in and isolated from the core build and CI.
+  contrib:
+    name: contrib (opt-in, best-effort)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install SBCL
+        run: sudo apt-get update && sudo apt-get install -y sbcl
+
+      - name: Install Quicklisp
+        run: |
+          curl -fsSL -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive \
+            --load /tmp/quicklisp.lisp \
+            --eval '(quicklisp-quickstart:install)'
+
+      - name: Run contrib verification
+        run: sbcl --script contrib/verify-contrib.lisp

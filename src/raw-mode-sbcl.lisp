@@ -91,38 +91,40 @@
 #+sbcl
 (defun enable-raw-mode (&optional (fd 0))
   "Enable raw terminal mode on FD and remember the previous settings."
-  (handler-case
-      (let ((existing-state (%raw-mode-state fd)))
-        (when existing-state
-          (incf (getf (cdr existing-state) :depth))
-          (return-from enable-raw-mode t))
-        (let ((termios (funcall (%sb-posix-function "TCGETATTR") fd)))
-          (let ((snapshot (%snapshot-termios termios)))
-            (%set-raw-mode-flags termios)
-            (%set-raw-mode-character-control termios)
-            (funcall *raw-mode-tcsetattr-function*
-                     fd (%sb-posix-value "TCSADRAIN") termios)
-            (%set-raw-mode-state fd snapshot 1)
-            t)))
-    (error (condition)
-      (%signal-raw-mode-operation-failed :enable fd condition))))
+  (%with-raw-mode-states-lock
+    (handler-case
+        (let ((existing-state (%raw-mode-state fd)))
+          (when existing-state
+            (incf (getf (cdr existing-state) :depth))
+            (return-from enable-raw-mode t))
+          (let ((termios (funcall (%sb-posix-function "TCGETATTR") fd)))
+            (let ((snapshot (%snapshot-termios termios)))
+              (%set-raw-mode-flags termios)
+              (%set-raw-mode-character-control termios)
+              (funcall *raw-mode-tcsetattr-function*
+                       fd (%sb-posix-value "TCSADRAIN") termios)
+              (%set-raw-mode-state fd snapshot 1)
+              t)))
+      (error (condition)
+        (%signal-raw-mode-operation-failed :enable fd condition)))))
 
 #+sbcl
 (defun disable-raw-mode (&optional (fd 0))
   "Restore the terminal settings saved by ENABLE-RAW-MODE."
-  (let ((state (%raw-mode-state fd)))
-    (when state
-      (if (> (%raw-mode-state-depth state) 1)
-          (progn
-            (decf (getf (cdr state) :depth))
-            t)
-          (handler-case
-              (progn
-                (let ((termios (funcall (%sb-posix-function "TCGETATTR") fd)))
-                  (%restore-termios termios (%raw-mode-state-snapshot state))
-                  (funcall *raw-mode-tcsetattr-function*
-                           fd (%sb-posix-value "TCSADRAIN") termios))
-                (%remove-raw-mode-state fd)
-                t)
-            (error (condition)
-              (%signal-raw-mode-operation-failed :disable fd condition)))))))
+  (%with-raw-mode-states-lock
+    (let ((state (%raw-mode-state fd)))
+      (when state
+        (if (> (%raw-mode-state-depth state) 1)
+            (progn
+              (decf (getf (cdr state) :depth))
+              t)
+            (handler-case
+                (progn
+                  (let ((termios (funcall (%sb-posix-function "TCGETATTR") fd)))
+                    (%restore-termios termios (%raw-mode-state-snapshot state))
+                    (funcall *raw-mode-tcsetattr-function*
+                             fd (%sb-posix-value "TCSADRAIN") termios))
+                  (%remove-raw-mode-state fd)
+                  t)
+              (error (condition)
+                (%signal-raw-mode-operation-failed :disable fd condition))))))))

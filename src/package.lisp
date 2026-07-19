@@ -1,3 +1,12 @@
+;; cl-tty-kit currently targets SBCL only: the character-width classification
+;; uses SB-UNICODE, UTF-8 transcoding uses SB-EXT, and the raw-mode/PTY layers
+;; use SB-POSIX/SB-EXT. Fail fast with a clear message on other implementations
+;; rather than letting a later file error out on an unknown package. This file
+;; loads before any SBCL-only source, so aborting here stops the build cleanly.
+#-sbcl
+(error "cl-tty-kit currently requires SBCL (it relies on sb-posix, sb-unicode, ~
+and sb-ext). See the \"Compatibility\" section of the README for details.")
+
 (defpackage #:cl-tty-kit/prolog
   (:use #:cl)
   (:nicknames #:tty-prolog)

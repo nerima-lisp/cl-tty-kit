@@ -7,7 +7,12 @@
   :bug-tracker "https://github.com/takeokunn/cl-tty-kit/issues"
   :source-control "git https://github.com/takeokunn/cl-tty-kit.git"
   :version "0.1.0"
-  :depends-on (#:sb-posix)
+  ;; SB-POSIX is only used by the SBCL-specific raw-mode layer (which requires
+  ;; it itself under #+sbcl). Gating the dependency on the feature keeps ASDF
+  ;; from failing dependency resolution with a confusing "system sb-posix not
+  ;; found" on non-SBCL hosts; instead src/package.lisp reports a clear
+  ;; SBCL-required error. See the README "Compatibility" section.
+  :depends-on (#+sbcl #:sb-posix)
   :serial t
   :components ((:file "src/package")
                (:file "src/prolog-bindings")

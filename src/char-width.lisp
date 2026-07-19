@@ -49,6 +49,14 @@ is a binary search instead of a linear scan of the source list.")
 (defun %code-point-width (code)
   (cond
     ((%control-code-point-p code) 0)
+    ;; Below U+0300 (the start of Combining Diacritical Marks) there is no
+    ;; zero-width or wide code point, only Basic Latin/Latin-1/Latin
+    ;; Extended/IPA/spacing-modifier letters and punctuation -- verified
+    ;; against SB-UNICODE:GENERAL-CATEGORY and +WIDE-CODE-POINT-RANGES+,
+    ;; whose lowest range starts at U+1100. Skipping straight to width 1
+    ;; here avoids a GENERAL-CATEGORY table lookup for the common case of
+    ;; writing plain ASCII text.
+    ((< code #x300) 1)
     ((%zero-width-code-point-p code) 0)
     ((%wide-code-point-p code) 2)
     (t 1)))

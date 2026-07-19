@@ -39,10 +39,26 @@ Before tagging a release:
    git diff --check
    ```
 
-4. Review `CHANGELOG.md` and add the release notes under `Unreleased` before
-   cutting the tag.
-5. Confirm that `README.md` still matches the public API and current examples.
-6. Smoke-test the examples on a clean SBCL environment if possible.
+4. Review `CHANGELOG.md`: promote the `Unreleased` section to a dated version
+   heading (for example `## 0.1.0 - 2026-07-20`) and leave a fresh empty
+   `## Unreleased` section on top for the next cycle.
+5. Bump `:version` in `cl-tty-kit.asd` to match the release being cut.
+6. Confirm that `README.md` still matches the public API and current examples.
+7. Smoke-test the examples on a clean SBCL environment if possible.
+8. If contrib/vendor submodules changed, confirm they are pinned to the intended
+   upstream commits (`git submodule status`) before tagging.
+
+## Cutting the tag
+
+Once the checklist passes and the release commit is merged to `main`:
+
+```bash
+git tag -a v0.1.0 -m "cl-tty-kit 0.1.0"
+git push origin v0.1.0
+```
+
+Then create the corresponding GitHub release from that tag, using the matching
+`CHANGELOG.md` section as the release notes.
 
 ## Release notes
 

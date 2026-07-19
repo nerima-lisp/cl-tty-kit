@@ -2,8 +2,15 @@
 
 (defun %cell-equal-p (left right)
   (and (char= (cell-char left) (cell-char right))
-       (equal (%supported-cell-style-codes left)
-              (%supported-cell-style-codes right))))
+       ;; Cell styles are already normalized (see %NORMALIZE-CELL-STYLE), so
+       ;; an EQUAL raw-style comparison answers the common case -- identical
+       ;; or both-blank cells, the bulk of any diff -- without rebuilding
+       ;; each cell's SGR code list. Differing raw styles can still render
+       ;; identically (e.g. two distinct SGR-unsupported keywords both drop
+       ;; out), so fall back to the semantic comparison only then.
+       (or (equal (cell-style left) (cell-style right))
+           (equal (%supported-cell-style-codes left)
+                  (%supported-cell-style-codes right)))))
 
 (defun %render-blank-cell-p (cell)
   (and (char= (cell-char cell) #\Space)
@@ -70,7 +77,14 @@
     (finish)))
 
 (defun %render-command-length (command)
-  (length (%render-command-string command)))
+  ;; Sum each part's length directly instead of concatenating them into a
+  ;; throwaway string via %RENDER-COMMAND-STRING: %PREFERRED-DIFF-COMMANDS
+  ;; calls this once per command in both the full-screen and diff command
+  ;; lists just to pick the smaller one, and the chosen list is rendered for
+  ;; real afterwards -- so the old body paid for a full string build (and,
+  ;; for a screen-sized command list, effectively a whole extra frame of
+  ;; rendering) purely to throw the result away.
+  (reduce #'+ (%render-command-parts command) :key #'length :initial-value 0))
 
 (defun %render-commands-length (commands)
   (loop for command in commands

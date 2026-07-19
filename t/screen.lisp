@@ -176,6 +176,31 @@
         (0 0 #\O :style '(:bold (:fg 33)))
         (1 0 #\K :style '(:bold (:fg 33)))))
 
+    (let ((ideograph (code-char #x65E5)))
+      (let ((wide (make-screen 3 1 :initial-cell #\.)))
+        (screen-write-string wide 0 0 (coerce (list ideograph #\X) 'string))
+        (screen-cells-is wide
+          (0 0 ideograph)
+          (1 0 #\Space)
+          (2 0 #\X)))
+
+      (let ((wide (make-screen 4 1 :initial-cell #\.)))
+        (screen-write-string wide 0 0 (coerce (list #\X ideograph #\Y) 'string))
+        (screen-cells-is wide
+          (0 0 #\X)
+          (1 0 ideograph)
+          (2 0 #\Space)
+          (3 0 #\Y)))
+
+      (let ((wide (make-screen 2 1)))
+        (screen-write-string wide 0 0 (string ideograph) :style '(:bold))
+        (screen-cells-is wide
+          (0 0 ideograph :style '(:bold))
+          (1 0 #\Space :style '(:bold))))
+
+      (bounds-error-is (condition 1 0 1 1)
+          (screen-write-string (make-screen 1 1) 0 0 (string ideograph))))
+
     (let ((source (make-cell :char #\Z :style '(:bold))))
       (screen-clear screen :cell source)
       (setf (cell-char source) #\Y
@@ -316,4 +341,11 @@
     (dimensions-error-is (condition -1 2)
         (screen-resize screen -1 2))
     (dimensions-error-is (condition -1 2)
-        (screen-fill-rect screen 0 0 -1 2 #\X))))
+        (screen-fill-rect screen 0 0 -1 2 #\X))
+    ;; A dimension too large to ever allocate signals the documented condition
+    ;; rather than a raw type-error/make-array failure: a non-fixnum bignum side
+    ;; and a fixnum side whose product exceeds ARRAY-TOTAL-SIZE-LIMIT.
+    (dimensions-error-is (condition #.(expt 10 30) 1)
+        (make-screen #.(expt 10 30) 1))
+    (dimensions-error-is (condition #.array-total-size-limit 2)
+        (make-screen #.array-total-size-limit 2))))

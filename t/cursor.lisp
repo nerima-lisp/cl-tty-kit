@@ -31,6 +31,13 @@
     (is (= 8 (cursor-y cursor)))
     (setf (cursor-visible-p cursor) nil)
     (is (not (cursor-visible-p cursor))))
+  ;; The documented contract is "any non-negative integer", so a bignum
+  ;; coordinate must be stored, not rejected by the slot's numeric type.
+  (let ((cursor (make-cursor :x (expt 10 30) :y (1+ most-positive-fixnum))))
+    (is (= (expt 10 30) (cursor-x cursor)))
+    (is (= (1+ most-positive-fixnum) (cursor-y cursor)))
+    (setf (cursor-x cursor) (* 2 (expt 10 30)))
+    (is (= (* 2 (expt 10 30)) (cursor-x cursor))))
   (%assert-cursor-parameter-invalid
    (lambda () (make-cursor :x -1))
    :x -1 "a non-negative integer")

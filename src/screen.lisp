@@ -25,8 +25,15 @@
   (and style (copy-list (%normalize-cell-style style))))
 
 (defun %assert-screen-dimensions (width height)
-  (unless (and (typep width '(integer 0 *))
-               (typep height '(integer 0 *)))
+  ;; Reject not just negatives but any dimension whose cell grid could not be
+  ;; allocated: each side must be a non-negative fixnum and the total cell
+  ;; count must stay within ARRAY-TOTAL-SIZE-LIMIT. Without the fixnum/product
+  ;; bound a huge-but-non-negative dimension slips past validation and then
+  ;; raises a raw TYPE-ERROR (fixnum slot store) or MAKE-ARRAY error instead of
+  ;; the documented SCREEN-DIMENSIONS-INVALID.
+  (unless (and (typep width '(and fixnum unsigned-byte))
+               (typep height '(and fixnum unsigned-byte))
+               (< (* width height) array-total-size-limit))
     (error 'screen-dimensions-invalid
            :width width
            :height height)))
@@ -121,17 +128,30 @@ SCREEN-DIMENSIONS-INVALID."
 (defun screen-write-string (screen x y string
                             &key style (start 0) (end (length string)))
   "Write STRING (bounded by START and END) into SCREEN starting at X and Y.
-Returns SCREEN. An optional STYLE is applied to every written cell. A run that
-would extend past the screen edge signals SCREEN-INDEX-OUT-OF-BOUNDS and leaves
-SCREEN unchanged; an empty run is a no-op."
+Each character advances the column by its CHAR-WIDTH rather than by one cell
+per character: a double-width character (CHAR-WIDTH 2, such as a CJK
+ideograph) also fills the column immediately after it with a blank spacer
+cell, so the grid's column count matches what a real terminal displays. A
+zero-width character (CHAR-WIDTH 0, such as a combining mark) still consumes
+its own column, since this function does not cluster it onto the previous
+cell. Returns SCREEN. An optional STYLE is applied to every written cell,
+including spacer cells. A run that would extend past the screen edge signals
+SCREEN-INDEX-OUT-OF-BOUNDS and leaves SCREEN unchanged; an empty run is a
+no-op."
   (let ((run-length (- end start)))
     (when (plusp run-length)
-      (%assert-screen-bounds screen x y)
-      (%assert-screen-bounds screen (+ x (1- run-length)) y)
-      (loop for offset from 0 below run-length
-            do (screen-put-cell screen (+ x offset) y
-                                (char string (+ start offset))
-                                :style style))))
+      (let ((total-width (loop for offset from start below end
+                                sum (max 1 (char-width (char string offset))))))
+        (%assert-screen-bounds screen x y)
+        (%assert-screen-bounds screen (+ x (1- total-width)) y)
+        (let ((column x))
+          (loop for offset from start below end
+                for char = (char string offset)
+                for width = (char-width char)
+                do (screen-put-cell screen column y char :style style)
+                   (when (= width 2)
+                     (screen-put-cell screen (1+ column) y #\Space :style style))
+                   (incf column (max 1 width)))))))
   screen)
 
 (defun screen-fill-rect (screen x y width height value &key (style nil style-supplied-p))

@@ -24,7 +24,14 @@
      ((:special :escape nil)
       (:character ,#\[ nil)
       (:character ,#\u nil))
-     "An empty CSI-u body falls back to ordinary decoding instead of crashing.")))
+     "An empty CSI-u body falls back to ordinary decoding instead of crashing.")
+    (,(concatenate 'string (string #\Esc) "[" (make-string 19 :initial-element #\9) "u")
+     ((:special :escape nil)
+      (:character ,#\[ nil)
+      ,@(loop repeat 19 collect (list :character #\9 nil))
+      (:character ,#\u nil))
+     "A CSI parameter digit run past +MAX-CSI-PARAMETER-DIGITS+ falls back to
+ordinary decoding instead of parsing an unbounded bignum.")))
 
 (defparameter +streaming-input-cases+
   `(((,(string #\Esc) "[A")

@@ -38,10 +38,23 @@
   (loop for style in (cell-style cell)
         append (%style-sgr-codes style)))
 
+(defparameter *cell-style-sequence-cache* (make-hash-table :test 'equal)
+  "Memoizes the SGR escape string built for a cell's (already-normalized)
+style list. A real screen has a small, bounded set of distinct styles in
+use at once but many cells sharing each one, and the render/diff/length
+passes each rebuild the same style's escape string independently, so
+caching by style list turns repeat lookups into an O(1) hash hit.")
+
 (defun %cell-style-sequence (cell)
-  (let ((codes (%supported-cell-style-codes cell)))
-    (when codes
-      (format nil "~C[~{~A~^;~}m" +escape+ codes))))
+  (let ((style (cell-style cell)))
+    (multiple-value-bind (cached foundp)
+        (gethash style *cell-style-sequence-cache*)
+      (if foundp
+          cached
+          (setf (gethash style *cell-style-sequence-cache*)
+                (let ((codes (%supported-cell-style-codes cell)))
+                  (when codes
+                    (format nil "~C[~{~A~^;~}m" +escape+ codes))))))))
 
 (defun %cell-render-parts (cell)
   (let ((prefix (%cell-style-sequence cell))

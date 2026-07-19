@@ -4,6 +4,21 @@
 
 (defvar *raw-mode-tcsetattr-function* nil)
 
+#+sb-thread
+(defvar *raw-mode-states-lock*
+  (sb-thread:make-mutex :name "cl-tty-kit raw-mode states"))
+
+(defmacro %with-raw-mode-states-lock (&body body)
+  "Serialize a raw-mode state transition (check-then-act on
+*RAW-MODE-STATES* plus the TCGETATTR/TCSETATTR calls that accompany it)
+against other threads sharing the same process. Raw-mode transitions are
+infrequent, so one global lock -- rather than one per FD -- keeps this
+simple without a measurable cost."
+  #+sb-thread
+  `(sb-thread:with-mutex (*raw-mode-states-lock*) ,@body)
+  #-sb-thread
+  `(progn ,@body))
+
 (defmacro define-unsupported-raw-mode-operation (name)
   `(defun ,name (&optional (fd 0))
      "Signal that raw mode is unsupported on this implementation."

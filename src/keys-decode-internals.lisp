@@ -97,8 +97,14 @@ terminating byte within [START, LIMIT), i.e. it is still incomplete."
       (t
        nil))))
 
+(defparameter +max-csi-parameter-digits+ 18
+  "Maximum digit run %PARSE-CSI-INTEGER accepts. No real CSI parameter needs
+more than a few digits; capping this keeps an attacker-controlled multi-
+megabyte digit run from being parsed into an arbitrarily large bignum.")
+
 (defun %parse-csi-integer (string start end)
-  (when (< start end)
+  (when (and (< start end)
+             (<= (- end start) +max-csi-parameter-digits+))
     (when (loop for index from start below end
                 for ch = (aref string index)
                 always (digit-char-p ch))

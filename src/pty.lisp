@@ -115,16 +115,22 @@
 #+sbcl
 (defun close-pty (pty)
   "Attempt PTY shutdown and signal structured failures.
-Signals `unsupported-feature` for :PTY on non-SBCL implementations."
+Signals `unsupported-feature` for :PTY on non-SBCL implementations.
+PTY's process and stream slots are cleared even when shutdown signals
+PTY-OPERATION-FAILED, since by that point the stream is already closed at
+the OS level; leaving the slots populated would let a caller re-close an
+already-closed stream or retry against a process shutdown already gave up
+on."
   (let ((process (pty-process pty))
         (stream (pty-stream pty)))
     (when (or process stream)
-      (%with-pty-operation (:close pty)
-        (if process
-            (%close-pty-process process stream)
-            (close stream :abort t)))
-      (setf (pty-process pty) nil
-            (pty-stream pty) nil)))
+      (unwind-protect
+          (%with-pty-operation (:close pty)
+            (if process
+                (%close-pty-process process stream)
+                (close stream :abort t)))
+        (setf (pty-process pty) nil
+              (pty-stream pty) nil))))
   pty)
 
 #-sbcl

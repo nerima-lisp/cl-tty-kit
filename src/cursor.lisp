@@ -3,8 +3,8 @@
 (defstruct (cursor
     (:constructor %make-cursor (&key (x 0) (y 0) (visible t)))
     (:conc-name %cursor-)) "The cursor state for a rendered screen."
-  (x 0 :type fixnum)
-  (y 0 :type fixnum)
+  (x 0 :type (integer 0))
+  (y 0 :type (integer 0))
   (visible t :type boolean))
 
 (defun %assert-cursor-coordinate (parameter value)

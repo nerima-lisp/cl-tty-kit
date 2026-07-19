@@ -1,12 +1,15 @@
 # cl-tty-kit
 
+[![CI](https://github.com/takeokunn/cl-tty-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/takeokunn/cl-tty-kit/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 `cl-tty-kit` is a small Common Lisp toolkit for terminal and TTY work.
 The goal is to provide a tight, reusable core for building terminal apps
 without turning the library into a UI framework or shell.
 
 ## Status
 
-- SBCL-first and intentionally small
+- requires SBCL (see [Compatibility](#compatibility)) and intentionally small
 - test-backed public API
 - PTY support is limited to SBCL
 - examples are runnable from `examples/`
@@ -15,14 +18,26 @@ without turning the library into a UI framework or shell.
 
 ## Compatibility
 
-The library is split into portable pieces and SBCL-specific integrations.
+`cl-tty-kit` currently **requires SBCL**. It relies on SBCL-only facilities:
+`sb-posix` for terminal control, `sb-unicode` for character-width
+classification, and `sb-ext` for UTF-8 transcoding and process/PTY handling.
+Loading the system on another Common Lisp implementation fails fast with a
+clear "requires SBCL" error rather than a confusing missing-dependency report.
 
-- portable: ANSI helpers, key decoding, screen state, cursor state, and rendering
-- SBCL-specific: raw mode helpers and PTY support
-- unsupported on other implementations: `enable-raw-mode`, `disable-raw-mode`, `with-raw-mode`, `make-pty`, and `close-pty`
+Internally the code is still organized by portability of *concern*, which keeps
+the OS-facing surface small and isolated and makes the pure logic easy to test:
 
-When an implementation-specific feature is unavailable, the library signals
-`unsupported-feature` instead of silently degrading.
+- pure logic (no OS calls): ANSI helpers, key/input decoding, character width,
+  screen and cursor state, rendering, and the embedded logic engine
+- OS-facing, SBCL-specific: raw-mode control, the terminal-session helper, and
+  PTY support
+
+Broader multi-implementation support is a possible future direction (see
+`ROADMAP.md`); today the supported and tested target is SBCL.
+
+Within a supported (SBCL) build, when an OS-facing runtime feature cannot be
+provided, the library signals `unsupported-feature` instead of silently
+degrading.
 
 ## What it provides
 
@@ -203,12 +218,20 @@ If PTY startup, shutdown, reads, or writes fail, `make-pty`, `close-pty`,
 and underlying condition. Spawn failures report `:spawn` and use `nil` for the
 PTY slot because no PTY object was created. Read and write failures report
 `:read` or `:write`, including closed-stream cases after shutdown. `close-pty`
-is idempotent and clears the stored process and stream after a successful
-close.
+is idempotent and always clears the stored process and stream, even when
+shutdown itself fails, since the stream is already closed at the OS level by
+that point.
 
-PTY support is currently SBCL-specific. On other Common Lisp
-implementations, `make-pty` and `close-pty` signal `unsupported-feature`
-with `:pty`.
+`make-pty`'s `PROGRAM` is resolved against `PATH` and `ARGS`/`ENVIRONMENT` are
+passed straight through to the spawned process (`sb-ext:run-program :search
+t`) — this is the intended API surface, but it means callers who forward
+attacker-influenced strings into `PROGRAM`, `ARGS`, or `ENVIRONMENT` are
+choosing to let that data drive process execution; `make-pty` does not
+sanitize them.
+
+PTY support is part of the OS-facing, SBCL-specific layer (see
+[Compatibility](#compatibility)); the whole library requires SBCL, so `make-pty`
+and `close-pty` are available on every build that loads.
 
 ## Installation
 
@@ -263,7 +286,12 @@ cells.
 styling when replacing an existing cell.
 `screen-write-string` builds on `screen-put-cell` for the common case of laying
 out text runs, with optional `:style`, `:start`, and `:end` arguments for
-partial writes.
+partial writes. It advances the column by each character's `char-width`
+rather than by one column per character, so a double-width character (a CJK
+ideograph or common emoji) also fills the column after it with a blank
+spacer cell — keeping the grid's column count aligned with what a real
+terminal displays, and making the bounds check ("does this run fit?") a
+display-width check rather than a character count.
 `screen-fill-rect` applies the same cell/template semantics to rectangular
 regions, which keeps higher-level drawing code data-oriented instead of
 spelling out nested update loops at each call site.
@@ -368,11 +396,18 @@ rule sets load in linear time.
   (tty-prolog:define-clauses db
     ((parent abraham isaac))
     ((parent isaac jacob))
+    ((parent jacob joseph))
     ((ancestor ?a ?b) (parent ?a ?b))
     ((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b)))
   (tty-prolog:solutions db '(tty-prolog:findall ?d (ancestor abraham ?d) ?ds) '?ds))
 ;; => ((ISAAC JACOB JOSEPH))
 ```
+
+For advanced usage beyond this embedded engine — a DCG grammar for the
+ECMA-48 CSI byte-class shape, property-based fuzz testing of the untrusted-
+input decoders, and bridges to an external ISO Prolog and to a literate
+"weave" toolchain — see the opt-in integrations under `contrib/` (not part of
+the core build or CI; `contrib/README.md` has the full list).
 
 ### ANSI helpers
 

@@ -28,3 +28,6 @@ cl-tty-kit
 \#*\#
 .\#*
 .DS_Store
+
+# Local tool state (Serena semantic index and caches)
+/.serena/
