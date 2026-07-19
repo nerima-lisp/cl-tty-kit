@@ -40,7 +40,14 @@
               *coverage-timeout-seconds*))))
 
 (defun coverage-entry-count ()
-  (hash-table-count (car sb-int:*code-coverage-info*)))
+  "Return the number of SB-COVER instrumentation entries recorded so far, or 0
+if this SBCL build keeps that data somewhere other than SB-INT:*CODE-COVERAGE-INFO*.
+This is a progress diagnostic only; SB-COVER:REPORT below does not depend on it,
+so an unresolvable symbol here degrades the log output, not the coverage report."
+  (let ((variable (find-symbol "*CODE-COVERAGE-INFO*" "SB-INT")))
+    (if (and variable (boundp variable))
+        (hash-table-count (car (symbol-value variable)))
+        0)))
 
 (defun canonical-directory (path)
   (uiop:ensure-directory-pathname (truename path)))
