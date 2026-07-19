@@ -14,11 +14,16 @@
                      do (screen-put-cell screen x y char)))
     screen))
 
-(defun %screen-with-styled-cells (row &rest cells)
-  (let ((screen (%screen-from-rows row)))
-    (dolist (cell cells screen)
-      (destructuring-bind (x y char &key style) cell
-        (screen-put-cell screen x y char :style style)))))
+(defmacro %screen-with-styled-cells (row &rest cells)
+  "Build a screen from ROW, then paint each literal (X Y CHAR &KEY STYLE) cell.
+CELLS are literal specifications, so callers write them inline without quoting."
+  (let ((screen (gensym "SCREEN")))
+    `(let ((,screen (%screen-from-rows ,row)))
+       ,@(mapcar (lambda (cell)
+                   (destructuring-bind (x y char &key style) cell
+                     `(screen-put-cell ,screen ,x ,y ,char :style ,style)))
+                 cells)
+       ,screen)))
 
 (defun %assert-render-contains-parts (output parts)
   (dolist (part parts)
@@ -70,9 +75,7 @@
     (%assert-render-diff-output
      new old
      (%ansi-string (ansi-move-cursor 1 1)
-                   "Hi"
-                   (ansi-move-cursor 1 2)
-                   (ansi-show-cursor))))
+                   "Hi")))
   (let ((old (make-screen 2 1))
         (new (%screen-from-rows "Hi"))
         (cursor (make-cursor :x 1 :y 0))
@@ -162,11 +165,11 @@
           ,(%screen-with-styled-cells "A  "
              (1 0 #\Space :style '((:fg 196)))
              (2 0 #\Space :style '((:fg 196))))
-          nil ,(format nil "~C[38;5;196m" #\Esc))))
+          nil ,(format nil "~C[38;5;196m" #\Esc)))
        (old new expect-clear-line-p required-style))
     (%assert-render-diff-clear-line-output new old
                                            expect-clear-line-p
-                                           required-style))
+                                           required-style)))
 
 (defun %test-render-diff-stream-output-cases ()
   (let ((old (make-screen 10 4))

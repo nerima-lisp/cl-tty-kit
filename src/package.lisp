@@ -7,7 +7,9 @@ explicit clause database. cl-tty-kit expresses its pure decision logic as
 relations resolved by this engine.")
   (:export
    #:clause-db
+   #:make-clause-db
    #:add-clause
+   #:define-clauses
    #:add-primitive
    #:define-primitive
    #:variable-p
@@ -17,7 +19,12 @@ relations resolved by this engine.")
    #:+fail+
    #:solutions
    #:provable-p
-   #:install-standard-primitives))
+   #:install-standard-primitives
+   ;; advanced standard relations installed by INSTALL-STANDARD-PRIMITIVES
+   #:true
+   #:fail
+   #:call
+   #:findall))
 
 (defpackage #:cl-tty-kit
   (:use #:cl)
@@ -58,7 +65,6 @@ relations resolved by this engine.")
    #:disable-raw-mode
    #:with-raw-mode
    ;; terminal session
-   #:with-terminal-session-output
    #:with-terminal-session
    ;; ansi
    #:ansi-move-cursor
@@ -83,11 +89,13 @@ relations resolved by this engine.")
    #:key-event-modifiers
    #:input-decoder
    #:make-input-decoder
+   #:decode-input
    #:decode-input-chunk
    #:flush-input-decoder
    #:decode-key-sequence
    ;; character width
    #:char-width
+   #:string-width
    ;; screen and cells
    #:cell
    #:make-cell
@@ -103,7 +111,10 @@ relations resolved by this engine.")
    #:screen-height
    #:screen-cells
    #:screen-cell
+   #:screen-resize
+   #:screen-clear
    #:screen-put-cell
+   #:screen-fill-rect
    #:screen-write-string
    ;; cursor
    #:cursor
@@ -111,6 +122,7 @@ relations resolved by this engine.")
    #:cursor-x
    #:cursor-y
    #:cursor-visible-p
+   #:move-cursor
    ;; render
    #:render-screen
    #:render-cursor

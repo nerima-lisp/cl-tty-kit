@@ -37,16 +37,33 @@ keyboard enhancement, and optional raw mode setup with guaranteed cleanup."
            (,keyboard-enhancements-value ,keyboard-enhancements))
        (labels ((%emit (sequence)
                   (write-string sequence ,stream))
+                (%start-step (thunk)
+                  ;; Attempt one setup step; on failure leave it un-done so the
+                  ;; matching teardown is skipped and the body still runs.
+                  (handler-case (progn (funcall thunk) t)
+                    (error () nil)))
                 (%start-session ()
-                  (when ,alternate-screen-value
-                    (%emit (ansi-enter-alternate-screen)))
-                  (when ,hide-cursor-value
-                    (%emit (ansi-hide-cursor)))
-                  (when ,bracketed-paste-value
-                    (%emit (ansi-enable-bracketed-paste)))
-                  (when ,keyboard-enhancements-value
-                    (%emit (ansi-push-keyboard-enhancements
-                            ,keyboard-enhancements-value)))
+                  (when (and ,alternate-screen-value
+                             (not (%start-step
+                                   (lambda ()
+                                     (%emit (ansi-enter-alternate-screen))))))
+                    (setf ,alternate-screen-value nil))
+                  (when (and ,hide-cursor-value
+                             (not (%start-step
+                                   (lambda ()
+                                     (%emit (ansi-hide-cursor))))))
+                    (setf ,hide-cursor-value nil))
+                  (when (and ,bracketed-paste-value
+                             (not (%start-step
+                                   (lambda ()
+                                     (%emit (ansi-enable-bracketed-paste))))))
+                    (setf ,bracketed-paste-value nil))
+                  (when (and ,keyboard-enhancements-value
+                             (not (%start-step
+                                   (lambda ()
+                                     (%emit (ansi-push-keyboard-enhancements
+                                             ,keyboard-enhancements-value))))))
+                    (setf ,keyboard-enhancements-value nil))
                   (finish-output ,stream))
                 (%end-session ()
                   (when ,keyboard-enhancements-value

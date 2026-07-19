@@ -23,7 +23,7 @@
          (cursor-2 (make-cursor :x 22 :y 3))
          (cursor-3 (make-cursor :x 15 :y 4)))
     (screen-write-string frame-3 0 4 "press q to quit")
-    (with-terminal-session-output (stream :stream stream)
+    (cl-tty-kit::with-terminal-session-output (stream :stream stream)
       (write-string (render-frame frame-1 cursor-1) stream)
       (write-string
        (render-frame-diff frame-2 frame-1 cursor-2
@@ -71,7 +71,7 @@
                (:special
                 (case (key-event-code event)
                   (:up (incf count)))))))
-      (with-terminal-session-output (stream :stream stream
+      (cl-tty-kit::with-terminal-session-output (stream :stream stream
                                               :bracketed-paste t
                                               :keyboard-enhancements 1)
         (labels ((emit-frame ()
@@ -151,7 +151,7 @@
                (ansi-move-cursor 2 1)
                "!"))
 
-(defun %terminal-session-expected-output ()
+(defun %terminal-session-example-expected-output ()
   (concatenate 'string
                (ansi-enter-alternate-screen)
                (ansi-hide-cursor)
@@ -185,8 +185,7 @@
     ("examples/styled-render.lisp" . %styled-render-expected-output)
     ("examples/frame-render.lisp" . %frame-render-expected-output)
     ("examples/screen-update.lisp" . %screen-update-expected-output)
-    ("examples/status-dashboard.lisp" . %status-dashboard-output)
-    ("examples/event-loop.lisp" . %event-loop-output)))
+    ("examples/status-dashboard.lisp" . %status-dashboard-output)))
 
 (defun %assert-example-renders (file expected-output)
   (let ((example (symbol-function (load-example-symbol file))))
@@ -203,11 +202,18 @@
     (is (string= (%quick-start-output)
                  (%quick-start-expected-output)))
     (do-test-case-bind
-        (example-case +render-example-cases+ (file expected-output-fn))
-      (%assert-example-renders file (funcall expected-output-fn))))
+        (example-case +render-example-cases+ (file . expected-output-fn))
+      (%assert-example-renders file (funcall expected-output-fn)))
+    ;; The event-loop example returns its decoded event trace, so its rendered
+    ;; frames come from a dedicated EVENT-LOOP-EXAMPLE-RENDER entry point.
+    (load-example-symbol "examples/event-loop.lisp")
+    (is (string= (funcall (symbol-function
+                           (find-symbol "EVENT-LOOP-EXAMPLE-RENDER" :cl-user)))
+                 (%event-loop-output))
+        "examples/event-loop.lisp should render the documented output"))
   (let ((example (symbol-function
                   (load-example-symbol "examples/terminal-session.lisp"))))
     (is (string= (with-output-to-string (out)
                    (funcall example out))
-                 (%terminal-session-expected-output))))
+                 (%terminal-session-example-expected-output))))
   t)

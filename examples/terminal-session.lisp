@@ -14,10 +14,11 @@
     (cl-tty-kit:screen-write-string screen 0 1 "Press")
     (cl-tty-kit:screen-write-string screen 6 1 "q to")
     (cl-tty-kit:screen-write-string screen 11 1 "exit")
-    (cl-tty-kit:with-terminal-session-output (stream :stream stream
-                                                      :bracketed-paste t
-                                                      :keyboard-enhancements 1)
-      (write-string (cl-tty-kit:render-screen screen) stream))))
+    (cl-tty-kit:with-terminal-session (session :stream stream
+                                               :bracketed-paste t
+                                               :keyboard-enhancements 1)
+      (write-string (cl-tty-kit:render-screen screen) session))
+    stream))
 
 (defun run-terminal-session-example ()
   (terminal-session-example))

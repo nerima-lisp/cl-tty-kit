@@ -18,22 +18,46 @@
      "an unprovable goal yields no solutions")))
 
 (defparameter +prolog-primitive-cases+
-  '((#'tty-prolog:provable-p
+  '((tty-prolog:provable-p
       (ancestor abraham joseph)
       t
       "provable-p reports a reachable relation")
-    (#'%not-provable-p
+    (%not-provable-p
      (ancestor joseph abraham)
      t
      "provable-p reports an unreachable relation")
-    (#'%solve-variable
+    (%solve-variable
       (= ?x bound)
       (bound)
       "the = primitive unifies its arguments")
-    (#'%solve-parent
+    (%solve-parent
      (and (parent ?p jacob) (not (parent ?p joseph)))
      (isaac)
-     "negation as failure filters out joseph's parent")))
+     "negation as failure filters out joseph's parent")
+    (%solve-variable
+     (or (parent isaac ?x) (parent jacob ?x))
+     (jacob joseph)
+     "disjunction enumerates the solutions of each branch in order")
+    (%solve-variable
+     (tty-prolog:call (ancestor abraham ?x))
+     (isaac jacob joseph)
+     "call/1 proves a goal term like an ordinary relation")
+    (%solve-result
+     (tty-prolog:findall ?a (ancestor ?a joseph) ?result)
+     ((jacob abraham isaac))
+     "findall/3 aggregates every solution into a single list in proof order")
+    (%solve-result
+     (tty-prolog:findall ?x (parent joseph ?x) ?result)
+     (())
+     "findall/3 yields the empty list when the goal has no proof")
+    (%solve-variable
+     (tty-prolog:call ?g)
+     ()
+     "call/1 fails gracefully on an unbound goal instead of crashing")
+    (%solve-result
+     (tty-prolog:findall ?x ?goal ?result)
+     (())
+     "findall/3 tolerates an unbound goal, collecting nothing")))
 
 (defparameter +prolog-db-error-cases+
   '((primitive-clause

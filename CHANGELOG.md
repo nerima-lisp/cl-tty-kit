@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- restore compilation on modern SBCL by fixing the condition `:report` macro expansion
+- implement the documented public API that was missing: `make-screen`, `screen-resize`, `screen-clear`, `screen-fill-rect`, `screen-write-string`, `make-cursor`, `cursor-visible-p`, `move-cursor`, `string-width`, `decode-input`, `decode-input-chunk`, and `flush-input-decoder`
+- restore and extend the embedded logic engine's public API: `make-clause-db`, `define-clauses`, and the advanced relational predicates `or/*`, `true/0`, `fail/0`, `call/1`, and `findall/3`
+- append clauses in O(1) amortized time so large rule sets load in linear time
+- resolve East Asian / emoji wide-character width by binary search over the sorted range table instead of a linear scan, speeding up `string-width` on wide text (verified equivalent across every Unicode code point)
+- keep full runtime safety when decoding untrusted terminal input (drop `(optimize (safety 0))`)
+- bound the streaming input decoder's buffered tail (`make-input-decoder :max-pending`, 4 MiB default) so an unterminated escape or bracketed paste from an untrusted source cannot exhaust memory
+- fix input decoding bugs: control-byte and Alt-prefixed key mapping, CSI final-byte detection, streaming UTF-8 boundary buffering, and bracketed-paste event ordering
+- stop `decode-input` crashing with an uncaught TYPE-ERROR on an empty CSI-u body such as `ESC [ u`; it now falls back to ordinary decoding like other malformed escapes
+- make the logic engine's `call/1`, `findall/3`, and variable goals in `and`/`or` fail gracefully on a non-compound goal term instead of crashing, and give `findall/3` fresh variables for template positions the goal leaves unbound (ISO behavior)
+- fix diff rendering emitting only the last changed run and make terminal-session setup resilient to a failed setup step
+- add opt-in `contrib/` integrations with the latest external libraries, isolated from the core build and CI: a `cl-prolog2` bridge that runs the embedded clause database on an external ISO Prolog, and a `clweb` (literate "weave") module; see `contrib/README.md` and `contrib/verify-contrib.lisp`
+- make the test harness robust to ASDF output translations so `scripts/test.lisp` runs regardless of fasl cache configuration
 - define a repository-local quality gate for release readiness and contract discipline
 - document project governance and security reporting
 - add a runnable streaming bracketed-paste collector example

@@ -16,10 +16,6 @@
 (setf (documentation 'key-event-modifiers 'function)
       "Return the normalized modifier list of KEY-EVENT.")
 
-(defparameter *canonical-modifier-order*
-  '(:alt :control :shift)
-  "Preferred order for normalized modifier lists.")
-
 (defun keyword-modifier-p (value)
   (keywordp value))
 
@@ -30,22 +26,12 @@
                  (not (member modifier seen :test #'eq)))
         (push modifier seen)))))
 
-(defun collect-canonical-modifiers (modifiers)
-  (let ((result '()))
-    (dolist (modifier *canonical-modifier-order* (nreverse result))
-      (when (member modifier modifiers :test #'eq)
-        (push modifier result)))))
-
-(defun collect-extra-modifiers (modifiers)
-  (let ((result '()))
-    (dolist (modifier modifiers (nreverse result))
-      (unless (member modifier *canonical-modifier-order* :test #'eq)
-        (push modifier result)))))
-
 (defun normalize-modifiers (modifiers)
-  (let ((unique (unique-keyword-modifiers modifiers)))
-    (append (collect-canonical-modifiers unique)
-            (collect-extra-modifiers unique))))
+  "Return the keyword modifiers in MODIFIERS, de-duplicated and ordered by name.
+Non-keyword entries are ignored, so equivalent modifier sets compare EQUAL
+regardless of the order or duplicates in which they were supplied."
+  (sort (unique-keyword-modifiers modifiers)
+        #'string< :key #'symbol-name))
 
 (defun modifiers-from-csi-number (number)
   (let ((mask (max 0 (1- (or number 1)))))

@@ -4,8 +4,7 @@
   (cond
     ((stringp input)
      input)
-    ((and (vectorp input)
-          (subtypep (array-element-type input) '(unsigned-byte 8)))
+    ((%octet-input-p input)
      (%utf8-octets-to-string input))
     ((vectorp input)
      (coerce input 'string))
@@ -15,7 +14,9 @@
 (defun decode-key-sequence (input &key (start 0))
   "Decode a single key sequence from INPUT starting at START.
 Returns two values: a KEY-EVENT and the number of consumed characters."
-  (declare (optimize (safety 0)))
+  ;; This function parses untrusted terminal input, so it keeps full safety:
+  ;; bounds and type checks must stay enabled to turn any malformed sequence
+  ;; into a signaled condition rather than undefined behavior.
   (let* ((string (%input->string input))
          (length (length string)))
     (when (< start length)

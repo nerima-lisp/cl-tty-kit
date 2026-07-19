@@ -1,7 +1,15 @@
 (require :asdf)
 
-(load (merge-pathnames #P"../scripts/bootstrap.lisp"
-                       (uiop:pathname-directory-pathname *load-truename*)))
+;; The project bootstrap is normally loaded by the invoking script (test.lisp,
+;; verify.lisp, ...) before this system. Only fall back to loading it directly
+;; when it is missing, and resolve it from the source file rather than a possibly
+;; cached fasl location so the reload works regardless of ASDF output
+;; translations.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (find-package '#:cl-tty-kit/bootstrap)
+    (load (merge-pathnames #P"../scripts/bootstrap.lisp"
+                           (uiop:pathname-directory-pathname
+                            (or *compile-file-truename* *load-truename*))))))
 (cl-tty-kit/bootstrap:load-support-files)
 
 (in-package #:cl-tty-kit/test)

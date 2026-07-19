@@ -100,10 +100,15 @@
     screen))
 
 (defun event-loop-example ()
+  "Return the decoded event trace produced by the demo input stream."
+  (event-loop-example-events))
+
+(defun event-loop-example-render ()
+  "Advance the demo state over the decoded events, returning the framed output."
   (let ((state (make-event-loop-state :count 0
                                       :donep nil
                                       :last-event "waiting")))
-    (cl-tty-kit:with-terminal-session-output (stream :stream stream
+    (cl-tty-kit::with-terminal-session-output (stream :stream stream
                                                       :bracketed-paste t
                                                       :keyboard-enhancements 1)
       (%event-loop-render-frame state stream)
@@ -112,7 +117,7 @@
         (%event-loop-render-frame state stream)))))
 
 (defun run-event-loop-example ()
-  (format t "~A~%" (event-loop-example)))
+  (format t "~A~%" (event-loop-example-render)))
 
 (when *cl-tty-kit-run-example-on-load*
   (run-event-loop-example))

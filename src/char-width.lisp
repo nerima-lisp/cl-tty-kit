@@ -11,9 +11,24 @@
 (defun %unicode-general-category (char)
   (sb-unicode:general-category char))
 
-(defun %code-point-in-ranges-p (code ranges)
-  (loop for (start . end) in ranges
-        thereis (<= start code end)))
+(defparameter +wide-code-point-vector+
+  (coerce +wide-code-point-ranges+ 'simple-vector)
+  "The sorted, non-overlapping wide-code-point ranges as a vector, so membership
+is a binary search instead of a linear scan of the source list.")
+
+(defun %code-point-in-sorted-ranges-p (code ranges)
+  "Return true when CODE lies inside one of the sorted, non-overlapping
+(START . END) ranges in the simple-vector RANGES, using binary search."
+  (declare (type simple-vector ranges))
+  (let ((low 0)
+        (high (1- (length ranges))))
+    (loop while (<= low high) do
+      (let* ((mid (ash (+ low high) -1))
+             (range (svref ranges mid)))
+        (cond ((< code (car range)) (setf high (1- mid)))
+              ((> code (cdr range)) (setf low (1+ mid)))
+              (t (return-from %code-point-in-sorted-ranges-p t)))))
+    nil))
 
 (defun %zero-width-code-point-p (code)
   (let ((char (code-char code)))
@@ -24,7 +39,7 @@
 
 (defun %wide-code-point-p (code)
   "Return true when CODE occupies two terminal columns."
-  (%code-point-in-ranges-p code +wide-code-point-ranges+))
+  (%code-point-in-sorted-ranges-p code +wide-code-point-vector+))
 
 (defun %control-code-point-p (code)
   (and (integerp code)
@@ -44,4 +59,11 @@
    (if (characterp character)
        (char-code character)
        character)))
+
+(defun string-width (string &key (start 0) (end (length string)))
+  "Return the total terminal column width of STRING between START and END.
+The width is the sum of CHAR-WIDTH over the selected characters, so callers
+can align text that mixes ASCII, CJK, combining marks, and emoji."
+  (loop for index from start below end
+        sum (char-width (char string index))))
 

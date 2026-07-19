@@ -6,7 +6,8 @@
   (pending-string "")
   (pending-octets #())
   (collect-bracketed-paste-p nil)
-  (pending-paste nil))
+  (pending-paste nil)
+  (max-pending 4194304 :type (integer 0 *)))
 
 (defstruct (input-transition (:constructor %make-transition
                                            (&key next-index

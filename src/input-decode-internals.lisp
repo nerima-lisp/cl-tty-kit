@@ -122,13 +122,16 @@
         (%plan-plain-transition string index eof))))
 
 (defun %flush-pending-paste-events (decoder suffix)
+  "Fall back to ordinary decoding of an unterminated paste, clearing the buffer.
+Events are returned in reverse order so callers can prepend them onto the
+reverse-order accumulator that %COLLECT-PASTE-EVENTS threads through the loop."
   (multiple-value-bind (flushed-events pending-string)
       (%collect-plain-events
        (%fallback-paste-source (input-decoder-pending-paste decoder) suffix)
-       :eof t)
+       t)
     (declare (ignore pending-string))
     (setf (input-decoder-pending-paste decoder) nil)
-    flushed-events))
+    (nreverse flushed-events)))
 
 (defun %apply-paste-transition-action (decoder events action)
   (ecase (first action)
@@ -144,8 +147,8 @@
      (setf (input-decoder-pending-paste decoder) nil)
      events)
     (:flush-paste
-     (nconc events
-            (%flush-pending-paste-events decoder (second action))))
+     (nconc (%flush-pending-paste-events decoder (second action))
+            events))
     (:start-paste
      (setf (input-decoder-pending-paste decoder) "")
      events)))
@@ -157,7 +160,7 @@
     (loop
       (when (>= index limit)
         (when (and eof (input-decoder-pending-paste decoder))
-          (setf events (nconc events (%flush-pending-paste-events decoder ""))))
+          (setf events (nconc (%flush-pending-paste-events decoder "") events)))
         (return (values (nreverse events) "")))
       (let ((transition (%decoder-transition decoder string index eof)))
         (dolist (action (input-transition-actions transition))

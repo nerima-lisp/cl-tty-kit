@@ -347,14 +347,32 @@ callers can align text that mixes ASCII, CJK, and emoji.
 
 ### Design: relations and continuations
 
-The library's pure decision logic is expressed as relations resolved by a small
-embedded logic engine split across `src/prolog-bindings.lisp`,
-`src/prolog-db.lisp`, `src/prolog-engine.lisp`, and
-`src/prolog-primitives.lisp`. Data tables (width ranges, key decoding tables,
-style codes) stay as plain data; the rules that classify them are clauses.
-Resolution is continuation-passing, so decoding and rendering fan out through
-success continuations rather than ad hoc control flow. The engine is internal:
-the public API stays a set of ordinary functions and macros.
+The toolkit ships a small, self-contained embedded logic engine, split across
+`src/prolog-bindings.lisp`, `src/prolog-db.lisp`, `src/prolog-engine.lisp`, and
+`src/prolog-primitives.lisp`, and exposed as the `cl-tty-kit/prolog` package
+(nickname `tty-prolog`). It provides unification with an occurs check, a
+continuation-passing resolver with branch-local cycle detection and
+ground-goal failure memoization, and an explicit clause database. Rules are
+kept separate from the plain data tables they reason about (width ranges, key
+decoding tables, style codes), so the classification logic can be expressed as
+relations while the data stays ordinary Lisp.
+
+The engine is a first-class part of the public API. `install-standard-primitives`
+installs the relational combinators `and/*`, `or/*`, and `not/1`, unification
+`=/2`, and the advanced predicates `true/0`, `fail/0`, meta-call `call/1`, and
+aggregation `findall/3`. Clauses are added in O(1) amortized time, so large
+rule sets load in linear time.
+
+```lisp
+(let ((db (tty-prolog:install-standard-primitives (tty-prolog:make-clause-db))))
+  (tty-prolog:define-clauses db
+    ((parent abraham isaac))
+    ((parent isaac jacob))
+    ((ancestor ?a ?b) (parent ?a ?b))
+    ((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b)))
+  (tty-prolog:solutions db '(tty-prolog:findall ?d (ancestor abraham ?d) ?ds) '?ds))
+;; => ((ISAAC JACOB JOSEPH))
+```
 
 ### ANSI helpers
 
