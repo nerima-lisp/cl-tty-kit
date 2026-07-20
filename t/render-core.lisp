@@ -22,7 +22,10 @@
     (#\R ((:fg 1 2 3) (:bg 4 5 6))
      ,(format nil "~C[38;2;1;2;3;48;2;4;5;6m" #\Esc)
      t)
-    (#\Z (:blink) nil nil)))
+    (#\K (:blink) ,(format nil "~C[5m" #\Esc) t)
+    (#\S (:strikethrough) ,(format nil "~C[9m" #\Esc) t)
+    (#\H (:hidden) ,(format nil "~C[8m" #\Esc) t)
+    (#\Z (:no-such-modifier) nil nil)))
 
 (defparameter +render-cursor-cases+
   `((,(make-cursor :x 3 :y 4)
@@ -67,6 +70,63 @@
   (is (null (cl-tty-kit::%style-sgr-codes 42)))
   (is (null (cl-tty-kit::%color-style-sgr-codes '(:foo 1))))
   (is (null (cl-tty-kit::%color-style-sgr-codes '(:fg 1 2))))
+  ;; STYLE-ANSI: public SGR emitter over normalized style lists.
+  (is (string= "" (style-ansi)))
+  (is (string= "" (style-ansi :no-such-modifier)))
+  (is (string= (ansi-bold) (style-ansi :bold)))
+  (is (string= (format nil "~C[1;4m" #\Esc) (style-ansi :bold :underline)))
+  (is (string= (format nil "~C[38;5;208m" #\Esc) (style-ansi (style-fg 208))))
+  (is (string= (format nil "~C[1;38;5;196;48;5;17m" #\Esc)
+               (style-ansi :bold (style-fg 196) (style-bg 17))))
+  ;; NAMED-COLOR: the sixteen standard palette indices, usable with STYLE-FG.
+  (is (= 1 (named-color :red)))
+  (is (= 7 (named-color :white)))
+  (is (= 8 (named-color :gray)))
+  (is (= 8 (named-color :grey)))
+  (is (= 15 (named-color :bright-white)))
+  (is (string= (format nil "~C[38;5;9m" #\Esc)
+               (style-ansi (style-fg (named-color :bright-red)))))
+  (signals (error c) (named-color :not-a-color) (is c))
+  ;; STYLE-MERGE: modifiers union, OVERRIDE's colors win.
+  (is (equal '(:bold :italic) (style-merge '(:bold) '(:italic))))
+  (is (equal '((:fg 2)) (style-merge (make-style (style-fg 1))
+                                     (make-style (style-fg 2)))))
+  (is (equal '(:bold (:fg 1) (:bg 2))
+             (style-merge (make-style :bold (style-fg 1))
+                          (make-style (style-bg 2)))))
+  (is (equal '(:bold) (style-merge nil '(:bold))))
+  ;; CELL-BLANK-P: a space with no rendered style is blank.
+  (is (cell-blank-p (make-cell)))
+  (is (not (cell-blank-p (make-cell :char #\x))))
+  (is (not (cell-blank-p (make-cell :char #\Space :style '(:bold)))))
+  (is (cell-blank-p (make-cell :char #\Space :style '(:no-such-modifier))))
+  ;; Extended underline styles and overline emit their SGR sub-parameters.
+  (is (string= (format nil "~C[4:3m" #\Esc) (style-ansi :curly-underline)))
+  (is (string= (format nil "~C[4:2m" #\Esc) (style-ansi :double-underline)))
+  (is (string= (format nil "~C[53m" #\Esc) (style-ansi :overline)))
+  ;; Underline color is a third color channel (SGR 58).
+  (is (string= (format nil "~C[4;58;5;9m" #\Esc)
+               (style-ansi :underline (style-underline-color 9))))
+  (is (string= (format nil "~C[58;2;1;2;3m" #\Esc)
+               (style-ansi (style-underline-color 1 2 3))))
+  ;; A later underline color overrides an earlier one, like fg/bg.
+  (is (equal '((:underline-color 5))
+             (make-style (style-underline-color 1) (style-underline-color 5))))
+  ;; DECODE-SGR is the inverse of STYLE-ANSI.
+  (is (equal '(:bold (:fg 1)) (decode-sgr (format nil "~C[1;31m" #\Esc))))
+  (is (equal '((:fg 208)) (decode-sgr (format nil "~C[38;5;208m" #\Esc))))
+  (is (null (decode-sgr (format nil "~C[0m" #\Esc))))
+  (is (equal (make-style :bold (style-fg 196) (style-bg 17))
+             (decode-sgr (style-ansi :bold (style-fg 196) (style-bg 17)))))
+  (multiple-value-bind (style reset-p) (decode-sgr (format nil "~C[0m" #\Esc))
+    (is (null style))
+    (is reset-p))
+  ;; PARSE-STYLED-STRING recovers text and accumulated style per run.
+  (is (equal '(("A" :bold) ("B" :bold (:fg 1)) ("C"))
+             (parse-styled-string
+              (concatenate 'string (style-ansi :bold) "A"
+                           (style-ansi (style-fg 1)) "B"
+                           (ansi-reset-style) "C"))))
   (let ((screen (make-screen 2 1))
         (stream (make-string-output-stream)))
     (screen-put-cell screen 0 0 #\H)

@@ -44,9 +44,50 @@
 (setf (documentation 'style-bg 'function)
       "Return a background style entry of the form (:BG INDEX) or (:BG R G B).")
 
+(defun style-underline-color (first &optional second third)
+  "Return a validated underline-color style entry (SGR 58)."
+  (%style-color :underline-color first second third))
+
+(setf (documentation 'style-underline-color 'function)
+      "Return an underline-color style entry, (:UNDERLINE-COLOR INDEX) or
+(:UNDERLINE-COLOR R G B), coloring the underline independently of the text (SGR
+58) on terminals that support it.")
+
+(defparameter +named-colors+
+  '((:black . 0)
+    (:red . 1)
+    (:green . 2)
+    (:yellow . 3)
+    (:blue . 4)
+    (:magenta . 5)
+    (:cyan . 6)
+    (:white . 7)
+    (:bright-black . 8)
+    (:gray . 8)
+    (:grey . 8)
+    (:bright-red . 9)
+    (:bright-green . 10)
+    (:bright-yellow . 11)
+    (:bright-blue . 12)
+    (:bright-magenta . 13)
+    (:bright-cyan . 14)
+    (:bright-white . 15))
+  "Maps the sixteen standard ANSI color names (plus :GRAY/:GREY aliases for
+:BRIGHT-BLACK) to their palette indices.")
+
+(defun named-color (name)
+  "Return the 0-15 palette index for the standard ANSI color NAME.
+NAME is a keyword such as :RED, :BRIGHT-CYAN, or :GRAY. The result is an index
+suitable for STYLE-FG or STYLE-BG, so (STYLE-FG (NAMED-COLOR :BRIGHT-RED)) reads
+more clearly than the bare integer. An unknown NAME signals an error."
+  (or (cdr (assoc name +named-colors+))
+      (error "Unknown color name ~S; expected one of ~S."
+             name
+             (mapcar #'car +named-colors+))))
+
 (defun %color-style-item-p (item)
   (and (consp item)
-       (member (first item) '(:fg :bg) :test #'eq)))
+       (member (first item) '(:fg :bg :underline-color) :test #'eq)))
 
 (defun %cell-style-items (style)
   (cond
@@ -73,16 +114,19 @@
 (defun %normalize-cell-style (style)
   (let ((modifiers (normalize-modifiers style))
         (foreground nil)
-        (background nil))
+        (background nil)
+        (underline nil))
     (dolist (item (%cell-style-items style))
       (let ((color (%normalize-color-style-item item)))
         (when color
           (case (first color)
             (:fg (setf foreground color))
-            (:bg (setf background color))))))
+            (:bg (setf background color))
+            (:underline-color (setf underline color))))))
     (append modifiers
             (when foreground (list foreground))
-            (when background (list background)))))
+            (when background (list background))
+            (when underline (list underline)))))
 
 (defun make-style (&rest items)
   "Return a normalized style list from modifier keywords and color entries."
@@ -90,6 +134,16 @@
 
 (setf (documentation 'make-style 'function)
       "Return a normalized style list with deduplicated modifiers and the last valid fg/bg entries.")
+
+(defun style-merge (base override)
+  "Return a normalized style combining BASE with OVERRIDE, OVERRIDE winning.
+Modifier keywords from both are unioned; OVERRIDE's foreground/background replace
+BASE's when present, otherwise BASE's are kept. Each argument is any style value
+accepted by MAKE-STYLE (a normalized list, a bare color entry, or NIL). Layering
+a highlight over a base style is (STYLE-MERGE base-style (MAKE-STYLE :REVERSE))."
+  (copy-list (%normalize-cell-style
+              (append (%normalize-cell-style base)
+                      (%normalize-cell-style override)))))
 
 (defun make-cell (&key (char #\Space) style)
   "Create a CELL, normalizing any supplied style list."

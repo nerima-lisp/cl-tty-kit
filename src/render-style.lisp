@@ -5,7 +5,15 @@
     (:dim . "2")
     (:italic . "3")
     (:underline . "4")
-    (:reverse . "7")))
+    (:double-underline . "4:2")
+    (:curly-underline . "4:3")
+    (:dotted-underline . "4:4")
+    (:dashed-underline . "4:5")
+    (:blink . "5")
+    (:reverse . "7")
+    (:hidden . "8")
+    (:strikethrough . "9")
+    (:overline . "53")))
 
 (defun %keyword-style-sgr-codes (style)
   (let ((code (cdr (assoc style +style-sgr-keywords+))))
@@ -16,6 +24,7 @@
     (let ((prefix (case channel
                     (:fg "38")
                     (:bg "48")
+                    (:underline-color "58")
                     (otherwise nil))))
       (when prefix
         (case (length values)
@@ -34,9 +43,32 @@
      (%color-style-sgr-codes style))
     (t nil)))
 
-(defun %supported-cell-style-codes (cell)
-  (loop for style in (cell-style cell)
+(defun %style-list-sgr-codes (style-list)
+  (loop for style in style-list
         append (%style-sgr-codes style)))
+
+(defun %supported-cell-style-codes (cell)
+  (%style-list-sgr-codes (cell-style cell)))
+
+(defun cell-blank-p (cell)
+  "Return true when CELL is a space that renders no visible styling.
+This is the same emptiness test RENDER-DIFF uses to decide a cell can be cleared
+rather than repainted: the character is a space and the style emits no SGR codes
+(an unsupported-only style still counts as blank)."
+  (and (char= (cell-char cell) #\Space)
+       (null (%supported-cell-style-codes cell))))
+
+(defun style-ansi (&rest style)
+  "Return the SGR escape string for STYLE, or an empty string if it emits none.
+STYLE is any mix of modifier keywords and color entries accepted by MAKE-STYLE
+(for example :BOLD, (STYLE-FG 208), or (STYLE-BG 0 0 0)); it is normalized the
+same way a cell's style is, so ambiguous or duplicate entries collapse before
+the escape is built. Callers that render their own text -- outside the SCREEN
+grid -- can prefix a run with this and terminate it with ANSI-RESET-STYLE."
+  (let ((codes (%style-list-sgr-codes (%normalize-cell-style style))))
+    (if codes
+        (format nil "~C[~{~A~^;~}m" +escape+ codes)
+        "")))
 
 (defparameter *cell-style-sequence-cache* (make-hash-table :test 'equal)
   "Memoizes the SGR escape string built for a cell's (already-normalized)
