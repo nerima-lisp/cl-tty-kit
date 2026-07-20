@@ -1,0 +1,83 @@
+(in-package #:cl-tty-kit)
+
+;;; --------------------------------------------------------------------------
+;;; Higher-level screen text placement
+;;;
+;;; These build on SCREEN-WRITE-STRING and the text-layout helpers to place
+;;; multi-line and wrapped text, clipping to the grid instead of signaling so a
+;;; block of content can be dropped into a region without the caller measuring.
+;;; --------------------------------------------------------------------------
+
+(defun screen-write-aligned (screen rect text &key (align :left) (vertical :top) style)
+  "Write the single line TEXT inside RECT, returning SCREEN.
+ALIGN places it horizontally (:LEFT, :RIGHT, or :CENTER) and VERTICAL places it
+(:TOP, :MIDDLE, or :BOTTOM) within the rectangle; TEXT is clipped to RECT's width
+so it never spills. STYLE, when non-NIL, applies to every written cell. This is
+the natural way to center a label in a panel carved out with RECT-INSET."
+  (let ((rect-width (rect-width rect))
+        (rect-height (rect-height rect)))
+    (when (and (plusp rect-width) (plusp rect-height))
+      (let* ((clipped (subseq text 0 (%cells-prefix-end text rect-width)))
+             (cells (%string-cell-width clipped))
+             (column-offset (ecase align
+                              (:left 0)
+                              (:right (- rect-width cells))
+                              (:center (floor (- rect-width cells) 2))))
+             (row-offset (ecase vertical
+                           (:top 0)
+                           (:middle (floor (1- rect-height) 2))
+                           (:bottom (1- rect-height))))
+             (x (+ (rect-x rect) (max 0 column-offset)))
+             (y (+ (rect-y rect) row-offset)))
+        (when (plusp (length clipped))
+          (if style
+              (screen-write-string screen x y clipped :style style)
+              (screen-write-string screen x y clipped))))))
+  screen)
+
+(defun screen-write-lines (screen x y lines &key style)
+  "Write each string in LINES on successive rows starting at (X, Y), returning
+SCREEN. Each line is clipped to the columns available from X to the right edge,
+and rows outside the screen are skipped, so an over-long or over-tall block never
+signals. STYLE, when non-NIL, applies to every written cell."
+  (let ((width (screen-width screen))
+        (height (screen-height screen)))
+    (when (and (<= 0 x) (< x width))
+      (let ((available (- width x)))
+        (loop for line in lines
+              for row from y
+              when (and (<= 0 row) (< row height))
+                do (let ((clipped (subseq line 0 (%cells-prefix-end line available))))
+                     (when (plusp (length clipped))
+                       (if style
+                           (screen-write-string screen x row clipped :style style)
+                           (screen-write-string screen x row clipped))))))))
+  screen)
+
+(defun screen-write-wrapped (screen x y width text &key style)
+  "Wrap TEXT to WIDTH columns and write the lines down from (X, Y).
+Returns (VALUES SCREEN COUNT), where COUNT is how many wrapped lines landed
+inside the screen. Lines are further clipped to the right edge and rows past the
+bottom are dropped. WIDTH must be positive (it is the wrap column, not a screen
+coordinate). STYLE, when non-NIL, applies to every written cell."
+  (let ((lines (wrap-string text width))
+        (screen-width (screen-width screen))
+        (screen-height (screen-height screen)))
+    (screen-write-lines screen x y lines :style style)
+    (values screen
+            (if (and (<= 0 x) (< x screen-width))
+                (loop for index from 0 below (length lines)
+                      for row = (+ y index)
+                      when (and (<= 0 row) (< row screen-height))
+                        count 1)
+                0))))
+
+(defun screen-to-string (screen)
+  "Return SCREEN's contents as plain text: each row's stored characters joined
+by newlines, with no styling. A double-width glyph appears once followed by its
+spacer, matching the grid. Useful for snapshots and test assertions."
+  (with-output-to-string (out)
+    (dotimes (y (screen-height screen))
+      (when (plusp y)
+        (write-char #\Newline out))
+      (write-string (screen-row-string screen y) out))))
