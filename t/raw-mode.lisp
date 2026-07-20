@@ -67,13 +67,23 @@
     (is body-ran)
     (is disabled))
   #+sbcl
+  (progn
+    (signals (error condition) (enable-raw-mode -1)
+      (declare (ignore condition)))
+    (signals (error condition) (enable-raw-mode "fd")
+      (declare (ignore condition)))
+    (signals (error condition) (disable-raw-mode -1)
+      (declare (ignore condition)))
+    (signals (error condition) (disable-raw-mode "fd")
+      (declare (ignore condition))))
+  #+sbcl
   (let ((failed nil))
     (handler-case
-        (enable-raw-mode -1)
+        (enable-raw-mode 987654321)
       (raw-mode-operation-failed (condition)
         (is (eq :enable (raw-mode-operation-failed-operation condition)))
-        (is (= -1 (raw-mode-operation-failed-fd condition)))
-        (is (search "Raw mode operation ENABLE failed for FD -1"
+        (is (= 987654321 (raw-mode-operation-failed-fd condition)))
+        (is (search "Raw mode operation ENABLE failed for FD 987654321"
                     (format nil "~A" condition)))
         (setf failed t)))
     (is failed))

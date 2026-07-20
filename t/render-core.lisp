@@ -100,6 +100,7 @@
   (is (not (cell-blank-p (make-cell :char #\x))))
   (is (not (cell-blank-p (make-cell :char #\Space :style '(:bold)))))
   (is (cell-blank-p (make-cell :char #\Space :style '(:no-such-modifier))))
+  (signals (error c) (cell-blank-p :not-a-cell) (is c))
   ;; Extended underline styles and overline emit their SGR sub-parameters.
   (is (string= (format nil "~C[4:3m" #\Esc) (style-ansi :curly-underline)))
   (is (string= (format nil "~C[4:2m" #\Esc) (style-ansi :double-underline)))
@@ -115,6 +116,10 @@
   ;; DECODE-SGR is the inverse of STYLE-ANSI.
   (is (equal '(:bold (:fg 1)) (decode-sgr (format nil "~C[1;31m" #\Esc))))
   (is (equal '((:fg 208)) (decode-sgr (format nil "~C[38;5;208m" #\Esc))))
+  (is (null (decode-sgr "38;5;256")))
+  (is (null (decode-sgr "38;5;1234567890123")))
+  (is (null (decode-sgr "38;2;1;2;256")))
+  (is (null (decode-sgr "38;2;1;2;1234567890123")))
   (is (null (decode-sgr (format nil "~C[0m" #\Esc))))
   (is (equal (make-style :bold (style-fg 196) (style-bg 17))
              (decode-sgr (style-ansi :bold (style-fg 196) (style-bg 17)))))

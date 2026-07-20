@@ -40,12 +40,19 @@ platform is not one this file knows the constant for.")
 platform, or NIL when unknown.")
 
 #+sbcl
+(defun %assert-terminal-fd (fd)
+  (unless (and (integerp fd) (not (minusp fd)))
+    (error "Terminal FD must be a non-negative integer, got ~S." fd))
+  fd)
+
+#+sbcl
 (defun terminal-size (&optional (fd 0))
   "Return the terminal window size on FD as (VALUES COLUMNS ROWS).
 Returns (VALUES NIL NIL) when FD is not a terminal, the ioctl fails, the report
 is zero-sized, or the platform's TIOCGWINSZ constant is unknown -- so a caller
 should treat NIL as \"size unavailable\" and fall back to a default. FD defaults
 to standard input (0)."
+  (setf fd (%assert-terminal-fd fd))
   (if (null +tiocgwinsz+)
       (values nil nil)
       (handler-case
@@ -63,6 +70,7 @@ to standard input (0)."
   "Set the window size on FD to COLUMNS by ROWS via ioctl TIOCSWINSZ.
 Returns true on success, NIL when the platform constant is unknown or the ioctl
 fails."
+  (setf fd (%assert-terminal-fd fd))
   (if (null +tiocswinsz+)
       nil
       (handler-case

@@ -91,6 +91,7 @@
 #+sbcl
 (defun enable-raw-mode (&optional (fd 0))
   "Enable raw terminal mode on FD and remember the previous settings."
+  (setf fd (%assert-raw-mode-fd fd))
   (%with-raw-mode-states-lock
     (handler-case
         (let ((existing-state (%raw-mode-state fd)))
@@ -111,6 +112,7 @@
 #+sbcl
 (defun disable-raw-mode (&optional (fd 0))
   "Restore the terminal settings saved by ENABLE-RAW-MODE."
+  (setf fd (%assert-raw-mode-fd fd))
   (%with-raw-mode-states-lock
     (let ((state (%raw-mode-state fd)))
       (when state

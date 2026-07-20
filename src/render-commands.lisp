@@ -42,8 +42,7 @@
 
 (defun %render-commands-string (commands)
   (with-output-to-string (stream)
-    (dolist (command commands)
-      (write-string (%render-command-string command) stream))))
+    (%write-render-commands commands stream)))
 
 (defun %render-commands-output (commands stream)
   (if stream

@@ -55,8 +55,9 @@
 This is the same emptiness test RENDER-DIFF uses to decide a cell can be cleared
 rather than repainted: the character is a space and the style emits no SGR codes
 (an unsupported-only style still counts as blank)."
-  (and (char= (cell-char cell) #\Space)
-       (null (%supported-cell-style-codes cell))))
+  (let ((cell (%assert-cell cell)))
+    (and (char= (cell-char cell) #\Space)
+         (null (%supported-cell-style-codes cell)))))
 
 (defun style-ansi (&rest style)
   "Return the SGR escape string for STYLE, or an empty string if it emits none.
@@ -88,9 +89,20 @@ caching by style list turns repeat lookups into an O(1) hash hit.")
                   (when codes
                     (format nil "~C[~{~A~^;~}m" +escape+ codes))))))))
 
+(defun %terminal-control-character-p (char)
+  (let ((code (char-code char)))
+    (or (< code #x20)
+        (= code #x7f)
+        (<= #x80 code #x9f))))
+
+(defun %render-safe-cell-character (char)
+  (if (%terminal-control-character-p char)
+      #\Space
+      char))
+
 (defun %cell-render-parts (cell)
   (let ((prefix (%cell-style-sequence cell))
-        (char (string (cell-char cell))))
+        (char (string (%render-safe-cell-character (cell-char cell)))))
     (if prefix
         (list prefix char (ansi-reset-style))
         (list char))))
@@ -98,4 +110,3 @@ caching by style list turns repeat lookups into an O(1) hash hit.")
 (defun %write-cell (cell stream)
   (dolist (part (%cell-render-parts cell) stream)
     (write-string part stream)))
-

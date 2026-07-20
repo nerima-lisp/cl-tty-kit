@@ -31,12 +31,24 @@ character, or NIL for blank). The first RENDERER-RENDER repaints in full."
                   :front nil
                   :cursor nil))
 
+(defun %assert-renderer (renderer)
+  (unless (renderer-p renderer)
+    (error "RENDERER ~S must be a renderer." renderer))
+  renderer)
+
+(defun %assert-render-cursor (cursor)
+  (unless (cursor-p cursor)
+    (error "CURSOR ~S must be a cursor." cursor))
+  cursor)
+
 (defun renderer-width (renderer)
   "Return the column width of RENDERER's back buffer."
+  (%assert-renderer renderer)
   (screen-width (renderer-screen renderer)))
 
 (defun renderer-height (renderer)
   "Return the row height of RENDERER's back buffer."
+  (%assert-renderer renderer)
   (screen-height (renderer-screen renderer)))
 
 (defun %snapshot-cursor (cursor)
@@ -51,6 +63,9 @@ Diffs the back buffer against the previous frame and returns the ANSI string
 also finishes in that cursor state, diffed against the previous frame's cursor.
 After emitting, RENDERER snapshots the current screen and cursor as the new
 previous frame, so the next call diffs against this one."
+  (%assert-renderer renderer)
+  (when cursor
+    (%assert-render-cursor cursor))
   (let* ((back (renderer-screen renderer))
          (front (renderer-front renderer))
          (output (if cursor
@@ -66,6 +81,7 @@ previous frame, so the next call diffs against this one."
 (defun renderer-clear (renderer &key cell)
   "Reset RENDERER's back buffer to CELL (a template, character, or NIL for
 blank), returning RENDERER. The change is emitted by the next RENDERER-RENDER."
+  (%assert-renderer renderer)
   (screen-clear (renderer-screen renderer) :cell cell)
   renderer)
 
@@ -73,6 +89,7 @@ blank), returning RENDERER. The change is emitted by the next RENDERER-RENDER."
   "Resize RENDERER's back buffer to WIDTH by HEIGHT, returning RENDERER.
 The previous-frame snapshot is dropped so the next RENDERER-RENDER repaints in
 full, since a resized terminal cannot be updated by a diff."
+  (%assert-renderer renderer)
   (screen-resize (renderer-screen renderer) width height
                  :initial-cell initial-cell)
   (setf (renderer-front renderer) nil

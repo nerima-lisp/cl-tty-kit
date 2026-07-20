@@ -57,10 +57,12 @@
     (is (or (and (null columns) (null rows))
             (and (integerp columns) (plusp columns)
                  (integerp rows) (plusp rows)))))
-  ;; An obviously invalid descriptor is reported as unavailable, not an error.
-  (multiple-value-bind (columns rows) (terminal-size -1)
-    (is (null columns))
-    (is (null rows))))
+  ;; Invalid descriptor values are programmer errors; valid-but-non-tty FDs
+  ;; remain the "unavailable size" NIL/NIL case above.
+  (signals (error condition) (terminal-size -1)
+    (declare (ignore condition)))
+  (signals (error condition) (terminal-size "fd")
+    (declare (ignore condition))))
 
 (defun test-terminal-session ()
   (%test-terminal-size)

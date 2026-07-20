@@ -12,6 +12,16 @@
 (setf (documentation 'cell-style 'function)
       "Return the normalized style list stored in CELL.")
 
+(defun %assert-cell-character (char)
+  (unless (characterp char)
+    (error "Cell character must be a character, got ~S." char))
+  char)
+
+(defun %assert-cell (cell)
+  (unless (cell-p cell)
+    (error "Expected a CELL, got ~S." cell))
+  cell)
+
 (defun %style-color (channel first &optional second third)
   (cond
     ((and (null second) (null third))
@@ -89,11 +99,17 @@ more clearly than the bare integer. An unknown NAME signals an error."
   (and (consp item)
        (member (first item) '(:fg :bg :underline-color) :test #'eq)))
 
+(defun %proper-style-list-p (value)
+  (loop for rest = value then (cdr rest)
+        while (consp rest)
+        finally (return (null rest))))
+
 (defun %cell-style-items (style)
   (cond
     ((null style) nil)
     ((%color-style-item-p style) (list style))
-    (t (ensure-list* style))))
+    ((%proper-style-list-p style) style)
+    (t (list style))))
 
 (defun %valid-color-byte-p (value)
   (typep value '(integer 0 255)))
@@ -102,21 +118,23 @@ more clearly than the bare integer. An unknown NAME signals an error."
   (when (%color-style-item-p item)
     (let ((channel (first item))
           (payload (rest item)))
-      (cond
-        ((and (= (length payload) 1)
-              (%valid-color-byte-p (first payload)))
-         (list channel (first payload)))
-        ((and (= (length payload) 3)
-              (every #'%valid-color-byte-p payload))
-         (list* channel payload))
-        (t nil)))))
+      (when (%proper-style-list-p payload)
+        (cond
+          ((and (= (length payload) 1)
+                (%valid-color-byte-p (first payload)))
+           (list channel (first payload)))
+          ((and (= (length payload) 3)
+                (every #'%valid-color-byte-p payload))
+           (list* channel payload))
+          (t nil))))))
 
 (defun %normalize-cell-style (style)
-  (let ((modifiers (normalize-modifiers style))
+  (let* ((items (%cell-style-items style))
+         (modifiers (normalize-modifiers items))
         (foreground nil)
         (background nil)
         (underline nil))
-    (dolist (item (%cell-style-items style))
+    (dolist (item items)
       (let ((color (%normalize-color-style-item item)))
         (when color
           (case (first color)
@@ -147,7 +165,7 @@ a highlight over a base style is (STYLE-MERGE base-style (MAKE-STYLE :REVERSE)).
 
 (defun make-cell (&key (char #\Space) style)
   "Create a CELL, normalizing any supplied style list."
-  (%make-cell :char char
+  (%make-cell :char (%assert-cell-character char)
               :style (and style (copy-list (%normalize-cell-style style)))))
 
 (defun %blank-cell ()
@@ -155,5 +173,6 @@ a highlight over a base style is (STYLE-MERGE base-style (MAKE-STYLE :REVERSE)).
 
 (defun copy-cell (cell)
   "Return a fresh copy of CELL."
-  (make-cell :char (cell-char cell)
-             :style (cell-style cell)))
+  (let ((cell (%assert-cell cell)))
+    (make-cell :char (cell-char cell)
+               :style (cell-style cell))))

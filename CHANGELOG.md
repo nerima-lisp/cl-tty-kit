@@ -9,6 +9,8 @@
   widths, ratios, and source slices while preserving existing successful output
 - improve render diff, sixel, kitty image, and text-layout hot paths by avoiding
   redundant string work, streaming output builders, and precomputing color state
+- validate public cell and terminal FD boundaries explicitly, and stream render
+  command output without per-command intermediate strings
 
 ## 0.2.0 - 2026-07-20
 

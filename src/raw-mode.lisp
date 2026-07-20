@@ -25,6 +25,11 @@ simple without a measurable cost."
      (declare (ignore fd))
      (unsupported :raw-mode)))
 
+(defun %assert-raw-mode-fd (fd)
+  (unless (and (integerp fd) (not (minusp fd)))
+    (error "Raw mode FD must be a non-negative integer, got ~S." fd))
+  fd)
+
 (defun %signal-raw-mode-operation-failed (operation fd reason)
   (error 'raw-mode-operation-failed
          :operation operation
