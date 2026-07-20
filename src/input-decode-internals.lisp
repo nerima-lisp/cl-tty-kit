@@ -9,9 +9,13 @@
          (let ((body-start (+ index 2)))
            (if (>= body-start limit)
                t
+               ;; A CSI runs until its final byte (0x40-0x7E); every earlier
+               ;; byte is a parameter or intermediate. Treating anything before
+               ;; that byte as still-incomplete keeps a split parameter list --
+               ;; including an SGR mouse report's `<Cb;Cx;Cy' -- buffered
+               ;; instead of being decoded as a bare ESC.
                (loop for final-index from body-start below limit
-                     for final = (aref string final-index)
-                     unless (or (digit-char-p final) (char= final #\;))
+                     when (<= #x40 (char-code (aref string final-index)) #x7E)
                        do (return nil)
                      finally (return t)))))
         ((char= (aref string (1+ index)) #\O)
