@@ -1,5 +1,17 @@
 (in-package #:cl-tty-kit/test)
 
+(defun %text-layout-signals-non-type-error (thunk)
+  (handler-case
+      (progn
+        (funcall thunk)
+        (is nil))
+    (type-error (condition)
+      (declare (ignore condition))
+      (is nil))
+    (error (condition)
+      (declare (ignore condition))
+      (is t))))
+
 (defun %test-truncate-string ()
   ;; A string within the budget is returned untouched.
   (is (string= "hello" (truncate-string "hello" 10)))
@@ -17,7 +29,13 @@
   (let ((cjk (format nil "~C~C~C" #\U+4E00 #\U+4E8C #\U+4E09)))
     (is (= 6 (string-width cjk)))
     (is (string= (format nil "~C" #\U+4E00) (truncate-string cjk 3)))
-    (is (= 2 (string-width (truncate-string cjk 3))))))
+    (is (= 2 (string-width (truncate-string cjk 3)))))
+  (%text-layout-signals-non-type-error
+   (lambda () (truncate-string :not-a-string 3)))
+  (%text-layout-signals-non-type-error
+   (lambda () (truncate-string "hello" :wide)))
+  (%text-layout-signals-non-type-error
+   (lambda () (truncate-string "hello" 3 :ellipsis :bad))))
 
 (defun %test-pad-string ()
   (is (string= "hi   " (pad-string "hi" 5)))
@@ -31,7 +49,15 @@
   ;; Column-accurate padding around a double-width glyph.
   (is (string= (format nil "~C  " #\U+4E00) (pad-string (format nil "~C" #\U+4E00) 4)))
   ;; A multi-column pad character is rejected.
-  (signals (error c) (pad-string "hi" 5 :pad #\U+4E00) (is c)))
+  (signals (error c) (pad-string "hi" 5 :pad #\U+4E00) (is c))
+  (%text-layout-signals-non-type-error
+   (lambda () (pad-string :not-a-string 3)))
+  (%text-layout-signals-non-type-error
+   (lambda () (pad-string "hi" :wide)))
+  (%text-layout-signals-non-type-error
+   (lambda () (pad-string "hi" 3 :align :diagonal)))
+  (%text-layout-signals-non-type-error
+   (lambda () (pad-string "hi" 3 :pad :bad))))
 
 (defun %test-wrap-string ()
   (is (equal '("the quick" "brown fox")
@@ -45,18 +71,24 @@
   ;; Wide glyphs are packed by column width, not character count.
   (let ((cjk (format nil "~C~C~C" #\U+4E00 #\U+4E8C #\U+4E09)))
     (is (equal (list (format nil "~C~C" #\U+4E00 #\U+4E8C)
-                     (format nil "~C" #\U+4E09))
-               (wrap-string cjk 4))))
-  (signals (error c) (wrap-string "x" 0) (is c)))
+                      (format nil "~C" #\U+4E09))
+                (wrap-string cjk 4))))
+  (signals (error c) (wrap-string "x" 0) (is c))
+  (%text-layout-signals-non-type-error
+   (lambda () (wrap-string :not-a-string 3)))
+  (%text-layout-signals-non-type-error
+   (lambda () (wrap-string "x" :wide))))
 
 (defun %test-expand-tabs ()
   (is (string= "a   bc  d" (expand-tabs (format nil "a~Cbc~Cd" #\Tab #\Tab) :tab-width 4)))
   (is (string= "        x" (expand-tabs (format nil "~Cx" #\Tab))))
   ;; A newline resets the column.
   (is (string= (format nil "ab~%c   d")
-               (expand-tabs (format nil "ab~%c~Cd" #\Tab) :tab-width 4)))
+                (expand-tabs (format nil "ab~%c~Cd" #\Tab) :tab-width 4)))
   (is (string= "" (expand-tabs "")))
-  (signals (error c) (expand-tabs "x" :tab-width 0) (is c)))
+  (signals (error c) (expand-tabs "x" :tab-width 0) (is c))
+  (%text-layout-signals-non-type-error
+   (lambda () (expand-tabs :not-a-string))))
 
 (defun %test-chop-string ()
   (is (equal '("abc" "def" "g") (chop-string "abcdefg" 3)))
@@ -65,9 +97,13 @@
   ;; Chops by column width, keeping wide glyphs whole.
   (let ((cjk (format nil "~C~C~C" #\U+4E00 #\U+4E8C #\U+4E09)))
     (is (equal (list (format nil "~C~C" #\U+4E00 #\U+4E8C)
-                     (format nil "~C" #\U+4E09))
-               (chop-string cjk 4))))
-  (signals (error c) (chop-string "x" 0) (is c)))
+                      (format nil "~C" #\U+4E09))
+                (chop-string cjk 4))))
+  (signals (error c) (chop-string "x" 0) (is c))
+  (%text-layout-signals-non-type-error
+   (lambda () (chop-string :not-a-string 3)))
+  (%text-layout-signals-non-type-error
+   (lambda () (chop-string "x" :wide))))
 
 (defun %test-strip-ansi ()
   (is (string= "hi" (strip-ansi (concatenate 'string (ansi-bold) "hi"
@@ -76,12 +112,30 @@
   (is (string= "abc" (strip-ansi "abc")))
   ;; The visible width of styled text is measurable after stripping.
   (is (= 2 (string-width (strip-ansi (concatenate 'string (ansi-bold) "hi"
-                                                  (ansi-reset-style)))))))
+                                                  (ansi-reset-style))))))
+  (let ((nested (concatenate 'string
+                             "a"
+                             (string #\Esc)
+                             "[12"
+                             (string #\Esc)
+                             "]52;c;secret"
+                             (string (code-char 7))
+                             "b")))
+    (is (string= "ab" (strip-ansi nested))))
+  (%text-layout-signals-non-type-error
+   (lambda () (strip-ansi :not-a-string))))
 
 (defun %test-ambiguous-width ()
   ;; U+00A7 (section sign) is East Asian Ambiguous: narrow by default, wide when
   ;; the policy is enabled.
   (is (= 1 (char-width (code-char #xA7))))
+  (is (= 2 (string-width "abc" :start 1 :end 3)))
+  (signals (error c) (char-width -1) (is c))
+  (signals (error c) (char-width #x110000) (is c))
+  (signals (error c) (char-width :not-a-code-point) (is c))
+  (signals (error c) (string-width "abc" :start -1) (is c))
+  (signals (error c) (string-width "abc" :start 2 :end 1) (is c))
+  (signals (error c) (string-width "abc" :end 4) (is c))
   (let ((*east-asian-ambiguous-wide* t))
     (is (= 2 (char-width (code-char #xA7))))
     ;; ASCII is unaffected by the policy.

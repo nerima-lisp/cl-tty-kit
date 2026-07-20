@@ -8,17 +8,56 @@
 ;;; block of content can be dropped into a region without the caller measuring.
 ;;; --------------------------------------------------------------------------
 
+(defun %assert-screen-text-screen (screen)
+  (unless (screen-p screen)
+    (error "SCREEN ~S must be a screen." screen)))
+
+(defun %assert-screen-text-rect (rect)
+  (unless (rect-p rect)
+    (error "RECT ~S must be a rect." rect)))
+
+(defun %assert-screen-text-string (name value)
+  (unless (stringp value)
+    (error "~A ~S must be a string." name value)))
+
+(defun %assert-screen-text-coordinate (name value)
+  (unless (integerp value)
+    (error "~A ~S must be an integer coordinate." name value)))
+
+(defun %proper-screen-text-list-p (value)
+  (loop for rest = value then (cdr rest)
+        while (consp rest)
+        finally (return (null rest))))
+
+(defun %assert-screen-text-lines (lines)
+  (unless (and (%proper-screen-text-list-p lines)
+               (every #'stringp lines))
+    (error "LINES ~S must be a proper list of strings." lines)))
+
+(defun %assert-screen-text-align (align)
+  (unless (member align '(:left :right :center) :test #'eq)
+    (error "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align)))
+
+(defun %assert-screen-text-vertical (vertical)
+  (unless (member vertical '(:top :middle :bottom) :test #'eq)
+    (error "VERTICAL ~S must be one of :TOP, :MIDDLE, or :BOTTOM." vertical)))
+
 (defun screen-write-aligned (screen rect text &key (align :left) (vertical :top) style)
   "Write the single line TEXT inside RECT, returning SCREEN.
 ALIGN places it horizontally (:LEFT, :RIGHT, or :CENTER) and VERTICAL places it
 (:TOP, :MIDDLE, or :BOTTOM) within the rectangle; TEXT is clipped to RECT's width
 so it never spills. STYLE, when non-NIL, applies to every written cell. This is
-the natural way to center a label in a panel carved out with RECT-INSET."
+  the natural way to center a label in a panel carved out with RECT-INSET."
+  (%assert-screen-text-screen screen)
+  (%assert-screen-text-rect rect)
+  (%assert-screen-text-string "TEXT" text)
+  (%assert-screen-text-align align)
+  (%assert-screen-text-vertical vertical)
   (let ((rect-width (rect-width rect))
         (rect-height (rect-height rect)))
     (when (and (plusp rect-width) (plusp rect-height))
-      (let* ((clipped (subseq text 0 (%cells-prefix-end text rect-width)))
-             (cells (%string-cell-width clipped))
+      (let* ((end (%cells-prefix-end text rect-width))
+             (cells (%string-cell-width text :end end))
              (column-offset (ecase align
                               (:left 0)
                               (:right (- rect-width cells))
@@ -29,10 +68,10 @@ the natural way to center a label in a panel carved out with RECT-INSET."
                            (:bottom (1- rect-height))))
              (x (+ (rect-x rect) (max 0 column-offset)))
              (y (+ (rect-y rect) row-offset)))
-        (when (plusp (length clipped))
+        (when (plusp end)
           (if style
-              (screen-write-string screen x y clipped :style style)
-              (screen-write-string screen x y clipped))))))
+              (screen-write-string screen x y text :style style :end end)
+              (screen-write-string screen x y text :end end))))))
   screen)
 
 (defun screen-write-lines (screen x y lines &key style)
@@ -40,6 +79,10 @@ the natural way to center a label in a panel carved out with RECT-INSET."
 SCREEN. Each line is clipped to the columns available from X to the right edge,
 and rows outside the screen are skipped, so an over-long or over-tall block never
 signals. STYLE, when non-NIL, applies to every written cell."
+  (%assert-screen-text-screen screen)
+  (%assert-screen-text-coordinate "X" x)
+  (%assert-screen-text-coordinate "Y" y)
+  (%assert-screen-text-lines lines)
   (let ((width (screen-width screen))
         (height (screen-height screen)))
     (when (and (<= 0 x) (< x width))
@@ -47,11 +90,11 @@ signals. STYLE, when non-NIL, applies to every written cell."
         (loop for line in lines
               for row from y
               when (and (<= 0 row) (< row height))
-                do (let ((clipped (subseq line 0 (%cells-prefix-end line available))))
-                     (when (plusp (length clipped))
+                do (let ((end (%cells-prefix-end line available)))
+                     (when (plusp end)
                        (if style
-                           (screen-write-string screen x row clipped :style style)
-                           (screen-write-string screen x row clipped))))))))
+                           (screen-write-string screen x row line :style style :end end)
+                           (screen-write-string screen x row line :end end))))))))
   screen)
 
 (defun screen-write-wrapped (screen x y width text &key style)
@@ -60,6 +103,9 @@ Returns (VALUES SCREEN COUNT), where COUNT is how many wrapped lines landed
 inside the screen. Lines are further clipped to the right edge and rows past the
 bottom are dropped. WIDTH must be positive (it is the wrap column, not a screen
 coordinate). STYLE, when non-NIL, applies to every written cell."
+  (%assert-screen-text-screen screen)
+  (%assert-screen-text-coordinate "X" x)
+  (%assert-screen-text-coordinate "Y" y)
   (let ((lines (wrap-string text width))
         (screen-width (screen-width screen))
         (screen-height (screen-height screen)))
@@ -76,6 +122,7 @@ coordinate). STYLE, when non-NIL, applies to every written cell."
   "Return SCREEN's contents as plain text: each row's stored characters joined
 by newlines, with no styling. A double-width glyph appears once followed by its
 spacer, matching the grid. Useful for snapshots and test assertions."
+  (%assert-screen-text-screen screen)
   (with-output-to-string (out)
     (dotimes (y (screen-height screen))
       (when (plusp y)

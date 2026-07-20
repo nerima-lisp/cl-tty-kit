@@ -16,6 +16,26 @@
   "The sorted, non-overlapping wide-code-point ranges as a vector, so membership
 is a binary search instead of a linear scan of the source list.")
 
+(defconstant +maximum-unicode-code-point+ #x10FFFF)
+
+(defun %valid-code-point-p (value)
+  (and (integerp value)
+       (<= 0 value +maximum-unicode-code-point+)))
+
+(defun %validate-code-point-designator (value)
+  (cond
+    ((characterp value) (char-code value))
+    ((%valid-code-point-p value) value)
+    (t (error "Expected a character or Unicode code point, got ~S." value))))
+
+(defun %validate-string-bounds (string start end)
+  (let ((length (length string)))
+    (unless (and (integerp start)
+                 (integerp end)
+                 (<= 0 start end length))
+      (error "Invalid string bounds START=~S END=~S for string of length ~D."
+             start end length))))
+
 (defun %code-point-in-sorted-ranges-p (code ranges)
   "Return true when CODE lies inside one of the sorted, non-overlapping
 (START . END) ranges in the simple-vector RANGES, using binary search."
@@ -75,15 +95,14 @@ since the ambiguous check runs only when this is true.")
 
 (defun char-width (character)
   "Return the terminal column width of CHARACTER or a Unicode code point."
-  (%code-point-width
-   (if (characterp character)
-       (char-code character)
-       character)))
+  (%code-point-width (%validate-code-point-designator character)))
 
 (defun string-width (string &key (start 0) (end (length string)))
   "Return the total terminal column width of STRING between START and END.
 The width is the sum of CHAR-WIDTH over the selected characters, so callers
 can align text that mixes ASCII, CJK, combining marks, and emoji."
+  (check-type string string)
+  (%validate-string-bounds string start end)
   (loop for index from start below end
         sum (char-width (char string index))))
 
@@ -113,4 +132,3 @@ marks is the base's width and a wide emoji cluster is two columns. Honors
     (loop for char across grapheme
           do (setf width (max width (char-width char))))
     width))
-

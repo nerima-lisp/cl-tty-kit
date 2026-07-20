@@ -25,6 +25,61 @@
                      do (screen-put-cell screen x y char)))
     screen))
 
+(defun %screen-signals-non-type-error (thunk)
+  (handler-case
+      (progn
+        (funcall thunk)
+        (is nil))
+    (type-error (condition)
+      (declare (ignore condition))
+      (is nil))
+    (error (condition)
+      (declare (ignore condition))
+      (is t))))
+
+(defun %test-screen-public-validation ()
+  (let ((screen (make-screen 3 2 :initial-cell #\.)))
+    (%screen-signals-non-type-error
+     (lambda () (make-screen 1 1 :initial-cell :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-clear screen :cell :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-resize screen 3 3 :initial-cell :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (setf (screen-cell screen 0 0) :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-put-cell screen 0 0 :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-fill-rect screen 0 0 1 1 :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-fill screen :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-scroll screen :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-copy :not-a-screen)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-cell :not-a-screen 0 0)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-row-string :not-a-screen 0)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-row-string screen 0 :end nil)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-string screen 0 0 :bad)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-string screen 0 0 "x" :end nil)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-crop screen :not-a-rect)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-blit :not-a-screen screen)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-blit screen :not-a-screen)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-blit screen screen :dest-x :bad))))
+  (let ((screen (%screen-rows "A" "B" "C")))
+    (%screen-signals-non-type-error
+     (lambda () (screen-scroll screen 1 :fill :bad)))
+    (is (string= (format nil "A~%B~%C") (screen-to-string screen)))))
+
 (defun %test-screen-fill ()
   (let ((screen (make-screen 2 2)))
     (screen-fill screen #\#)
@@ -113,7 +168,18 @@
   ;; Style is applied to written cells.
   (let ((screen (make-screen 3 1)))
     (screen-write-lines screen 0 0 '("hi") :style '(:bold))
-    (cell-is (screen 0 0) #\h '(:bold))))
+    (cell-is (screen 0 0) #\h '(:bold)))
+  (let ((screen (make-screen 4 1)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-lines :not-a-screen 0 0 '("ok"))))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-lines screen :x 0 '("ok"))))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-lines screen 0 :y '("ok"))))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-lines screen 0 0 '("ok" . "bad"))))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-lines screen 0 0 '("ok" :bad))))))
 
 (defun %test-screen-write-wrapped ()
   (let ((screen (make-screen 6 3)))
@@ -123,12 +189,21 @@
       ;; Four wrapped lines, three of which fit on the 3-row screen.
       (is (= 3 count))
       (is (string= (format nil "the   ~%quick ~%brown ")
-                   (screen-to-string screen))))))
+                   (screen-to-string screen)))))
+  (let ((screen (make-screen 4 1)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-wrapped :not-a-screen 0 0 3 "text")))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-wrapped screen :x 0 3 "text")))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-wrapped screen 0 :y 3 "text")))))
 
 (defun %test-screen-to-string ()
   (let ((screen (%screen-rows "AB" "CD")))
     (is (string= (format nil "AB~%CD") (screen-to-string screen))))
-  (is (string= "" (screen-to-string (make-screen 0 0)))))
+  (is (string= "" (screen-to-string (make-screen 0 0))))
+  (%screen-signals-non-type-error
+   (lambda () (screen-to-string :not-a-screen))))
 
 (defun %test-screen-write-aligned ()
   (let ((rect (make-rect :width 7 :height 3)))
@@ -152,7 +227,19 @@
   (let ((screen (make-screen 4 1)))
     (screen-write-aligned screen (make-rect :width 4 :height 1) "x"
                           :align :right :style '(:bold))
-    (cell-is (screen 3 0) #\x '(:bold))))
+    (cell-is (screen 3 0) #\x '(:bold)))
+  (let ((screen (make-screen 4 1))
+        (rect (make-rect :width 4 :height 1)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-aligned :not-a-screen rect "x")))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-aligned screen :not-a-rect "x")))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-aligned screen rect :not-a-string)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-aligned screen rect "x" :align :diagonal)))
+    (%screen-signals-non-type-error
+     (lambda () (screen-write-aligned screen rect "x" :vertical :sideways)))))
 
 (defun %test-screen-crop ()
   (let* ((screen (%screen-rows "ABCD" "EFGH" "IJKL"))
@@ -175,6 +262,7 @@
     (is (= 0 (screen-height crop)))))
 
 (defun test-screen ()
+  (%test-screen-public-validation)
   (%test-screen-fill)
   (%test-screen-copy)
   (%test-screen-row-string)
@@ -201,6 +289,13 @@
         (setf (cell-char source) #\K
               (cell-style source) '(:italic))
         (cell-is (filled 0 0) #\J '(:bold))))
+
+    (let* ((source (make-cell :char #\N :style '(:underline)))
+           (filled (make-screen 2 1 :initial-cell source)))
+      (is (not (eq (aref (screen-cells filled) 0)
+                   (aref (screen-cells filled) 1))))
+      (setf (cell-char (aref (screen-cells filled) 0)) #\O)
+      (cell-is (filled 1 0) #\N '(:underline)))
 
     (let ((source (make-cell :char #\L :style '(:bold)))
           (filled (make-screen 2 1 :initial-cell #\Space)))
@@ -339,6 +434,21 @@
         (1 0 #\.)
         (2 0 #\.)))
 
+    (let ((unchanged (make-screen 3 1 :initial-cell #\.)))
+      (signals (error condition)
+          (screen-write-string unchanged 0 0 "prefix" :start 4 :end 2)
+        (declare (ignore condition)))
+      (signals (error condition)
+          (screen-write-string unchanged 0 0 "prefix" :start -1)
+        (declare (ignore condition)))
+      (signals (error condition)
+          (screen-write-string unchanged 0 0 "prefix" :end 7)
+        (declare (ignore condition)))
+      (screen-cells-is unchanged
+        (0 0 #\.)
+        (1 0 #\.)
+        (2 0 #\.)))
+
     (let* ((style (list :bold '(:fg 33)))
            (styled (make-screen 2 1)))
       (screen-write-string styled 0 0 "OK" :style style)
@@ -439,13 +549,25 @@
       (is-equal '(:bold (:fg 7))
                 (cell-style cell)))
 
+    (let ((cell (make-cell :char #\C
+                           :style '((:fg . 1) :bold))))
+      (is-equal '(:bold)
+                (cell-style cell)))
+
+    (is (null (make-style '(:fg . 1))))
+
     (let ((cell (make-cell)))
       (is (char= #\Space (cell-char cell)))
       (is (null (cell-style cell))))
 
+    (signals (error condition) (make-cell :char "C")
+      (declare (ignore condition)))
+    (signals (error condition) (copy-cell :not-a-cell)
+      (declare (ignore condition)))
+
     (let ((cell (make-cell :char #\C
                            :style '(:fg 33))))
-      (is-equal '(:fg (:fg 33))
+      (is-equal '((:fg 33))
                 (cell-style cell)))
 
     (let ((cell (make-cell :char #\C :style nil)))

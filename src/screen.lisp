@@ -15,11 +15,43 @@
 (setf (documentation 'screen-cells 'function)
       "Return the backing vector of cells for SCREEN.")
 
+(defun %assert-screen (screen)
+  (unless (screen-p screen)
+    (error "Expected a SCREEN, got ~S." screen))
+  screen)
+
+(defun %assert-screen-rect (rect)
+  (unless (rect-p rect)
+    (error "Expected a RECT, got ~S." rect))
+  rect)
+
+(defun %assert-cell-template (value)
+  (unless (or (null value) (cell-p value) (characterp value))
+    (error "Cell template ~S must be NIL, a CELL, or a character." value))
+  value)
+
+(defun %assert-cell-value (value)
+  (unless (or (cell-p value) (characterp value))
+    (error "Cell value ~S must be a CELL or a character." value))
+  value)
+
 (defun %coerce-cell-template (value)
-  (etypecase value
-    (cell (copy-cell value))
-    (character (make-cell :char value))
-    (null (make-cell))))
+  (%assert-cell-template value)
+  (cond
+    ((cell-p value) (copy-cell value))
+    ((characterp value) (make-cell :char value))
+    (t (make-cell))))
+
+(defun %coerce-cell-value (value style style-supplied-p)
+  (%assert-cell-value value)
+  (cond
+    ((cell-p value)
+     (make-cell :char (cell-char value)
+                :style (if style-supplied-p
+                           (%coerce-cell-style style)
+                           (cell-style value))))
+    (t
+     (make-cell :char value :style style))))
 
 (defun %coerce-cell-style (style)
   (and style (copy-list (%normalize-cell-style style))))
@@ -42,7 +74,10 @@
   (+ (* y (screen-width screen)) x))
 
 (defun %assert-screen-bounds (screen x y)
-  (unless (and (<= 0 x) (< x (screen-width screen))
+  (%assert-screen screen)
+  (unless (and (integerp x)
+               (integerp y)
+               (<= 0 x) (< x (screen-width screen))
                (<= 0 y) (< y (screen-height screen)))
     (error 'screen-index-out-of-bounds
            :screen screen
@@ -51,17 +86,37 @@
            :width (screen-width screen)
            :height (screen-height screen))))
 
+(defun %assert-screen-offset (name value)
+  (unless (integerp value)
+    (error "Screen ~A ~S must be an integer." name value))
+  value)
+
 (defun %assert-screen-rect-bounds (screen x y width height)
+  (%assert-screen screen)
   (%assert-screen-dimensions width height)
   (when (and (plusp width) (plusp height))
     (%assert-screen-bounds screen x y)
     (%assert-screen-bounds screen (+ x (1- width)) (+ y (1- height)))))
 
+(defun %assert-string-bounds (string start end)
+  (unless (stringp string)
+    (error "Expected a string, got ~S." string))
+  (unless (and (integerp start)
+               (integerp end)
+               (<= 0 start)
+               (<= start end)
+               (<= end (length string)))
+    (error "Invalid string bounds START=~S END=~S for string of length ~D."
+           start
+           end
+           (length string))))
+
 (defun %screen-vector (width height &optional (cell (%blank-cell)))
-  (make-array (* width height)
-              :initial-contents
-              (loop repeat (* width height)
-                    collect (%coerce-cell-template cell))))
+  (let* ((size (* width height))
+         (cells (make-array size))
+         (template (%coerce-cell-template cell)))
+    (dotimes (index size cells)
+      (setf (aref cells index) (copy-cell template)))))
 
 (defun screen-cell (screen x y)
   "Return the CELL at X and Y in SCREEN."
@@ -71,19 +126,12 @@
 (defun (setf screen-cell) (value screen x y)
   (%assert-screen-bounds screen x y)
   (setf (aref (screen-cells screen) (%screen-index screen x y))
-        (etypecase value
-          (cell (copy-cell value))
-          (character (make-cell :char value)))))
+        (%coerce-cell-value value nil nil)))
 
 (defun screen-put-cell (screen x y value &key (style nil style-supplied-p))
   "Write VALUE into SCREEN at X and Y, optionally overriding style."
   (setf (screen-cell screen x y)
-        (etypecase value
-          (cell (make-cell :char (cell-char value)
-                           :style (if style-supplied-p
-                                      (%coerce-cell-style style)
-                                      (cell-style value))))
-          (character (make-cell :char value :style style))))
+        (%coerce-cell-value value style style-supplied-p))
   screen)
 
 (defun make-screen (width height &key initial-cell)
@@ -99,9 +147,11 @@ SCREEN-DIMENSIONS-INVALID."
 (defun screen-clear (screen &key cell)
   "Reset every cell in SCREEN to an independent copy of CELL, returning SCREEN.
 CELL may be a CELL template, a character, or NIL for a blank cell."
-  (let ((cells (screen-cells screen)))
+  (%assert-screen screen)
+  (let ((cells (screen-cells screen))
+        (template (%coerce-cell-template cell)))
     (dotimes (index (length cells))
-      (setf (aref cells index) (%coerce-cell-template cell))))
+      (setf (aref cells index) (copy-cell template))))
   screen)
 
 (defun screen-resize (screen width height &key initial-cell)
@@ -110,23 +160,25 @@ The overlapping top-left region is preserved and any newly exposed area is
 filled with independent copies of INITIAL-CELL. Invalid dimensions signal
 SCREEN-DIMENSIONS-INVALID."
   (%assert-screen-dimensions width height)
+  (%assert-screen screen)
   (let ((old-width (screen-width screen))
         (old-height (screen-height screen))
         (old-cells (screen-cells screen))
-        (new-cells (make-array (* width height))))
+        (new-cells (make-array (* width height)))
+        (template (%coerce-cell-template initial-cell)))
     (dotimes (y height)
       (dotimes (x width)
         (setf (aref new-cells (+ (* y width) x))
               (if (and (< x old-width) (< y old-height))
                   (copy-cell (aref old-cells (+ (* y old-width) x)))
-                  (%coerce-cell-template initial-cell)))))
+                  (copy-cell template)))))
     (setf (screen-width screen) width
           (screen-height screen) height
           (screen-cells screen) new-cells))
   screen)
 
 (defun screen-write-string (screen x y string
-                            &key style (start 0) (end (length string)))
+                            &key style (start 0) (end nil end-supplied-p))
   "Write STRING (bounded by START and END) into SCREEN starting at X and Y.
 Each character advances the column by its CHAR-WIDTH rather than by one cell
 per character: a double-width character (CHAR-WIDTH 2, such as a CJK
@@ -137,8 +189,14 @@ its own column, since this function does not cluster it onto the previous
 cell. Returns SCREEN. An optional STYLE is applied to every written cell,
 including spacer cells. A run that would extend past the screen edge signals
 SCREEN-INDEX-OUT-OF-BOUNDS and leaves SCREEN unchanged; an empty run is a
-no-op."
-  (let ((run-length (- end start)))
+  no-op."
+  (%assert-screen screen)
+  (let* ((end (if end-supplied-p
+                  end
+                  (and (stringp string) (length string))))
+         (run-length (progn
+                       (%assert-string-bounds string start end)
+                       (- end start))))
     (when (plusp run-length)
       (let ((total-width (loop for offset from start below end
                                 sum (max 1 (char-width (char string offset))))))
@@ -175,6 +233,7 @@ SCREEN-DIMENSIONS-INVALID, both leaving SCREEN unchanged."
 VALUE is a CELL template or a character; STYLE overrides its style when supplied.
 This is SCREEN-FILL-RECT applied to the whole grid, so an empty screen is a
 no-op."
+  (%assert-screen screen)
   (if style-supplied-p
       (screen-fill-rect screen 0 0 (screen-width screen) (screen-height screen)
                         value :style style)
@@ -186,6 +245,7 @@ no-op."
   "Return a deep copy of SCREEN with the same dimensions and independent cells.
 Mutating the copy -- or the original -- never affects the other, so a copy makes
 a natural previous-frame snapshot for RENDER-DIFF."
+  (%assert-screen screen)
   (let* ((source (screen-cells screen))
          (cells (make-array (length source))))
     (dotimes (index (length source))
@@ -194,38 +254,47 @@ a natural previous-frame snapshot for RENDER-DIFF."
                   :height (screen-height screen)
                   :cells cells)))
 
-(defun screen-row-string (screen y &key (start 0) (end (screen-width screen)))
+(defun screen-row-string (screen y &key (start 0) (end nil end-supplied-p))
   "Return the characters stored in row Y of SCREEN between columns START and END.
 A double-width glyph appears once followed by the blank spacer cell that
 SCREEN-WRITE-STRING writes after it, matching the grid's column layout. An
 out-of-range row or column span signals SCREEN-INDEX-OUT-OF-BOUNDS."
-  (unless (and (<= 0 y) (< y (screen-height screen))
-               (<= 0 start) (<= start end) (<= end (screen-width screen)))
-    (error 'screen-index-out-of-bounds
-           :screen screen
-           :x start
-           :y y
-           :width (screen-width screen)
-           :height (screen-height screen)))
-  (with-output-to-string (out)
-    (loop for x from start below end
-          do (write-char (cell-char (screen-cell screen x y)) out))))
+  (%assert-screen screen)
+  (let ((end (if end-supplied-p end (screen-width screen))))
+    (unless (and (integerp y)
+                 (integerp start)
+                 (integerp end)
+                 (<= 0 y) (< y (screen-height screen))
+                 (<= 0 start) (<= start end) (<= end (screen-width screen)))
+      (error 'screen-index-out-of-bounds
+             :screen screen
+             :x start
+             :y y
+             :width (screen-width screen)
+             :height (screen-height screen)))
+    (with-output-to-string (out)
+      (loop for x from start below end
+            do (write-char (cell-char (screen-cell screen x y)) out)))))
 
 (defun screen-scroll (screen count &key fill)
   "Scroll SCREEN vertically by COUNT rows in place, returning SCREEN.
 A positive COUNT moves content up, exposing new rows at the bottom; a negative
 COUNT moves it down, exposing new rows at the top. Exposed rows are filled with
 independent copies of FILL, a CELL template, a character, or NIL for a blank
-cell. A |COUNT| of at least the height clears the whole screen."
+  cell. A |COUNT| of at least the height clears the whole screen."
+  (%assert-screen screen)
+  (unless (integerp count)
+    (error "Screen scroll COUNT ~S must be an integer." count))
   (let ((width (screen-width screen))
         (height (screen-height screen)))
     (when (and (plusp width) (plusp height) (/= count 0))
-      (let ((shift (max (- height) (min height count))))
+      (let ((shift (max (- height) (min height count)))
+            (fill-cell (%coerce-cell-template fill)))
         (flet ((fill-or-copy (x y source)
                  (setf (screen-cell screen x y)
                        (if (and (<= 0 source) (< source height))
                            (screen-cell screen x source)
-                           (%coerce-cell-template fill)))))
+                           (copy-cell fill-cell)))))
           (if (plusp shift)
               ;; Move up: write each row from the one below, top to bottom, so a
               ;; source row is still original when it is read.
@@ -241,8 +310,10 @@ cell. A |COUNT| of at least the height clears the whole screen."
 (defun screen-crop (screen rect)
   "Return a new SCREEN holding the RECT region of SCREEN as independent cells.
 RECT is clipped to the source bounds, so a rectangle running off an edge yields
-only the overlapping cells and a fully off-screen rectangle yields a 0x0 screen.
+  only the overlapping cells and a fully off-screen rectangle yields a 0x0 screen.
 This is the read counterpart to SCREEN-BLIT: extract a panel, inspect or reuse it."
+  (%assert-screen screen)
+  (%assert-screen-rect rect)
   (let* ((start-x (max 0 (rect-x rect)))
          (start-y (max 0 (rect-y rect)))
          (end-x (min (screen-width screen) (+ (rect-x rect) (rect-width rect))))
@@ -257,24 +328,36 @@ This is the read counterpart to SCREEN-BLIT: extract a panel, inspect or reuse i
     result))
 
 (defun screen-blit (dest src &key (dest-x 0) (dest-y 0) (src-x 0) (src-y 0)
-                                  (width (screen-width src))
-                                  (height (screen-height src)))
+                                  (width nil width-supplied-p)
+                                  (height nil height-supplied-p))
   "Copy a WIDTH by HEIGHT region of SRC at (SRC-X, SRC-Y) into DEST at
 (DEST-X, DEST-Y), returning DEST. Cells are copied independently. The region is
 clipped to the parts that fall inside both SRC and DEST, so a blit that runs off
 an edge copies only its visible overlap instead of signaling. This is the
 primitive for compositing sub-screens (panels, widgets) onto a frame."
-  (loop for row from 0 below height
-        for sy = (+ src-y row)
-        for dy = (+ dest-y row)
-        when (and (<= 0 sy) (< sy (screen-height src))
-                  (<= 0 dy) (< dy (screen-height dest)))
-          do (loop for col from 0 below width
-                   for sx = (+ src-x col)
-                   for dx = (+ dest-x col)
-                   when (and (<= 0 sx) (< sx (screen-width src))
-                             (<= 0 dx) (< dx (screen-width dest)))
-                     do (setf (screen-cell dest dx dy)
-                              (screen-cell src sx sy))))
+  (%assert-screen dest)
+  (%assert-screen src)
+  (%assert-screen-offset :dest-x dest-x)
+  (%assert-screen-offset :dest-y dest-y)
+  (%assert-screen-offset :src-x src-x)
+  (%assert-screen-offset :src-y src-y)
+  (let ((width (if width-supplied-p width (screen-width src)))
+        (height (if height-supplied-p height (screen-height src))))
+    (%assert-screen-dimensions width height)
+    (loop for row from 0 below height
+          for sy = (+ src-y row)
+          for dy = (+ dest-y row)
+          when (and (integerp sy)
+                    (integerp dy)
+                    (<= 0 sy) (< sy (screen-height src))
+                    (<= 0 dy) (< dy (screen-height dest)))
+            do (loop for col from 0 below width
+                     for sx = (+ src-x col)
+                     for dx = (+ dest-x col)
+                     when (and (integerp sx)
+                               (integerp dx)
+                               (<= 0 sx) (< sx (screen-width src))
+                               (<= 0 dx) (< dx (screen-width dest)))
+                       do (setf (screen-cell dest dx dy)
+                                (screen-cell src sx sy)))))
   dest)
-

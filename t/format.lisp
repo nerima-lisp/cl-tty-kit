@@ -6,6 +6,18 @@
                (if partial (string (code-char partial)) "")
                (make-string pad :initial-element #\Space)))
 
+(defun %signals-non-type-error (thunk)
+  (handler-case
+      (progn
+        (funcall thunk)
+        (is nil))
+    (type-error (condition)
+      (declare (ignore condition))
+      (is nil))
+    (error (condition)
+      (declare (ignore condition))
+      (is t))))
+
 (defun %test-progress-bar-coarse ()
   (is (string= (%blocks 2 nil 2) (format-progress-bar 1/2 4 :fractional nil)))
   (is (string= "    " (format-progress-bar 0 4 :fractional nil)))
@@ -16,7 +28,13 @@
   ;; Custom empty glyph.
   (is (string= "..." (format-progress-bar 0 3 :fractional nil :empty #\.)))
   (is (string= "" (format-progress-bar 1/2 0)))
-  (signals (error c) (format-progress-bar 1/2 -1) (is c)))
+  (signals (error c) (format-progress-bar 1/2 -1) (is c))
+  (%signals-non-type-error
+   (lambda () (format-progress-bar "bad" 4)))
+  (%signals-non-type-error
+   (lambda () (format-progress-bar 1/2 4 :full "bad")))
+  (%signals-non-type-error
+   (lambda () (format-progress-bar 1/2 4 :empty "bad"))))
 
 (defun %test-progress-bar-fractional ()
   ;; Whole cells resolve identically to the coarse bar.
@@ -38,7 +56,19 @@
   (is (string= "hello" (format-columns '("hello") '(3))))
   ;; Custom pad glyph.
   (is (string= "a.." (format-columns '("a") '(3) :pad #\.)))
-  (signals (error c) (format-columns '("a") '(1 2)) (is c)))
+  (signals (error c) (format-columns '("a") '(1 2)) (is c))
+  (%signals-non-type-error
+   (lambda () (format-columns '(:not-a-string) '(3))))
+  (%signals-non-type-error
+   (lambda () (format-columns '("a") '(:wide))))
+  (%signals-non-type-error
+   (lambda () (format-columns '("a") '(3) :aligns :bad)))
+  (%signals-non-type-error
+   (lambda () (format-columns '("a") '(3) :aligns '(:bad))))
+  (%signals-non-type-error
+   (lambda () (format-columns '("a") '(3) :separator :bad)))
+  (%signals-non-type-error
+   (lambda () (format-columns '("a") '(3) :pad "bad"))))
 
 (defun %spark (&rest levels)
   (map 'string (lambda (level) (code-char (+ #x2581 level))) levels))
@@ -54,7 +84,11 @@
   ;; Values are clamped into the range.
   (is (string= (%spark 0 7) (format-sparkline '(-5 15) :min 0 :max 10)))
   ;; Accepts a vector too.
-  (is (string= (%spark 0 7) (format-sparkline #(0 1)))))
+  (is (string= (%spark 0 7) (format-sparkline #(0 1))))
+  (%signals-non-type-error
+   (lambda () (format-sparkline '(:bad))))
+  (%signals-non-type-error
+   (lambda () (format-sparkline '(1 2) :min :low))))
 
 (defun %test-format-table ()
   (is (equal '("a   bb" "ccc d ")
@@ -65,6 +99,16 @@
   ;; Per-column alignment.
   (is (equal '("a b")
              (format-table '(("a" "b")) :aligns '(:right :right))))
+  (%signals-non-type-error
+   (lambda () (format-table '((:bad)))))
+  (%signals-non-type-error
+   (lambda () (format-table '(("a")) :aligns :bad)))
+  (%signals-non-type-error
+   (lambda () (format-table '(("a")) :aligns '(:bad))))
+  (%signals-non-type-error
+   (lambda () (format-table '(("a")) :separator :bad)))
+  (%signals-non-type-error
+   (lambda () (format-table '(("a")) :pad "bad")))
   (is (equal '() (format-table '()))))
 
 (defun %test-spinner-frame ()
@@ -76,7 +120,14 @@
   ;; A custom sequence of strings.
   (is (string= "b" (spinner-frame 1 :frames '("a" "b" "c"))))
   (is (string= "y" (spinner-frame 3 :frames #("x" "y"))))
-  (signals (error c) (spinner-frame 0 :frames :nope) (is c)))
+  (is (string= "" (spinner-frame 0 :frames "")))
+  (signals (error c) (spinner-frame 0 :frames :nope) (is c))
+  (%signals-non-type-error
+   (lambda () (spinner-frame 1.5 :frames :line)))
+  (%signals-non-type-error
+   (lambda () (spinner-frame 0 :frames 42)))
+  (%signals-non-type-error
+   (lambda () (spinner-frame 0 :frames #(1)))))
 
 (defun %test-sixel ()
   ;; 1x1 red: DCS q, palette (196 = cube red), one data byte '@', ST.
@@ -85,12 +136,21 @@
   ;; A zero-area image is an empty sixel.
   (is (string= (format nil "~CPq~C\\" #\Esc #\Esc)
                (format-sixel #() 0 0)))
+  (signals (error c) (format-sixel #() -1 0) (is c))
+  (signals (error c) (format-sixel #() 0 -1) (is c))
+  (signals (error c)
+      (format-sixel #() (1+ cl-tty-kit::+max-terminal-image-pixels+) 1)
+    (is c))
   ;; Structure: DCS introducer at the start, ST at the end.
   (let ((sixel (format-sixel (make-array 12 :initial-element 100) 2 2)))
     (is (eql 0 (search (format nil "~CPq" #\Esc) sixel)))
     (is (search (format nil "~C\\" #\Esc) sixel)))
   ;; A buffer whose length does not match WIDTH*HEIGHT*3 signals.
-  (signals (error c) (format-sixel #(1 2 3) 2 2) (is c)))
+  (signals (error c) (format-sixel #(1 2 3) 2 2) (is c))
+  (%signals-non-type-error
+   (lambda () (format-sixel '(1 2 3 4 5 6) 1 2)))
+  (signals (error c) (format-sixel #(1 2 :invalid) 1 1) (is c))
+  (signals (error c) (format-sixel #(1 2 256) 1 1) (is c)))
 
 (defun %test-kitty-image ()
   ;; 1x1 white RGB: base64 of #(255 255 255) is "////".
@@ -98,6 +158,11 @@
                (ansi-kitty-image #(255 255 255) 1 1)))
   ;; RGBA selects f=32.
   (is (search "f=32" (ansi-kitty-image #(255 0 0 128) 1 1 :format 32)))
+  (signals (error c) (ansi-kitty-image #() -1 0) (is c))
+  (signals (error c) (ansi-kitty-image #() 0 -1) (is c))
+  (signals (error c)
+      (ansi-kitty-image #() (1+ cl-tty-kit::+max-terminal-image-pixels+) 1)
+    (is c))
   ;; Structure: APC introducer, dimensions, ST terminator.
   (let ((image (ansi-kitty-image (make-array 12 :initial-element 100) 2 2)))
     (is (eql 0 (search (format nil "~C_Ga=T" #\Esc) image)))
@@ -109,7 +174,13 @@
     (is (search "m=1" image))
     (is (search "m=0" image)))
   ;; A buffer whose length does not match WIDTH*HEIGHT*bytes-per-pixel signals.
-  (signals (error c) (ansi-kitty-image #(1 2) 1 1) (is c)))
+  (signals (error c) (ansi-kitty-image #(1 2) 1 1) (is c))
+  (%signals-non-type-error
+   (lambda () (ansi-kitty-image '(1 2 3 4 5 6) 1 2)))
+  (%signals-non-type-error
+   (lambda () (ansi-kitty-image #(1 2 3) 1 1 :format 16)))
+  (signals (error c) (ansi-kitty-image #(1 2 :invalid) 1 1) (is c))
+  (signals (error c) (ansi-kitty-image #(1 2 256) 1 1) (is c)))
 
 (defun test-format ()
   (%test-progress-bar-coarse)

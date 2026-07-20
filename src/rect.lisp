@@ -25,6 +25,14 @@
   (unless (typep value '(integer 0 *))
     (error "RECT ~A ~S must be a non-negative integer." name value)))
 
+(defun %assert-rect-integer (name value)
+  (unless (integerp value)
+    (error "RECT ~A ~S must be an integer." name value)))
+
+(defun %assert-constraint-real (name value constraint)
+  (unless (realp value)
+    (error "Layout constraint ~S has non-real ~A ~S." constraint name value)))
+
 (defun make-rect (&key (x 0) (y 0) (width 0) (height 0))
   "Create a RECT at (X, Y) with the given WIDTH and HEIGHT.
 Each field must be a non-negative integer; otherwise an error is signaled."
@@ -36,11 +44,15 @@ Each field must be a non-negative integer; otherwise an error is signaled."
 
 (defun rect-inset (rect &key (all 0) (left all) (top all) (right all) (bottom all))
   "Return a new RECT shrunk inward by the given non-negative margins.
-ALL sets a default applied to every side that is not given its own margin. The
+  ALL sets a default applied to every side that is not given its own margin. The
 origin moves in by LEFT/TOP and the extents shrink by LEFT+RIGHT / TOP+BOTTOM,
 clamped at zero, so an over-large inset collapses to a zero-size rect at the
 inset origin. This is the natural way to carve the interior out of a bordered
 box (inset by 1 on every side)."
+  (%assert-rect-integer :left left)
+  (%assert-rect-integer :top top)
+  (%assert-rect-integer :right right)
+  (%assert-rect-integer :bottom bottom)
   (%make-rect :x (+ (rect-x rect) (max 0 left))
               :y (+ (rect-y rect) (max 0 top))
               :width (max 0 (- (rect-width rect) (max 0 left) (max 0 right)))
@@ -51,6 +63,8 @@ box (inset by 1 on every side)."
 LEFT receives AT columns; RIGHT begins GAP columns further right and receives the
 remainder. AT and GAP are clamped so both parts stay inside RECT, each possibly
 zero-width. The rows are unchanged."
+  (%assert-rect-integer :at at)
+  (%assert-rect-integer :gap gap)
   (let* ((width (rect-width rect))
          (left-width (clamp at 0 width))
          (right-x (min width (+ left-width (max 0 gap))))
@@ -65,6 +79,8 @@ zero-width. The rows are unchanged."
 TOP receives AT rows; BOTTOM begins GAP rows further down and receives the
 remainder. AT and GAP are clamped so both parts stay inside RECT, each possibly
 zero-height. The columns are unchanged."
+  (%assert-rect-integer :at at)
+  (%assert-rect-integer :gap gap)
   (let* ((height (rect-height rect))
          (top-height (clamp at 0 height))
          (bottom-y (min height (+ top-height (max 0 gap))))
@@ -76,6 +92,8 @@ zero-height. The columns are unchanged."
 
 (defun rect-contains-p (rect x y)
   "Return true when column X and row Y fall inside RECT."
+  (%assert-rect-integer :x x)
+  (%assert-rect-integer :y y)
   (and (<= (rect-x rect) x) (< x (+ (rect-x rect) (rect-width rect)))
        (<= (rect-y rect) y) (< y (+ (rect-y rect) (rect-height rect)))))
 
@@ -102,19 +120,35 @@ writing."
 
 (defun %constraint-baseline (constraint available)
   "Return the fixed baseline size a CONSTRAINT claims from AVAILABLE cells."
+  (unless (consp constraint)
+    (error "Layout constraint ~S must be a non-empty list." constraint))
   (destructuring-bind (kind &rest args) constraint
     (ecase kind
-      (:length (max 0 (first args)))
-      (:percentage (max 0 (floor (* (first args) available) 100)))
-      (:ratio (max 0 (floor (* (first args) available) (second args))))
-      (:min (max 0 (first args)))
+      (:length
+       (%assert-constraint-real :length (first args) constraint)
+       (max 0 (first args)))
+      (:percentage
+       (%assert-constraint-real :percentage (first args) constraint)
+       (max 0 (floor (* (first args) available) 100)))
+      (:ratio (let ((denominator (second args)))
+                (%assert-constraint-real :numerator (first args) constraint)
+                (unless (and (integerp denominator) (plusp denominator))
+                  (error "Invalid ratio denominator in layout constraint: ~S" constraint))
+                (max 0 (floor (* (first args) available) denominator))))
+      (:min
+       (%assert-constraint-real :min (first args) constraint)
+       (max 0 (first args)))
       (:fill 0))))
 
 (defun %constraint-weight (constraint)
   "Return the flexible-growth weight of a CONSTRAINT (0 for fixed constraints)."
+  (unless (consp constraint)
+    (error "Layout constraint ~S must be a non-empty list." constraint))
   (destructuring-bind (kind &rest args) constraint
     (case kind
-      (:fill (max 0 (first args)))
+      (:fill
+       (%assert-constraint-real :fill (first args) constraint)
+       (max 0 (first args)))
       (:min 1)
       (otherwise 0))))
 
@@ -168,6 +202,7 @@ weight) and :MIN (weight 1, never below N) constraints via largest-remainder, so
 the integer sizes tile exactly. SPACING cells sit between segments. Sizes are
 clipped so the sub-rects always stay within RECT. An empty CONSTRAINTS yields an
 empty list -- this is the constraint layout primitive TUIs build panels from."
+  (%assert-rect-integer :spacing spacing)
   (let* ((axis-total (ecase direction
                        (:horizontal (rect-width rect))
                        (:vertical (rect-height rect))))

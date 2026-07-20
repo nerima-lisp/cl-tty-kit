@@ -5,6 +5,8 @@
 - harden terminal escape, input, color, mouse, PTY, and image parsing against
   malformed or adversarial data, including bounded numeric parsing, OSC/control
   sanitization, vector element validation, and bracketed-paste preflight limits
+- make screen and layout operations fail atomically for invalid bounds, display
+  widths, ratios, and source slices while preserving existing successful output
 
 ## 0.2.0 - 2026-07-20
 

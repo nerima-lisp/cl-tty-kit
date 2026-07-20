@@ -30,6 +30,14 @@ horizontal, vertical, top-left, top-right, bottom-left, bottom-right.")
              (mapcar #'car +box-borders+)))
     (mapcar #'code-char (rest entry))))
 
+(defun %assert-box-title (title)
+  (unless (or (null title) (stringp title))
+    (error "Box TITLE ~S must be NIL or a string." title)))
+
+(defun %assert-box-title-align (align)
+  (unless (member align '(:left :center :right))
+    (error "Box TITLE-ALIGN ~S must be one of :LEFT, :CENTER, or :RIGHT." align)))
+
 (defun %box-put (screen x y char style style-supplied-p)
   (if style-supplied-p
       (screen-put-cell screen x y char :style style)
@@ -103,6 +111,8 @@ box is a no-op even off-screen; a positive box that leaves the screen signals
 SCREEN-INDEX-OUT-OF-BOUNDS and negative extents signal
 SCREEN-DIMENSIONS-INVALID, both leaving SCREEN unchanged."
   (%assert-screen-rect-bounds screen x y width height)
+  (%assert-box-title title)
+  (%assert-box-title-align title-align)
   (when (and (plusp width) (plusp height))
     (cond
       ((= height 1)

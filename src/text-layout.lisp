@@ -9,6 +9,24 @@
 ;;; never split across a column boundary.
 ;;; --------------------------------------------------------------------------
 
+(defun %assert-layout-string (name value)
+  (unless (stringp value)
+    (error "~A ~S must be a string." name value)))
+
+(defun %assert-layout-width (name value &key positive)
+  (unless (and (integerp value)
+               (if positive (plusp value) t))
+    (error "~A ~S must be ~:[an integer~;a positive integer~]."
+           name value positive)))
+
+(defun %assert-layout-character (name value)
+  (unless (characterp value)
+    (error "~A ~S must be a character." name value)))
+
+(defun %assert-layout-align (align)
+  (unless (member align '(:left :right :center) :test #'eq)
+    (error "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align)))
+
 (defun %width-prefix-end (string budget &key (start 0) (end (length string)))
   "Return the largest index E in [START, END] whose column span from START is
 still within BUDGET. Characters are counted by CHAR-WIDTH, so a wide glyph is
@@ -22,11 +40,11 @@ kept whole -- it is excluded rather than half-included when it would overflow."
              (setf result (1+ index)))
     result))
 
-(defun %string-cell-width (string)
+(defun %string-cell-width (string &key (start 0) (end (length string)))
   "Return the number of grid columns SCREEN-WRITE-STRING would consume for
 STRING, counting each character as at least one column (a double-width glyph
 costs two, including its spacer cell)."
-  (loop for index from 0 below (length string)
+  (loop for index from start below end
         sum (max 1 (char-width (char string index)))))
 
 (defun %cells-prefix-end (string budget)
@@ -46,9 +64,12 @@ check exactly so a clipped run never overflows its region."
   "Return STRING clipped so its terminal column width does not exceed WIDTH.
 When STRING already fits it is returned unchanged. Otherwise the longest prefix
 that leaves room for ELLIPSIS (measured in columns too) is kept and ELLIPSIS is
-appended, so the result stays within WIDTH. A wide glyph straddling the limit is
-dropped whole. When ELLIPSIS alone would not fit in WIDTH it is omitted and the
-plain prefix is returned. A negative WIDTH is treated as zero."
+  appended, so the result stays within WIDTH. A wide glyph straddling the limit is
+  dropped whole. When ELLIPSIS alone would not fit in WIDTH it is omitted and the
+  plain prefix is returned. A negative WIDTH is treated as zero."
+  (%assert-layout-string "STRING" string)
+  (%assert-layout-string "ELLIPSIS" ellipsis)
+  (%assert-layout-width "WIDTH" width)
   (let ((width (max 0 width)))
     (if (<= (string-width string) width)
         string
@@ -71,6 +92,10 @@ ALIGN is :LEFT (pad on the right), :RIGHT (pad on the left), or :CENTER (split
 the padding, with any odd column added on the right). PAD must be a single-column
 character. When STRING is already at least WIDTH columns wide it is returned
 unchanged -- PAD-STRING never truncates. A negative WIDTH is treated as zero."
+  (%assert-layout-string "STRING" string)
+  (%assert-layout-width "WIDTH" width)
+  (%assert-layout-character "PAD" pad)
+  (%assert-layout-align align)
   (unless (= 1 (char-width pad))
     (error "PAD ~S must be a single-column character." pad))
   (let* ((width (max 0 width))
@@ -131,34 +156,44 @@ its own becomes a lone over-width chunk rather than causing an endless loop."
 
 (defun %wrap-paragraph (paragraph width)
   (let ((lines '())
-        (current "")
+        (current-chunks '())
         (current-width 0))
-    (flet ((flush ()
-             (push current lines)
-             (setf current "" current-width 0))
-           (place (chunk chunk-width)
-             (setf current chunk current-width chunk-width)))
+    (labels ((current-line ()
+               (with-output-to-string (out)
+                 (loop for chunk in (nreverse current-chunks)
+                       for first = t then nil
+                       do (unless first (write-char #\Space out))
+                          (write-string chunk out))))
+             (flush ()
+               (push (current-line) lines)
+               (setf current-chunks '() current-width 0))
+             (place (chunk chunk-width)
+               (setf current-chunks (list chunk)
+                     current-width chunk-width))
+             (append-chunk (chunk chunk-width)
+               (push chunk current-chunks)
+               (setf current-width (+ current-width 1 chunk-width))))
       (dolist (word (%split-words paragraph))
         (dolist (chunk (if (> (string-width word) width)
                            (%hard-split-word word width)
                            (list word)))
           (let ((chunk-width (string-width chunk)))
             (cond
-              ((string= current "")
+              ((null current-chunks)
                (place chunk chunk-width))
               ((<= (+ current-width 1 chunk-width) width)
-               (setf current (concatenate 'string current " " chunk)
-                     current-width (+ current-width 1 chunk-width)))
+               (append-chunk chunk chunk-width))
               (t
                (flush)
                (place chunk chunk-width))))))
-      (push current lines))
+      (push (if current-chunks (current-line) "") lines))
     (nreverse lines)))
 
 (defun expand-tabs (string &key (tab-width 8))
   "Return STRING with each tab expanded to spaces up to the next TAB-WIDTH stop.
 The column is tracked by display width and reset by a newline, so the stops line
 up the way a terminal renders them. TAB-WIDTH must be a positive integer."
+  (%assert-layout-string "STRING" string)
   (unless (and (integerp tab-width) (plusp tab-width))
     (error "TAB-WIDTH ~S must be a positive integer." tab-width))
   (with-output-to-string (out)
@@ -181,8 +216,8 @@ up the way a terminal renders them. TAB-WIDTH must be a positive integer."
 Unlike WRAP-STRING this is a hard chop at column boundaries with no word breaking;
 a glyph wider than WIDTH becomes a lone over-width piece. An empty STRING yields
 an empty list. WIDTH must be a positive integer."
-  (unless (and (integerp width) (plusp width))
-    (error "WIDTH ~S must be a positive column count." width))
+  (%assert-layout-string "STRING" string)
+  (%assert-layout-width "WIDTH" width :positive t)
   (if (zerop (length string))
       '()
       (%hard-split-word string width)))
@@ -197,6 +232,8 @@ an empty list. WIDTH must be a positive integer."
            (let ((cursor (+ index 2)))
              (loop while (and (< cursor limit)
                               (not (<= #x40 (char-code (char string cursor)) #x7E)))
+                   when (char= (char string cursor) #\Esc)
+                     do (return-from %skip-escape-sequence cursor)
                    do (incf cursor))
              (if (< cursor limit) (1+ cursor) cursor)))
           ((char= next #\])
@@ -219,6 +256,7 @@ an empty list. WIDTH must be a positive integer."
 Handles CSI (`ESC [ ... final'), OSC (`ESC ] ... BEL/ST'), and simple two-byte
 `ESC X' sequences -- enough to measure or store text a terminal produced. Use
 STRING-WIDTH on the result to get the visible column count of styled text."
+  (%assert-layout-string "STRING" string)
   (with-output-to-string (out)
     (let ((index 0)
           (limit (length string)))
@@ -235,7 +273,7 @@ Words -- runs between spaces -- are kept whole and greedily packed; a single wor
 wider than WIDTH is hard-split at a column boundary. Runs of spaces collapse to a
 single separator, but embedded newlines are honored as forced breaks, so a blank
 line in the input yields an empty string in the result. WIDTH must be positive."
-  (unless (and (integerp width) (plusp width))
-    (error "WIDTH ~S must be a positive column count." width))
+  (%assert-layout-string "STRING" string)
+  (%assert-layout-width "WIDTH" width :positive t)
   (loop for paragraph in (%split-on-newline string)
         append (%wrap-paragraph paragraph width)))
