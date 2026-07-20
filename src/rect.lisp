@@ -1,0 +1,203 @@
+(in-package #:cl-tty-kit)
+
+;;; --------------------------------------------------------------------------
+;;; Rectangular regions for layout
+;;;
+;;; A RECT is a plain 0-based (X, Y, WIDTH, HEIGHT) value. It carries no screen;
+;;; it is the geometry callers thread through SCREEN-DRAW-BOX, SCREEN-WRITE-*,
+;;; and SCREEN-FILL-RECT to lay panels out without recomputing offsets by hand.
+;;; --------------------------------------------------------------------------
+
+(defstruct (rect (:constructor %make-rect (&key (x 0) (y 0) (width 0) (height 0)))
+                 (:copier nil))
+  "A rectangular region with a 0-based X/Y origin and WIDTH/HEIGHT extents."
+  (x 0 :type (integer 0))
+  (y 0 :type (integer 0))
+  (width 0 :type (integer 0))
+  (height 0 :type (integer 0)))
+
+(setf (documentation 'rect-x 'function) "Return the origin column of RECT.")
+(setf (documentation 'rect-y 'function) "Return the origin row of RECT.")
+(setf (documentation 'rect-width 'function) "Return the column extent of RECT.")
+(setf (documentation 'rect-height 'function) "Return the row extent of RECT.")
+
+(defun %assert-rect-extent (name value)
+  (unless (typep value '(integer 0 *))
+    (error "RECT ~A ~S must be a non-negative integer." name value)))
+
+(defun make-rect (&key (x 0) (y 0) (width 0) (height 0))
+  "Create a RECT at (X, Y) with the given WIDTH and HEIGHT.
+Each field must be a non-negative integer; otherwise an error is signaled."
+  (%assert-rect-extent :x x)
+  (%assert-rect-extent :y y)
+  (%assert-rect-extent :width width)
+  (%assert-rect-extent :height height)
+  (%make-rect :x x :y y :width width :height height))
+
+(defun rect-inset (rect &key (all 0) (left all) (top all) (right all) (bottom all))
+  "Return a new RECT shrunk inward by the given non-negative margins.
+ALL sets a default applied to every side that is not given its own margin. The
+origin moves in by LEFT/TOP and the extents shrink by LEFT+RIGHT / TOP+BOTTOM,
+clamped at zero, so an over-large inset collapses to a zero-size rect at the
+inset origin. This is the natural way to carve the interior out of a bordered
+box (inset by 1 on every side)."
+  (%make-rect :x (+ (rect-x rect) (max 0 left))
+              :y (+ (rect-y rect) (max 0 top))
+              :width (max 0 (- (rect-width rect) (max 0 left) (max 0 right)))
+              :height (max 0 (- (rect-height rect) (max 0 top) (max 0 bottom)))))
+
+(defun rect-split-horizontal (rect at &key (gap 0))
+  "Split RECT into (VALUES LEFT RIGHT) at column offset AT within the rect.
+LEFT receives AT columns; RIGHT begins GAP columns further right and receives the
+remainder. AT and GAP are clamped so both parts stay inside RECT, each possibly
+zero-width. The rows are unchanged."
+  (let* ((width (rect-width rect))
+         (left-width (clamp at 0 width))
+         (right-x (min width (+ left-width (max 0 gap))))
+         (right-width (- width right-x)))
+    (values (%make-rect :x (rect-x rect) :y (rect-y rect)
+                        :width left-width :height (rect-height rect))
+            (%make-rect :x (+ (rect-x rect) right-x) :y (rect-y rect)
+                        :width right-width :height (rect-height rect)))))
+
+(defun rect-split-vertical (rect at &key (gap 0))
+  "Split RECT into (VALUES TOP BOTTOM) at row offset AT within the rect.
+TOP receives AT rows; BOTTOM begins GAP rows further down and receives the
+remainder. AT and GAP are clamped so both parts stay inside RECT, each possibly
+zero-height. The columns are unchanged."
+  (let* ((height (rect-height rect))
+         (top-height (clamp at 0 height))
+         (bottom-y (min height (+ top-height (max 0 gap))))
+         (bottom-height (- height bottom-y)))
+    (values (%make-rect :x (rect-x rect) :y (rect-y rect)
+                        :width (rect-width rect) :height top-height)
+            (%make-rect :x (rect-x rect) :y (+ (rect-y rect) bottom-y)
+                        :width (rect-width rect) :height bottom-height))))
+
+(defun rect-contains-p (rect x y)
+  "Return true when column X and row Y fall inside RECT."
+  (and (<= (rect-x rect) x) (< x (+ (rect-x rect) (rect-width rect)))
+       (<= (rect-y rect) y) (< y (+ (rect-y rect) (rect-height rect)))))
+
+(defun rect-empty-p (rect)
+  "Return true when RECT encloses no cells (zero width or zero height)."
+  (or (zerop (rect-width rect)) (zerop (rect-height rect))))
+
+(defun rect-area (rect)
+  "Return the number of cells RECT covers (its width times its height)."
+  (* (rect-width rect) (rect-height rect)))
+
+(defun rect-intersect (a b)
+  "Return the overlap of rects A and B as a new RECT.
+When they do not overlap the result is an empty rect (RECT-EMPTY-P true). This is
+the clipping primitive: intersect a draw region with the screen bounds before
+writing."
+  (let* ((x (max (rect-x a) (rect-x b)))
+         (y (max (rect-y a) (rect-y b)))
+         (right (min (+ (rect-x a) (rect-width a)) (+ (rect-x b) (rect-width b))))
+         (bottom (min (+ (rect-y a) (rect-height a)) (+ (rect-y b) (rect-height b)))))
+    (%make-rect :x x :y y
+                :width (max 0 (- right x))
+                :height (max 0 (- bottom y)))))
+
+(defun %constraint-baseline (constraint available)
+  "Return the fixed baseline size a CONSTRAINT claims from AVAILABLE cells."
+  (destructuring-bind (kind &rest args) constraint
+    (ecase kind
+      (:length (max 0 (first args)))
+      (:percentage (max 0 (floor (* (first args) available) 100)))
+      (:ratio (max 0 (floor (* (first args) available) (second args))))
+      (:min (max 0 (first args)))
+      (:fill 0))))
+
+(defun %constraint-weight (constraint)
+  "Return the flexible-growth weight of a CONSTRAINT (0 for fixed constraints)."
+  (destructuring-bind (kind &rest args) constraint
+    (case kind
+      (:fill (max 0 (first args)))
+      (:min 1)
+      (otherwise 0))))
+
+(defun %clip-sizes (sizes available)
+  "Clip SIZES cumulatively so their running sum never exceeds AVAILABLE."
+  (let ((remaining available))
+    (mapcar (lambda (size)
+              (let ((take (max 0 (min size remaining))))
+                (decf remaining take)
+                take))
+            sizes)))
+
+(defun %distribute-remaining (sizes weights remaining)
+  "Add REMAINING cells to SIZES in proportion to WEIGHTS, using the
+largest-remainder method so the integer sizes still sum exactly."
+  (let ((total-weight (reduce #'+ weights)))
+    (if (or (<= remaining 0) (zerop total-weight))
+        sizes
+        (let* ((shares (mapcar (lambda (weight) (/ (* remaining weight) total-weight))
+                               weights))
+               (floors (mapcar #'floor shares))
+               (leftover (- remaining (reduce #'+ floors)))
+               (order (mapcar #'car
+                              (sort (loop for share in shares
+                                          for weight in weights
+                                          for index from 0
+                                          when (plusp weight)
+                                            collect (cons index (- share (floor share))))
+                                    #'> :key #'cdr)))
+               (result (mapcar #'+ sizes floors)))
+          (loop repeat leftover
+                for index in order
+                do (incf (nth index result)))
+          result))))
+
+(defun %layout-solve-sizes (available constraints)
+  (let* ((baselines (mapcar (lambda (constraint)
+                              (%constraint-baseline constraint available))
+                            constraints))
+         (weights (mapcar #'%constraint-weight constraints))
+         (remaining (- available (reduce #'+ baselines))))
+    (%clip-sizes (%distribute-remaining baselines weights remaining) available)))
+
+(defun layout-split (rect direction constraints &key (spacing 0))
+  "Divide RECT along DIRECTION into one sub-rect per constraint, returning them.
+DIRECTION is :HORIZONTAL (split into columns) or :VERTICAL (into rows). Each entry
+of CONSTRAINTS sizes the matching sub-rect and is one of (:LENGTH N),
+(:PERCENTAGE P), (:RATIO NUM DEN), (:MIN N), or (:FILL WEIGHT). Fixed constraints
+take their size from the axis extent; the leftover is shared among :FILL (by
+weight) and :MIN (weight 1, never below N) constraints via largest-remainder, so
+the integer sizes tile exactly. SPACING cells sit between segments. Sizes are
+clipped so the sub-rects always stay within RECT. An empty CONSTRAINTS yields an
+empty list -- this is the constraint layout primitive TUIs build panels from."
+  (let* ((axis-total (ecase direction
+                       (:horizontal (rect-width rect))
+                       (:vertical (rect-height rect))))
+         (gaps (* (max 0 spacing) (max 0 (1- (length constraints)))))
+         (available (max 0 (- axis-total gaps)))
+         (sizes (%layout-solve-sizes available constraints))
+         (offset 0)
+         (rects '()))
+    (dolist (size sizes (nreverse rects))
+      (push (ecase direction
+              (:horizontal (%make-rect :x (+ (rect-x rect) offset)
+                                       :y (rect-y rect)
+                                       :width size
+                                       :height (rect-height rect)))
+              (:vertical (%make-rect :x (rect-x rect)
+                                     :y (+ (rect-y rect) offset)
+                                     :width (rect-width rect)
+                                     :height size)))
+            rects)
+      (incf offset (+ size (max 0 spacing))))))
+
+(defun rect-union (a b)
+  "Return the smallest RECT that contains both A and B.
+An empty operand is ignored (the other is returned), so accumulating a union
+over a set of damaged regions yields their bounding box."
+  (cond
+    ((rect-empty-p a) b)
+    ((rect-empty-p b) a)
+    (t (let* ((x (min (rect-x a) (rect-x b)))
+              (y (min (rect-y a) (rect-y b)))
+              (right (max (+ (rect-x a) (rect-width a)) (+ (rect-x b) (rect-width b))))
+              (bottom (max (+ (rect-y a) (rect-height a)) (+ (rect-y b) (rect-height b)))))
+         (%make-rect :x x :y y :width (- right x) :height (- bottom y))))))
