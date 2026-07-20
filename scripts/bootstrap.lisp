@@ -43,9 +43,11 @@
 (defun load-project-file (relative-pathname)
   (load (project-pathname relative-pathname)))
 
-(defun load-core-system ()
+(defun load-core-system (&key force)
+  (when force
+    (setf *core-loaded-p* nil))
   (unless *core-loaded-p*
-    (asdf:load-system :cl-tty-kit)
+    (asdf:load-system :cl-tty-kit :force force)
     (setf *core-loaded-p* t))
   t)
 
@@ -56,9 +58,11 @@
     (setf *support-loaded-p* t))
   t)
 
-(defun load-test-system ()
+(defun load-test-system (&key force)
+  (when force
+    (setf *test-loaded-p* nil))
   (unless *test-loaded-p*
-    (asdf:load-system :cl-tty-kit/test)
+    (asdf:load-system :cl-tty-kit/test :force force)
     (setf *test-loaded-p* t))
   t)
 

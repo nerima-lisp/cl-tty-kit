@@ -40,14 +40,19 @@
               *coverage-timeout-seconds*))))
 
 (defun coverage-entry-count ()
-  "Return the number of SB-COVER instrumentation entries recorded so far, or 0
-if this SBCL build keeps that data somewhere other than SB-INT:*CODE-COVERAGE-INFO*.
-This is a progress diagnostic only; SB-COVER:REPORT below does not depend on it,
-so an unresolvable symbol here degrades the log output, not the coverage report."
+  "Return the number of SB-COVER instrumentation entries recorded so far."
   (let ((variable (find-symbol "*CODE-COVERAGE-INFO*" "SB-INT")))
     (if (and variable (boundp variable))
         (hash-table-count (car (symbol-value variable)))
         0)))
+
+(defun report-empty-p (coverage-dir)
+  (let ((index-path (merge-pathnames #P"cover-index.html" coverage-dir)))
+    (or (not (probe-file index-path))
+        (with-open-file (stream index-path :direction :input)
+          (loop for line = (read-line stream nil nil)
+                while line
+                thereis (search "No code coverage data found." line))))))
 
 (defun canonical-directory (path)
   (uiop:ensure-directory-pathname (truename path)))
@@ -72,12 +77,12 @@ so an unresolvable symbol here degrades the log output, not the coverage report.
   (format t "~&[COVERAGE] instrumented load~%")
   (finish-output)
   (with-coverage-timeout ("instrumented load")
-    (cl-tty-kit/bootstrap:load-core-system))
+    (cl-tty-kit/bootstrap:load-core-system :force t))
   (format t "~&[COVERAGE] entries after load: ~D~%" (coverage-entry-count))
   (format t "~&[COVERAGE] tests~%")
   (finish-output)
   (with-coverage-timeout ("coverage tests")
-    (cl-tty-kit/bootstrap:load-test-system)
+    (cl-tty-kit/bootstrap:load-test-system :force t)
     (call-exported-function "CL-TTY-KIT/TEST" "RUN-TESTS"))
   (format t "~&[COVERAGE] entries after tests: ~D~%" (coverage-entry-count))
   (format t "~&[COVERAGE] examples~%")
@@ -89,4 +94,7 @@ so an unresolvable symbol here degrades the log output, not the coverage report.
   (finish-output)
   (sb-cover:report coverage-dir
                    :if-matches (lambda (path)
-                                 (source-file-covered-p path project-prefix))))
+                                 (source-file-covered-p path project-prefix)))
+  (when (report-empty-p coverage-dir)
+    (error "Coverage report at ~A did not capture any source coverage data."
+           coverage-dir)))

@@ -16,6 +16,8 @@
   occurs check, validate clause databases, goals, bindings, and primitive
   arities, and prove negation goals by existence instead of materializing every
   binding
+- make coverage verification fail when SB-COVER produces an empty source report
+  instead of silently accepting a non-instrumented run
 
 ## 0.2.0 - 2026-07-20
 
