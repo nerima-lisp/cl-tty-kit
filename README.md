@@ -43,18 +43,54 @@ degrading.
 
 - raw mode helpers for SBCL
 - terminal session lifecycle helper
-- ANSI escape sequence helpers
-- key-event decoding from terminal input
+- ANSI escape sequence helpers: cursor motion, save/restore, scroll regions, window
+  title, cursor shape, mouse-reporting toggles, and the full SGR text attributes
+- key-event decoding from terminal input, with `key-event->string` labels and
+  kitty press/repeat/release `key-event-kind`
+- reverse SGR parsing (`decode-sgr`, `parse-styled-string`) and Device Attributes
+  request/decode
+- kitty associated text (`key-event-text`) and CSI in-place editing escapes
+  (insert/delete line/char, VPA, REP)
+- PTY window-size propagation (`pty-resize`)
+- sixel image encoding (`format-sixel`) for bitmap output
+- SGR mouse decoding into structured press, release, drag, move, and wheel events
+- focus-reporting toggles and `ESC[I`/`ESC[O` decoding into focus key events
 - streaming bracketed-paste collection for chunked reads
 - Unicode terminal column width for layout (`char-width`, `string-width`)
-- a pure screen and cell model
+- display-width-aware text layout: `truncate-string`, `pad-string`, `wrap-string`
+- runtime terminal size via `terminal-size` (ioctl), synchronized-update and
+  bell/reset escapes, and OSC 8 hyperlinks
+- color conversions: hex/`rgb()`/name parsing, xterm 256-palette round-tripping,
+  16-color downsampling, HSL/HSV, perceived luminance, contrast, blending, gradients
+- OSC helpers beyond links: clipboard (OSC 52), palette set/reset (OSC 4/104),
+  and default fg/bg query (OSC 10/11) with reply decoding
+- a full SGR style model incl. extended underline styles, underline color, and overline
+- East Asian ambiguous-width policy, tab expansion, hard column chopping, and
+  ANSI-sequence stripping for measuring styled text
+- textual widgets: sub-cell Unicode progress bars, sparklines, spinners, aligned
+  columns, and auto-width tables
+- a `rect` layout geometry with insetting, splitting, intersection/union, and a
+  ratatui-style `layout-split` constraint solver
+- Unicode grapheme-cluster segmentation (`string-graphemes`, `grapheme-width`)
+- a pure screen and cell model with copy, blit, scroll, fill, row inspection,
+  multi-line/wrapped text placement, and plain-text snapshots
+- box drawing (single, rounded, double, heavy, and ASCII borders and lines)
+- rect-aware aligned text placement (horizontal and vertical centering)
+- a normalized style model with 256-color and truecolor, named colors, and an
+  `style-ansi` emitter for text rendered outside the screen grid
+- OSC 8 hyperlinks and color-gradient generation
 - cursor state helpers
 - ANSI rendering and diff rendering
+- a double-buffered `renderer` that wraps the diff-render loop (draw, render only
+  the changes, snapshot)
 - frame-oriented render helpers that compose screen diffs with final cursor state
 - a minimal PTY abstraction for SBCL
-- runnable examples for rendering, input decoding, screen diffs, and terminal session lifecycle
+- runnable examples for rendering, input decoding, screen diffs, boxed panels,
+  mouse decoding, and terminal session lifecycle
 - a short roadmap, release process, and change history in `ROADMAP.md`, `RELEASING.md`, and `CHANGELOG.md`
 - an explicit repository-local quality gate in `docs/QUALITY-GATES.md`
+- a comprehensive capability enumeration in `docs/FEATURE-AUDIT.md` (what exists,
+  what was intentionally deferred, and why)
 
 ## Architecture
 
@@ -66,10 +102,13 @@ The implementation is split by concern:
 - `src/clamp.lisp`, `src/string-empty.lisp`, `src/output-utils.lisp`, and `src/utf8.lisp` for reusable utilities and codec helpers
 - `src/char-width.lisp` for Unicode terminal column width, expressed as width
   relations over East Asian and combining-mark data tables in `src/char-width-data.lisp`
-- `src/raw-mode.lisp` for SBCL-specific terminal mode control
+- `src/text-layout.lisp` for display-width-aware truncation, padding, and wrapping
+- `src/color.lisp` for hex/RGB/xterm-256 color conversions, `src/format.lisp` for progress-bar/sparkline/column widgets, and `src/rect.lisp` for layout geometry
+- `src/raw-mode.lisp` for SBCL-specific terminal mode control and `src/terminal-size.lisp` for the ioctl window-size query
 - `src/ansi.lisp` for escape-sequence string builders
 - `src/key-tables.lisp` for key decoding tables and `src/keys.lisp`, `src/input-state.lisp`, and `src/input-decode.lisp` for decoding logic
-- `src/cell.lisp` for cell/style data, `src/screen.lisp` and `src/cursor.lisp` for state transitions, `src/render-style.lisp` for ANSI style emission, and `src/render.lisp` for repaint/diff output
+- `src/mouse.lisp` for SGR mouse-report decoding, integrated into the CSI decode path
+- `src/cell.lisp` for cell/style data, `src/screen.lisp` and `src/cursor.lisp` for state transitions, `src/screen-text.lisp` for multi-line/wrapped/aligned text placement, `src/box.lisp` for box drawing, `src/render-style.lisp` for ANSI style emission, `src/render.lisp` for repaint/diff output, and `src/renderer.lisp` for the double-buffered render loop
 - `src/pty.lisp` for the SBCL PTY wrapper
 
 The pure parts stay easy to test, while platform-specific code is isolated.
@@ -120,6 +159,7 @@ The public API is intentionally small and grouped by subsystem.
 ### Terminal session
 
 - `with-terminal-session`
+- `terminal-size`
 
 ### ANSI helpers
 
@@ -132,11 +172,63 @@ The public API is intentionally small and grouped by subsystem.
 - `ansi-exit-alternate-screen`
 - `ansi-enable-bracketed-paste`
 - `ansi-disable-bracketed-paste`
+- `ansi-hyperlink`
+- `ansi-set-clipboard`
+- `ansi-set-palette-color`
+- `ansi-reset-palette`
+- `ansi-request-foreground-color`
+- `ansi-request-background-color`
+- `ansi-enable-line-wrap`
+- `ansi-disable-line-wrap`
+- `ansi-cursor-next-line`
+- `ansi-cursor-previous-line`
+- `ansi-enable-focus-reporting`
+- `ansi-disable-focus-reporting`
+- `ansi-request-cursor-position`
+- `ansi-request-device-attributes`
 - `ansi-set-keyboard-enhancements`
 - `ansi-push-keyboard-enhancements`
 - `ansi-pop-keyboard-enhancements`
+- `ansi-bell`
+- `ansi-reset-terminal`
+- `ansi-begin-synchronized-update`
+- `ansi-end-synchronized-update`
+- `ansi-default-foreground`
+- `ansi-default-background`
 - `ansi-bold`
+- `ansi-dim`
+- `ansi-italic`
+- `ansi-underline`
+- `ansi-blink`
+- `ansi-reverse`
+- `ansi-hidden`
+- `ansi-strikethrough`
 - `ansi-reset-style`
+- `ansi-sgr`
+- `ansi-cursor-up`
+- `ansi-cursor-down`
+- `ansi-cursor-forward`
+- `ansi-cursor-back`
+- `ansi-cursor-column`
+- `ansi-cursor-row`
+- `ansi-save-cursor`
+- `ansi-restore-cursor`
+- `ansi-insert-line`
+- `ansi-delete-line`
+- `ansi-insert-char`
+- `ansi-delete-char`
+- `ansi-erase-char`
+- `ansi-repeat`
+- `ansi-scroll-up`
+- `ansi-scroll-down`
+- `ansi-set-scroll-region`
+- `ansi-reset-scroll-region`
+- `ansi-set-mode`
+- `ansi-reset-mode`
+- `ansi-set-window-title`
+- `ansi-set-cursor-style`
+- `ansi-enable-mouse`
+- `ansi-disable-mouse`
 
 ### Input decoding
 
@@ -145,17 +237,95 @@ The public API is intentionally small and grouped by subsystem.
 - `key-event-type`
 - `key-event-code`
 - `key-event-modifiers`
+- `key-event-kind`
+- `key-event-text`
+- `key-event-shifted-key`
+- `key-event-base-key`
 - `input-decoder`
 - `make-input-decoder`
 - `decode-input`
 - `decode-input-chunk`
 - `decode-key-sequence`
+- `decode-cursor-position-report`
+- `decode-color-report`
+- `decode-device-attributes`
+- `decode-sgr`
+- `parse-styled-string`
 - `flush-input-decoder`
+- `key-event->string`
+
+### Mouse input
+
+- `mouse-event`
+- `make-mouse-event`
+- `mouse-event-button`
+- `mouse-event-action`
+- `mouse-event-x`
+- `mouse-event-y`
+- `mouse-event-modifiers`
+- `decode-mouse-sequence`
 
 ### Character width
 
 - `char-width`
 - `string-width`
+- `string-graphemes`
+- `grapheme-count`
+- `grapheme-width`
+
+### Text layout
+
+- `truncate-string`
+- `pad-string`
+- `wrap-string`
+- `expand-tabs`
+- `chop-string`
+- `strip-ansi`
+- `*east-asian-ambiguous-wide*`
+
+### Color utilities
+
+- `parse-hex-color`
+- `parse-color`
+- `color-256-to-rgb`
+- `rgb-to-256`
+- `rgb-to-ansi16`
+- `color-luminance`
+- `contrast-color`
+- `rgb-to-hsl`
+- `hsl-to-rgb`
+- `rgb-to-hsv`
+- `hsv-to-rgb`
+- `blend-colors`
+- `color-gradient`
+
+### Formatting widgets
+
+- `format-progress-bar`
+- `format-columns`
+- `format-table`
+- `format-sparkline`
+- `spinner-frame`
+- `format-sixel`
+- `ansi-kitty-image`
+
+### Rectangles and layout
+
+- `rect`
+- `make-rect`
+- `rect-x`
+- `rect-y`
+- `rect-width`
+- `rect-height`
+- `rect-inset`
+- `rect-split-horizontal`
+- `rect-split-vertical`
+- `rect-contains-p`
+- `rect-empty-p`
+- `rect-area`
+- `rect-intersect`
+- `rect-union`
+- `layout-split`
 
 ### Screen and cells
 
@@ -166,7 +336,12 @@ The public API is intentionally small and grouped by subsystem.
 - `make-style`
 - `style-fg`
 - `style-bg`
+- `style-underline-color`
+- `style-ansi`
+- `style-merge`
+- `named-color`
 - `copy-cell`
+- `cell-blank-p`
 - `screen`
 - `make-screen`
 - `screen-width`
@@ -177,7 +352,23 @@ The public API is intentionally small and grouped by subsystem.
 - `screen-clear`
 - `screen-put-cell`
 - `screen-fill-rect`
+- `screen-fill`
 - `screen-write-string`
+- `screen-copy`
+- `screen-row-string`
+- `screen-scroll`
+- `screen-blit`
+- `screen-crop`
+- `screen-write-lines`
+- `screen-write-wrapped`
+- `screen-write-aligned`
+- `screen-to-string`
+
+### Box drawing
+
+- `screen-draw-box`
+- `screen-draw-horizontal-line`
+- `screen-draw-vertical-line`
 
 ### Cursor and rendering
 
@@ -203,6 +394,17 @@ so callers can explicitly compose final cursor placement and visibility with
 provide that composition directly, including the common "diff plus final
 cursor restore" path for app render loops.
 
+### Double-buffered renderer
+
+- `renderer`
+- `make-renderer`
+- `renderer-screen`
+- `renderer-width`
+- `renderer-height`
+- `renderer-render`
+- `renderer-clear`
+- `renderer-resize`
+
 ### PTY
 
 - `pty`
@@ -211,6 +413,9 @@ cursor restore" path for app render loops.
 - `pty-stream`
 - `pty-read`
 - `pty-write`
+- `pty-resize`
+- `pty-alive-p`
+- `pty-exit-code`
 - `close-pty`
 
 If PTY startup, shutdown, reads, or writes fail, `make-pty`, `close-pty`,
@@ -269,6 +474,18 @@ More examples live in `examples/`:
 - `examples/event-loop.lisp`: compose a deterministic terminal event loop from streaming decode and diff rendering
 - `examples/terminal-session.lisp`: scope alternate-screen lifecycle, cursor visibility, and input modes
 - `examples/status-dashboard.lisp`: render an initial dashboard frame followed by incremental updates
+- `examples/boxed-panel.lisp`: frame a rounded box with a title, padded fields, and colored status text
+- `examples/mouse-decoding.lisp`: decode SGR mouse press, release, wheel, and drag reports
+- `examples/progress-dashboard.lisp`: compose a boxed dashboard with colored progress bars and aligned columns
+- `examples/layout-panels.lisp`: split a frame into bordered panels with a sparkline and a columns table
+- `examples/renderer-loop.lisp`: drive a double-buffered renderer, emitting a full paint then a diff-only update
+- `examples/color-report.lisp`: render a color gradient bar and a table of named color indices and luminance
+- `examples/layout-dashboard.lisp`: lay out a header, sidebar, main, and footer dashboard with layout-split constraints
+- `examples/text-panel.lisp`: frame a word-wrapped paragraph under an ellipsized title by display width
+- `examples/hsl-rainbow.lisp`: sweep the HSL hue circle across a panel with hsl-to-rgb color conversion
+- `examples/styled-parse.lisp`: recover text and style segments from an ANSI-styled string with parse-styled-string
+- `examples/graphemes.lisp`: split a mixed string into grapheme clusters and report each cluster's display width
+- `examples/sixel-image.lisp`: encode a small red-to-blue gradient image as a sixel DCS string
 
 ## Core Concepts
 
