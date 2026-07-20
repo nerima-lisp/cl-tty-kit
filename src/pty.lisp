@@ -84,6 +84,54 @@
           output)))))
 
 #+sbcl
+(defun pty-resize (pty columns rows)
+  "Set PTY's window size to COLUMNS by ROWS, returning PTY.
+Sends TIOCSWINSZ on the PTY's file descriptor, which is how a terminal tells a
+child process its window changed (the child normally receives SIGWINCH). Signals
+PTY-OPERATION-FAILED when the size cannot be set -- for example on a platform
+whose ioctl constant is unknown or a stream without an accessible descriptor."
+  (%with-pty-operation (:resize pty)
+    (let* ((stream (%pty-stream-or-error pty))
+           (fd (%stream-fd stream)))
+      (unless (and fd (%set-terminal-size fd columns rows))
+        (error "Could not set the PTY window size."))
+      pty)))
+
+#-sbcl
+(defun pty-resize (pty columns rows)
+  (declare (ignore pty columns rows))
+  (unsupported :pty))
+
+#+sbcl
+(defun pty-alive-p (pty)
+  "Return true when PTY's child process is still running.
+Returns NIL once the child has exited, or when PTY has no process (for example a
+stream-only PTY, or after CLOSE-PTY has cleared it). Use this in a read loop to
+tell \"no data yet\" from \"the child exited\"."
+  (let ((process (pty-process pty)))
+    (and process (sb-ext:process-alive-p process) t)))
+
+#-sbcl
+(defun pty-alive-p (pty)
+  (declare (ignore pty))
+  (unsupported :pty))
+
+#+sbcl
+(defun pty-exit-code (pty)
+  "Return the integer exit code of PTY's child, or NIL while it is still running
+(or when PTY has no process). Read it after PTY-ALIVE-P turns NIL and before
+CLOSE-PTY clears the process slot: 0 means the child succeeded, non-zero is its
+failure status. This completes the lifecycle -- MAKE-PTY, PTY-ALIVE-P,
+PTY-EXIT-CODE, CLOSE-PTY."
+  (let ((process (pty-process pty)))
+    (and process (sb-ext:process-exit-code process))))
+
+#-sbcl
+(defun pty-exit-code (pty)
+  (declare (ignore pty))
+  (unsupported :pty))
+
+#+sbcl
 (defun %wait-for-process-exit (process &key (attempts 20) (sleep-seconds 0.01))
   (loop repeat attempts
         until (not (sb-ext:process-alive-p process))

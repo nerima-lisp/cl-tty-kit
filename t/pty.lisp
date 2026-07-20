@@ -220,6 +220,40 @@
                                     (search "hello" output)))))
       (is (search "hello" output)))
     (close-pty pty))
+  ;; PTY-RESIZE sets the window size, verifiable by reading it back via ioctl.
+  (let ((pty (make-pty :program "/bin/sh")))
+    (is (eq pty (pty-resize pty 111 37)))
+    (let ((fd (cl-tty-kit::%stream-fd (pty-stream pty))))
+      (when fd
+        (multiple-value-bind (columns rows) (terminal-size fd)
+          (is (eql 111 columns))
+          (is (eql 37 rows)))))
+    (close-pty pty))
+  ;; A stream without a file descriptor signals a structured resize failure.
+  (let ((pty (cl-tty-kit::%make-pty :process nil
+                                    :stream (make-string-output-stream))))
+    (signals-pty-operation-failed (:resize pty "PTY operation RESIZE failed")
+      (pty-resize pty 80 24)))
+  ;; PTY-ALIVE-P tracks the child's lifetime.
+  (let ((pty (make-pty :program "/bin/sh")))
+    (is (pty-alive-p pty))
+    (close-pty pty)
+    (is (not (pty-alive-p pty))))
+  ;; A stream-only PTY (no process) is never alive.
+  (is (not (pty-alive-p (cl-tty-kit::%make-pty :process nil
+                                              :stream (make-string-input-stream "")))))
+  ;; PTY-EXIT-CODE reports the child's status once it has finished.
+  (let ((pty (make-pty :program "/bin/sh" :args '("-c" "exit 3"))))
+    (loop repeat 200 while (pty-alive-p pty) do (sleep 0.01))
+    (is (eql 3 (pty-exit-code pty)))
+    (close-pty pty))
+  (let ((pty (make-pty :program "/bin/sh" :args '("-c" "exit 0"))))
+    (loop repeat 200 while (pty-alive-p pty) do (sleep 0.01))
+    (is (eql 0 (pty-exit-code pty)))
+    (close-pty pty))
+  ;; No process -> no exit code.
+  (is (null (pty-exit-code (cl-tty-kit::%make-pty :process nil
+                                                 :stream (make-string-input-stream "")))))
   t)
 
 #-sbcl

@@ -50,7 +50,20 @@
                                                   :keyboard-enhancements keyboard-enhancements)
                output)))
 
+(defun %test-terminal-size ()
+  ;; Under the test harness FD 0 is usually not a tty, so TERMINAL-SIZE either
+  ;; reports the real size (two positive integers) or NIL/NIL -- never an error.
+  (multiple-value-bind (columns rows) (terminal-size)
+    (is (or (and (null columns) (null rows))
+            (and (integerp columns) (plusp columns)
+                 (integerp rows) (plusp rows)))))
+  ;; An obviously invalid descriptor is reported as unavailable, not an error.
+  (multiple-value-bind (columns rows) (terminal-size -1)
+    (is (null columns))
+    (is (null rows))))
+
 (defun test-terminal-session ()
+  (%test-terminal-size)
   (let ((output nil)
         (body-ran nil))
     (setf output
