@@ -24,8 +24,8 @@
   (%preferred-diff-commands screen previous))
 
 (defun %frame-render-commands (screen cursor)
-  (append (%screen-render-commands screen)
-          (%cursor-render-commands cursor)))
+  (nconc (%screen-render-commands screen)
+         (%cursor-render-commands cursor)))
 
 (define-render-function render-frame
     (screen cursor &optional stream)

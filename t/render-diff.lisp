@@ -126,6 +126,23 @@ CELLS are literal specifications, so callers write them inline without quoting."
        (old new expected))
     (%assert-render-output (render-diff new old) expected)))
 
+(defun %test-render-cell-control-character-sanitization ()
+  (let ((old (make-screen 1 1)))
+    ;; #\Bell is printable on some implementations; code 7 is the C0 BEL.
+    (dolist (char (list #\Esc (code-char 7) #\Rubout (code-char #x9b)))
+      (let ((new (make-screen 1 1)))
+        (screen-put-cell new 0 0 char)
+        (%assert-render-output (render-diff new old)
+                               (%ansi-string (ansi-move-cursor 1 1) " "))
+        (%assert-render-output (render-screen new)
+                               (%ansi-string (ansi-clear-screen)
+                                             (ansi-move-cursor 1 1)
+                                             " ")))))
+  (let ((new (%screen-with-styled-cells "X" (0 0 #\Esc :style '(:bold))))
+        (old (make-screen 1 1)))
+    (%assert-render-output (render-diff new old)
+                           (list :contains (ansi-bold) " " (ansi-reset-style)))))
+
 (defun %test-render-diff-layout-cases ()
   (do-test-case-bind
       (diff-case
@@ -202,6 +219,7 @@ CELLS are literal specifications, so callers write them inline without quoting."
 (defun test-render-diff ()
   (%test-render-diff-basic-output-cases)
   (%test-render-diff-style-cases)
+  (%test-render-cell-control-character-sanitization)
   (%test-render-diff-layout-cases)
   (%test-render-diff-clear-line-cases)
   (%test-render-diff-stream-output-cases)
