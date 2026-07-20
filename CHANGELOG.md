@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-07-20
 
 - greatly expand the ANSI helper set: cursor motion (`ansi-cursor-up`/`-down`/
   `-forward`/`-back`/`-column`), `ansi-save-cursor`/`ansi-restore-cursor`,
