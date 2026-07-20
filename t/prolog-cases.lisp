@@ -65,4 +65,22 @@
      "primitive relations reject clauses")
     (clause-primitive
      "cannot become primitive"
-     "relations with clauses reject primitives")))
+     "relations with clauses reject primitives")
+    (invalid-db
+     "Expected a clause database"
+     "add-clause rejects non-database inputs")
+    (empty-clause
+     "Clause must contain a head goal"
+     "add-clause rejects empty clauses")
+    (dotted-clause
+     "Clause must be a proper list"
+     "add-clause rejects dotted clauses")
+    (variable-relation
+     "Clause head must be a non-empty proper list"
+     "add-clause rejects variable relation symbols")
+    (invalid-primitive-relation
+     "Primitive relation must be a non-variable symbol"
+     "add-primitive rejects variable relation symbols")
+    (invalid-primitive-function
+     "Primitive implementation must be a function"
+     "add-primitive rejects non-function implementations")))

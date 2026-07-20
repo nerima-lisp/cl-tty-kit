@@ -11,6 +11,11 @@
   redundant string work, streaming output builders, and precomputing color state
 - validate public cell and terminal FD boundaries explicitly, and stream render
   command output without per-command intermediate strings
+- harden the embedded Prolog engine against malformed and adversarial programs:
+  bound term nesting depth, detect circular terms and variable chains, add an
+  occurs check, validate clause databases, goals, bindings, and primitive
+  arities, and prove negation goals by existence instead of materializing every
+  binding
 
 ## 0.2.0 - 2026-07-20
 

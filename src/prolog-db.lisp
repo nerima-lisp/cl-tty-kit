@@ -23,6 +23,37 @@ preserving definition order."
 (defun goal-relation (goal) (first goal))
 (defun goal-arguments (goal) (rest goal))
 
+(defun %proper-list-p (value)
+  (handler-case (integerp (list-length value))
+    (type-error () nil)))
+
+(defun %valid-relation-symbol-p (relation)
+  (and (symbolp relation) (not (variable-p relation))))
+
+(defun %assert-clause-db (db)
+  (unless (clause-db-p db)
+    (error "Expected a clause database, got ~S." db))
+  db)
+
+(defun %assert-goal-shape (goal context)
+  (unless (and (consp goal)
+               (%proper-list-p goal)
+               (%valid-relation-symbol-p (goal-relation goal)))
+    (error "~A must be a non-empty proper list whose first element is a relation symbol: ~S"
+           context
+           goal))
+  goal)
+
+(defun %assert-clause-shape (clause)
+  (unless (%proper-list-p clause)
+    (error "Clause must be a proper list (HEAD . BODY): ~S" clause))
+  (unless (consp clause)
+    (error "Clause must contain a head goal: ~S" clause))
+  (%assert-goal-shape (clause-head clause) "Clause head")
+  (dolist (goal (clause-body clause))
+    (%assert-goal-shape goal "Clause body goal"))
+  clause)
+
 (defun %relation-entry (db relation)
   (gethash relation (clause-db-relations db)))
 
@@ -33,10 +64,10 @@ preserving definition order."
 
 (defun add-clause (db clause)
   "Add CLAUSE, a list (HEAD . BODY), to DB and return its relation symbol."
+  (%assert-clause-db db)
+  (%assert-clause-shape clause)
   (let* ((stored-clause (copy-tree clause))
          (relation (goal-relation (clause-head stored-clause))))
-    (unless (and (symbolp relation) (not (variable-p relation)))
-      (error "Clause head must start with a relation symbol: ~S" clause))
     (let ((entry (%ensure-relation-entry db relation))
           (cell (list stored-clause)))
       (when (relation-entry-primitive entry)
@@ -52,6 +83,11 @@ preserving definition order."
 
 FUNCTION receives six arguments: DB, the goal ARGS, the current BINDINGS, the
 branch-local search STATE, a success CONTINUATION, and a failure CONTINUATION."
+  (%assert-clause-db db)
+  (unless (%valid-relation-symbol-p relation)
+    (error "Primitive relation must be a non-variable symbol: ~S" relation))
+  (unless (typep function 'function)
+    (error "Primitive implementation must be a function: ~S" function))
   (let ((entry (%ensure-relation-entry db relation)))
     (when (relation-entry-clauses entry)
       (error "Relation ~S already has clauses and cannot become primitive." relation))

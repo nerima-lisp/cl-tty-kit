@@ -10,6 +10,14 @@
       ((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b)))
     db))
 
+(defun %many-solutions-db ()
+  (let ((db (tty-prolog:install-standard-primitives (tty-prolog:make-clause-db))))
+    (tty-prolog:define-clauses db
+      ((value one))
+      ((value two))
+      ((value three)))
+    db))
+
 (defun %check-query (db goal template expected description &key set-p)
   (let ((actual (tty-prolog:solutions db goal template)))
     (if set-p
