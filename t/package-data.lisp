@@ -8,7 +8,7 @@
     (:homepage . "https://github.com/takeokunn/cl-tty-kit")
     (:bug-tracker . "https://github.com/takeokunn/cl-tty-kit/issues")
     (:source-control . "git https://github.com/takeokunn/cl-tty-kit.git")
-    (:version . "0.2.0")))
+    (:version . "0.3.0")))
 
 (defparameter +expected-external-symbols+
   '("TTY-KIT-ERROR"

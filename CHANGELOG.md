@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-07-20
 
 - harden terminal escape, input, color, mouse, PTY, and image parsing against
   malformed or adversarial data, including bounded numeric parsing, OSC/control

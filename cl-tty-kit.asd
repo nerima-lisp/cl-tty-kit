@@ -6,7 +6,7 @@
   :homepage "https://github.com/takeokunn/cl-tty-kit"
   :bug-tracker "https://github.com/takeokunn/cl-tty-kit/issues"
   :source-control "git https://github.com/takeokunn/cl-tty-kit.git"
-  :version "0.2.0"
+  :version "0.3.0"
   ;; SB-POSIX is only used by the SBCL-specific raw-mode layer (which requires
   ;; it itself under #+sbcl). Gating the dependency on the feature keeps ASDF
   ;; from failing dependency resolution with a confusing "system sb-posix not
