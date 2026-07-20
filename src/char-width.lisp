@@ -46,9 +46,21 @@ is a binary search instead of a linear scan of the source list.")
        (or (< code #x20)
            (<= #x7F code #x9F))))
 
+(defvar *east-asian-ambiguous-wide* nil
+  "When true, CHAR-WIDTH counts East Asian Ambiguous code points (such as U+00A7
+and many box-drawing and Greek characters) as two columns, matching CJK-locale
+terminals that render them full-width. The default NIL treats them as one column,
+which is correct for most Western terminals -- and keeps the ASCII fast path,
+since the ambiguous check runs only when this is true.")
+
+(defun %ambiguous-width-code-point-p (code)
+  (let ((char (code-char code)))
+    (and char (eq :a (sb-unicode:east-asian-width char)))))
+
 (defun %code-point-width (code)
   (cond
     ((%control-code-point-p code) 0)
+    ((and *east-asian-ambiguous-wide* (%ambiguous-width-code-point-p code)) 2)
     ;; Below U+0300 (the start of Combining Diacritical Marks) there is no
     ;; zero-width or wide code point, only Basic Latin/Latin-1/Latin
     ;; Extended/IPA/spacing-modifier letters and punctuation -- verified
@@ -74,4 +86,31 @@ The width is the sum of CHAR-WIDTH over the selected characters, so callers
 can align text that mixes ASCII, CJK, combining marks, and emoji."
   (loop for index from start below end
         sum (char-width (char string index))))
+
+(defun string-graphemes (string)
+  "Return STRING split into a list of grapheme-cluster strings.
+A cluster is what a reader perceives as one character -- a base plus its
+combining marks, or a ZWJ emoji sequence -- via SB-UNICODE's Unicode
+grapheme-break rules (already in the image, so no data tables are shipped). This
+is the right unit for cursor movement and grapheme-aware truncation, unlike
+per-code-point iteration."
+  ;; SB-UNICODE:GRAPHEMES indexes position 0 unconditionally, so it errors on an
+  ;; empty string; guard that edge here.
+  (if (zerop (length string))
+      '()
+      (sb-unicode:graphemes string)))
+
+(defun grapheme-count (string)
+  "Return the number of grapheme clusters in STRING (see STRING-GRAPHEMES)."
+  (length (string-graphemes string)))
+
+(defun grapheme-width (grapheme)
+  "Return the terminal column width of the grapheme cluster GRAPHEME (a string).
+The width is that of the cluster's widest code point, so a base plus combining
+marks is the base's width and a wide emoji cluster is two columns. Honors
+*EAST-ASIAN-AMBIGUOUS-WIDE* through CHAR-WIDTH."
+  (let ((width 0))
+    (loop for char across grapheme
+          do (setf width (max width (char-width char))))
+    width))
 

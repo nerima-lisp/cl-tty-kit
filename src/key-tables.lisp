@@ -7,7 +7,10 @@
     (#\D . :left)
     (#\H . :home)
     (#\F . :end)
-    (#\Z . :backtab)))
+    (#\Z . :backtab)
+    ;; Focus reporting (DEC private mode 1004): `ESC [ I' / `ESC [ O'.
+    (#\I . :focus-in)
+    (#\O . :focus-out)))
 
 (defparameter +csi-tilde-events+
   '((1 . :home)
@@ -29,7 +32,17 @@
     (20 . :f9)
     (21 . :f10)
     (23 . :f11)
-    (24 . :f12)))
+    (24 . :f12)
+    ;; Legacy CSI-tilde codes for F13-F20 (terminals not using the kitty
+    ;; protocol's private-use code points).
+    (25 . :f13)
+    (26 . :f14)
+    (28 . :f15)
+    (29 . :f16)
+    (31 . :f17)
+    (32 . :f18)
+    (33 . :f19)
+    (34 . :f20)))
 
 (defparameter +esc-o-events+
   '((#\A . :up)

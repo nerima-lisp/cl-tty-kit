@@ -6,11 +6,20 @@
 (defun %lookup-event-code (key table &key (test #'eql))
   (cdr (assoc key table :test test)))
 
-(defun %csi-event (final modifiers)
+(defun %event-kind (event)
+  "Map a kitty CSI-u event-type number to a KEY-EVENT kind keyword.
+1 (or NIL, the default) is :PRESS, 2 is :REPEAT, 3 is :RELEASE."
+  (case event
+    (2 :repeat)
+    (3 :release)
+    (otherwise :press)))
+
+(defun %csi-event (final modifiers &optional (kind :press))
   (%key-event :special
               (or (%lookup-event-code final +csi-final-events+ :test #'char=)
                   final)
-              modifiers))
+              modifiers
+              kind))
 
 (defun %code-point-character (code)
   (let ((char (code-char code)))
@@ -18,11 +27,12 @@
       (error 'unsupported-code-point :code-point code))
     char))
 
-(defun %csi-tilde-event (code modifiers)
+(defun %csi-tilde-event (code modifiers &optional (kind :press))
   (%key-event :special
               (or (%lookup-event-code code +csi-tilde-events+)
                   code)
-              modifiers))
+              modifiers
+              kind))
 
 (defun %kitty-function-key (code)
   (%lookup-event-code code +kitty-function-keys+))
@@ -57,17 +67,13 @@ terminating byte within [START, LIMIT), i.e. it is still incomplete."
       (let ((prefix (aref string (1+ start))))
         (cond
           ((char= prefix #\[)
-           (let ((final-index (%csi-final-index string (+ start 2) limit)))
-             (when final-index
-               (let ((final (aref string final-index)))
-                 (handler-case
-                     (multiple-value-bind (code modifier validp)
-                         (%parse-csi-body string (+ start 2) final-index)
-                       (when validp
-                         (values (%decode-csi-event code modifier final)
-                                 (- (1+ final-index) start))))
-                   (unsupported-code-point ()
-                     (values nil nil)))))))
+           (if (and (< (+ start 2) limit)
+                    (char= (aref string (+ start 2)) #\<))
+               ;; `ESC [ <' is the SGR mouse prefix; hand it to the mouse
+               ;; decoder, which yields a MOUSE-EVENT alongside key events or
+               ;; NIL (falling through to the :ESCAPE fallback) on a fragment.
+               (decode-mouse-sequence string :start start)
+               (%parse-csi-prefixed string start limit)))
           ((char= prefix #\O)
            (let ((final-index (+ start 2)))
              (when (< final-index limit)
@@ -80,18 +86,38 @@ terminating byte within [START, LIMIT), i.e. it is still incomplete."
            (values (nth-value 0 (%plain-key-event prefix '(:alt)))
                    2)))))))
 
-(defun %csi-u-event (code modifier)
+(defun %parse-csi-prefixed (string start limit)
+  (let ((final-index (%csi-final-index string (+ start 2) limit)))
+    (when final-index
+      (let ((final (aref string final-index)))
+        (handler-case
+            (multiple-value-bind (code modifier validp event text shifted base)
+                (%parse-csi-body string (+ start 2) final-index)
+              (when validp
+                (values (%decode-csi-event code modifier final event text
+                                           shifted base)
+                        (- (1+ final-index) start))))
+          (unsupported-code-point ()
+            (values nil nil)))))))
+
+(defun %csi-u-event (code modifier &optional (kind :press) text shifted base)
   ;; An empty CSI-u parameter body (e.g. the sequence `ESC [ u`) yields a NIL
   ;; CODE. Return NIL so the caller falls back to ordinary decoding instead of
   ;; letting a comparison against NIL raise an uncaught TYPE-ERROR on untrusted
   ;; input.
   (let* ((modifiers (%csi-modifiers modifier))
-         (special (and (integerp code) (%kitty-function-key code))))
+         (special (and (integerp code) (%kitty-function-key code)))
+         (shifted-char (%safe-code-char shifted))
+         (base-char (%safe-code-char base)))
     (cond
       (special
-       (%key-event :special special modifiers))
+       (make-key-event :type :special :code special :modifiers modifiers
+                       :kind kind :text text
+                       :shifted-key shifted-char :base-key base-char))
       ((and (integerp code) (<= 0 code #x10FFFF))
-       (%key-event :character (%code-point-character code) modifiers))
+       (make-key-event :type :character :code (%code-point-character code)
+                       :modifiers modifiers :kind kind :text text
+                       :shifted-key shifted-char :base-key base-char))
       ((integerp code)
        (error 'unsupported-code-point :code-point code))
       (t
@@ -110,28 +136,69 @@ megabyte digit run from being parsed into an arbitrarily large bignum.")
                 always (digit-char-p ch))
       (parse-integer string :start start :end end :junk-allowed t))))
 
+(defun %parse-csi-modifier-field (string start end)
+  "Parse a CSI modifier field, which the kitty protocol may write as
+MODIFIER:EVENT-TYPE. Returns (VALUES MODIFIER EVENT), each an integer or NIL."
+  (let ((colon (position #\: string :start start :end end)))
+    (if colon
+        (values (%parse-csi-integer string start colon)
+                (%parse-csi-integer string (1+ colon) end))
+        (values (%parse-csi-integer string start end) nil))))
+
+(defun %parse-csi-field1 (string start end)
+  "Parse a CSI-u first field UNICODE[:SHIFTED[:BASE]] into (VALUES PRIMARY SHIFTED
+BASE), each an integer code point or NIL. The kitty protocol reports the shifted
+and base-layout key alternates after the primary key."
+  (let* ((colon1 (position #\: string :start start :end end))
+         (colon2 (and colon1 (position #\: string :start (1+ colon1) :end end))))
+    (values (%parse-csi-integer string start (or colon1 end))
+            (and colon1 (%parse-csi-integer string (1+ colon1) (or colon2 end)))
+            (and colon2 (%parse-csi-integer string (1+ colon2) end)))))
+
+(defun %safe-code-char (code)
+  "Return (CODE-CHAR CODE) when CODE is a valid code point, else NIL."
+  (and (integerp code) (<= 0 code #x10FFFF) (code-char code)))
+
+(defun %parse-csi-text (string start end)
+  "Parse a kitty CSI-u text field -- a `:'-separated list of code points -- into
+a string, or NIL when it is empty or malformed."
+  (if (>= start end)
+      nil
+      (let ((characters '())
+            (field-start start))
+        (loop
+          (let* ((colon (position #\: string :start field-start :end end))
+                 (field-end (or colon end))
+                 (code (%parse-csi-integer string field-start field-end)))
+            (if (and code (<= 0 code #x10FFFF) (code-char code))
+                (push (code-char code) characters)
+                (return-from %parse-csi-text nil))
+            (if colon
+                (setf field-start (1+ colon))
+                (return))))
+        (coerce (nreverse characters) 'string))))
+
 (defun %parse-csi-body (string start end)
-  (let* ((separator (position #\; string :start start :end end))
-         (extra-separator (and separator
-                               (position #\; string
-                                         :start (1+ separator)
-                                         :end end))))
+  (let* ((sep1 (position #\; string :start start :end end))
+         (sep2 (and sep1 (position #\; string :start (1+ sep1) :end end)))
+         (sep3 (and sep2 (position #\; string :start (1+ sep2) :end end))))
     (cond
       ((= start end)
-       (values nil nil t))
-      (extra-separator
-       (values nil nil nil))
-      (separator
-       (let* ((code-end separator)
-              (modifier-start (1+ separator))
-              (code (%parse-csi-integer string start code-end))
-              (modifier (%parse-csi-integer string
-                                            modifier-start
-                                            end)))
-         (values code modifier (and code modifier))))
+       (values nil nil t nil nil nil nil))
+      ;; More than three `;'-separated fields is not a form we decode.
+      (sep3
+       (values nil nil nil nil nil nil nil))
+      (sep1
+       (multiple-value-bind (code shifted base)
+           (%parse-csi-field1 string start sep1)
+         (multiple-value-bind (modifier event)
+             (%parse-csi-modifier-field string (1+ sep1) (or sep2 end))
+           (values code modifier (and code modifier) event
+                   (and sep2 (%parse-csi-text string (1+ sep2) end))
+                   shifted base))))
       (t
        (let ((code (%parse-csi-integer string start end)))
-         (values code nil (not (null code))))))))
+         (values code nil (not (null code)) nil nil nil nil))))))
 
 (defun %csi-paste-marker-event (code final)
   (when (char= final #\~)
@@ -140,14 +207,15 @@ megabyte digit run from being parsed into an arbitrarily large bignum.")
       (201 (%key-event :special :paste-end))
       (otherwise nil))))
 
-(defun %decode-csi-event (code modifier final)
-  (or (%csi-paste-marker-event code final)
+(defun %decode-csi-event (code modifier final &optional event text shifted base)
+  (let ((kind (%event-kind event)))
+    (or (%csi-paste-marker-event code final)
       (cond
         ((char= final #\~)
-         (%csi-tilde-event code (%csi-modifiers modifier)))
+         (%csi-tilde-event code (%csi-modifiers modifier) kind))
         ((char= final #\u)
-         (%csi-u-event code modifier))
+         (%csi-u-event code modifier kind text shifted base))
         ((and code modifier)
-         (%csi-event final (%csi-modifiers modifier)))
+         (%csi-event final (%csi-modifiers modifier) kind))
         (t
-         (%csi-event final nil)))))
+         (%csi-event final nil))))))
