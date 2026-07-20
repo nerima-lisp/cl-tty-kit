@@ -118,7 +118,7 @@ truncated final sequence is reported; complete or invalid bytes end the scan so
 the caller decodes (and validates) them normally."
   (let ((length (length vector)))
     (loop for index from (1- length) downto (max 0 (- length 3))
-          for octet = (aref vector index)
+          for octet = (%utf8-octet-at vector index)
           do (cond
                ((< octet #x80)
                 (return nil))

@@ -207,18 +207,39 @@ as a foreground over the background RGB triple R G B, decided by COLOR-LUMINANCE
       (list 255 255 255)))
 
 (defun %parse-rgb-functional (string)
-  (let* ((open (position #\( string))
-         (close (position #\) string :from-end t))
-         (body (subseq string (1+ open) close))
-         (parts (loop with start = 0
-                      for index = (position-if (lambda (c) (or (char= c #\,) (char= c #\Space)))
-                                               body :start start)
-                      for piece = (string-trim " " (subseq body start (or index (length body))))
-                      when (plusp (length piece)) collect piece
-                      while index do (setf start (1+ index)))))
-    (unless (= 3 (length parts))
-      (error "Malformed rgb() color ~S." string))
-    (values-list (mapcar (lambda (s) (parse-integer s)) parts))))
+  (labels ((malformed ()
+             (error "Malformed rgb() color ~S." string))
+            (parse-component (component)
+              (unless (and (plusp (length component))
+                           (<= (length component) 3)
+                           (every #'digit-char-p component))
+                (malformed))
+              (let ((value (parse-integer component)))
+                (unless (typep value '(integer 0 255))
+                  (malformed))
+                value)))
+    (let ((open (position #\( string))
+          (close (position #\) string :from-end t)))
+      (unless (and open
+                   close
+                   (< open close)
+                   (loop for index from (1+ close) below (length string)
+                         always (char= (char string index) #\Space)))
+        (malformed))
+      (let* ((body (subseq string (1+ open) close))
+             (parts (loop with start = 0
+                          for index = (position-if (lambda (c)
+                                                     (or (char= c #\,)
+                                                         (char= c #\Space)))
+                                                   body :start start)
+                          for piece = (string-trim " " (subseq body start
+                                                                (or index
+                                                                    (length body))))
+                          when (plusp (length piece)) collect piece
+                          while index do (setf start (1+ index)))))
+        (unless (= 3 (length parts))
+          (malformed))
+        (values-list (mapcar #'parse-component parts))))))
 
 (defun parse-color (spec)
   "Parse SPEC into (VALUES R G B), each an integer in [0, 255].
@@ -235,8 +256,11 @@ inputs styling layers accept."
        ((and (>= (length spec) 4) (string-equal "rgb(" spec :end2 4))
         (%parse-rgb-functional spec))
        (t
-        (color-256-to-rgb
-         (named-color (intern (string-upcase spec) :keyword))))))))
+        (multiple-value-bind (symbol status)
+            (find-symbol (string-upcase spec) :keyword)
+          (unless (and symbol status)
+            (error "Unknown color name ~S." spec))
+          (color-256-to-rgb (named-color symbol))))))))
 
 (defun color-gradient (from to steps)
   "Return a list of STEPS RGB triples interpolating from FROM to TO inclusive.

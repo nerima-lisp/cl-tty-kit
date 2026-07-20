@@ -138,11 +138,45 @@
     (is (null (decode-input-chunk decoder "")))
     (is (null (decode-input-chunk decoder #())))
     (is (null (flush-input-decoder decoder))))
+  (signals (error c) (make-input-decoder :max-pending -1) (is c))
+  (signals (error c) (make-input-decoder :max-pending 1.5) (is c))
   (let ((decoder (make-input-decoder :collect-bracketed-paste t :max-pending 8)))
     (decode-input-chunk decoder (concatenate 'string (string #\Esc) "[200~"))
-    (signals (tty-kit-error condition)
+    (signals (cl-tty-kit::input-buffer-exceeded condition)
         (decode-input-chunk decoder "0123456789")
-      (declare (ignore condition)))))
+      (is (= 8 (cl-tty-kit::input-buffer-exceeded-limit condition)))
+      (is (= 10 (cl-tty-kit::input-buffer-exceeded-size condition)))))
+  (let ((decoder (make-input-decoder :max-pending 2)))
+    (is (null (decode-input-chunk decoder #(227 129))))
+    (signals (cl-tty-kit::input-buffer-exceeded condition)
+        (decode-input-chunk decoder #(130))
+      (is (= 2 (cl-tty-kit::input-buffer-exceeded-limit condition)))
+      (is (= 3 (cl-tty-kit::input-buffer-exceeded-size condition)))))
+  (let ((decoder (make-input-decoder :max-pending 4)))
+    (is (null (decode-input-chunk decoder (concatenate 'string
+                                                       (string #\Esc)
+                                                       "["))))
+    (signals (cl-tty-kit::input-buffer-exceeded condition)
+        (decode-input-chunk decoder "123")
+      (is (= 4 (cl-tty-kit::input-buffer-exceeded-limit condition)))
+      (is (= 5 (cl-tty-kit::input-buffer-exceeded-size condition)))))
+  (let ((decoder (make-input-decoder :collect-bracketed-paste t))
+        (payload (make-string 128 :initial-element #\x)))
+    (decode-input-chunk decoder (concatenate 'string (string #\Esc) "[200~"))
+    (loop repeat 32 do (decode-input-chunk decoder "xxxx"))
+    (%assert-event-signatures=
+     (decode-input-chunk decoder
+                          (concatenate 'string (string #\Esc) "[201~")
+                          :eof t)
+     `((:paste ,payload nil))
+     "Split bracketed paste payloads should emit the accumulated text once."))
+  (let* ((decoder (make-input-decoder :max-pending 2048))
+         (input (concatenate 'string
+                             (string #\Esc)
+                             "["
+                             (make-string 1025 :initial-element #\1))))
+    (is (decode-input-chunk decoder input))
+    (is (null (flush-input-decoder decoder)))))
 
 (defun %test-streaming-input-cases ()
   (do-test-case-bind (case +streaming-input-cases+
@@ -180,6 +214,9 @@
    0
    :invalid-leading-byte
    "Invalid leading bytes should fail immediately.")
+  (signals (error c) (decode-input #(#\a 1)) (is c))
+  (let ((decoder (make-input-decoder)))
+    (signals (error c) (decode-input-chunk decoder #(#\a 1)) (is c)))
   (%assert-flush-case
    (list (concatenate 'string (string #\Esc) "[200~ab"))
    `((:special :paste-start nil)

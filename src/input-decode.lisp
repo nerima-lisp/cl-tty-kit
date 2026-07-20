@@ -24,19 +24,19 @@ MAX-PENDING bounds the still-undecoded tail (partial UTF-8, a held escape, or an
 open paste payload) the decoder will buffer across chunks, which keeps an
 unterminated sequence from an untrusted source from exhausting memory; exceeding
 it signals a TTY-KIT-ERROR."
+  (unless (and (integerp max-pending) (not (minusp max-pending)))
+    (error "MAX-PENDING must be a non-negative integer: ~S." max-pending))
   (%make-input-decoder :collect-bracketed-paste-p collect-bracketed-paste
                        :max-pending max-pending))
 
 (defun %check-decoder-buffer (decoder)
   "Signal when DECODER's buffered, undecoded tail exceeds its MAX-PENDING bound."
   (with-input-decoder-state (decoder)
-    (let ((size (+ (length pending-string)
-                   (length pending-octets)
-                   (if (stringp pending-paste) (length pending-paste) 0))))
-      (when (> size (input-decoder-max-pending decoder))
-        (error 'input-buffer-exceeded
-               :limit (input-decoder-max-pending decoder)
-               :size size))))
+    (%assert-decoder-buffer-size
+     decoder
+     (+ (length pending-string)
+        (length pending-octets)
+        (if (stringp pending-paste) (length pending-paste) 0))))
   decoder)
 
 (defun %decoder-collect-events (decoder string eof)
@@ -51,9 +51,12 @@ Returns the decoded string. When EOF is true a truncated tail is not held and
 its decode signals INVALID-UTF8-SEQUENCE instead."
   (let ((combined
           (if (plusp (length (input-decoder-pending-octets decoder)))
-              (concatenate '(vector (unsigned-byte 8))
-                           (input-decoder-pending-octets decoder)
-                           octets)
+              (let ((size (+ (length (input-decoder-pending-octets decoder))
+                             (length octets))))
+                (%assert-decoder-buffer-size decoder size)
+                (concatenate '(vector (unsigned-byte 8))
+                             (input-decoder-pending-octets decoder)
+                             octets))
               (coerce octets '(vector (unsigned-byte 8))))))
     (if eof
         (progn
@@ -68,13 +71,19 @@ its decode signals INVALID-UTF8-SEQUENCE instead."
   (cond
     ((stringp input)
      (if (plusp (length (input-decoder-pending-octets decoder)))
-         (concatenate 'string
-                      (%decoder-decode-octets decoder #() eof)
-                      input)
+         (let ((prefix (%decoder-decode-octets decoder #() eof)))
+           (when (plusp (length prefix))
+             (%assert-decoder-buffer-size
+              decoder
+              (+ (length prefix) (length input))))
+           (concatenate 'string prefix input))
          input))
     ((%octet-input-p input)
      (%decoder-decode-octets decoder input eof))
     ((vectorp input)
+     (unless (loop for index below (length input)
+                   always (characterp (aref input index)))
+       (error "Unsupported input vector element in ~S." input))
      (coerce input 'string))
     (t
      (error "Unsupported input type: ~S" (type-of input)))))
@@ -88,7 +97,11 @@ rules."
   (with-input-decoder-state (decoder)
     (let* ((decoded (%decoder-decode-chunk-string decoder input eof))
            (full (if (plusp (length pending-string))
-                     (concatenate 'string pending-string decoded)
+                     (progn
+                       (%assert-decoder-buffer-size
+                        decoder
+                        (+ (length pending-string) (length decoded)))
+                       (concatenate 'string pending-string decoded))
                      decoded)))
       (setf pending-string "")
       (multiple-value-bind (events pending)

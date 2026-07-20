@@ -94,6 +94,14 @@
                                                        :attempts 3
                                                        :sleep-seconds 0)))
       (is (= 1 attempt-count))))
+  (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
+      (make-pty :program :not-a-program))
+  (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
+      (make-pty :program "/bin/sh" :args '("-c" :not-a-string)))
+  (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
+      (make-pty :program "/bin/sh" :environment '(:not-a-string)))
+  (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
+      (make-pty :program "/bin/sh" :directory :not-a-directory))
   (let ((alive-count 0))
     (with-function-overrides
         ((sb-ext:process-alive-p
@@ -141,6 +149,10 @@
     (is (eq input (pty-stream read-pty)))
     (is (string= "abc" (pty-read read-pty)))
     (is (null (pty-read read-pty)))
+    (signals-pty-operation-failed (:read read-pty "PTY operation READ failed")
+      (pty-read read-pty -1))
+    (signals-pty-operation-failed (:read read-pty "PTY operation READ failed")
+      (pty-read read-pty 1.5))
     (close-pty read-pty))
   (let* ((closed-input (make-string-input-stream "abc"))
          (read-pty (cl-tty-kit::%make-pty :process nil :stream closed-input)))
@@ -177,6 +189,10 @@
     (is (eq output (pty-stream write-pty)))
     (is (eq write-pty (pty-write write-pty "hi")))
     (is (string= "hi" (get-output-stream-string output)))
+    (signals-pty-operation-failed (:write write-pty "PTY operation WRITE failed")
+      (pty-write write-pty :bad))
+    (signals-pty-operation-failed (:write write-pty "PTY operation WRITE failed")
+      (pty-write write-pty #(104 :bad)))
     (let* ((vector-output (make-string-output-stream))
            (vector-pty (cl-tty-kit::%make-pty :process nil
                                               :stream vector-output)))

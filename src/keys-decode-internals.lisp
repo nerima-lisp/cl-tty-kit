@@ -17,7 +17,7 @@
 (defun %csi-event (final modifiers &optional (kind :press))
   (%key-event :special
               (or (%lookup-event-code final +csi-final-events+ :test #'char=)
-                  final)
+                  :unknown-csi)
               modifiers
               kind))
 
@@ -30,7 +30,7 @@
 (defun %csi-tilde-event (code modifiers &optional (kind :press))
   (%key-event :special
               (or (%lookup-event-code code +csi-tilde-events+)
-                  code)
+                  :unknown-csi)
               modifiers
               kind))
 

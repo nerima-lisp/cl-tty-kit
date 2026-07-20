@@ -1,26 +1,30 @@
 (in-package #:cl-tty-kit)
 
+(defconstant +max-incomplete-escape-length+ 1024
+  "Maximum bytes retained for an escape sequence that has not reached a final byte.")
+
 (defun %incomplete-escape-sequence-p (string index)
   (when (char= (aref string index) #\Esc)
     (let ((limit (length string)))
-      (cond
-        ((>= (1+ index) limit) t)
-        ((char= (aref string (1+ index)) #\[)
-         (let ((body-start (+ index 2)))
-           (if (>= body-start limit)
-               t
-               ;; A CSI runs until its final byte (0x40-0x7E); every earlier
-               ;; byte is a parameter or intermediate. Treating anything before
-               ;; that byte as still-incomplete keeps a split parameter list --
-               ;; including an SGR mouse report's `<Cb;Cx;Cy' -- buffered
-               ;; instead of being decoded as a bare ESC.
-               (loop for final-index from body-start below limit
-                     when (<= #x40 (char-code (aref string final-index)) #x7E)
-                       do (return nil)
-                     finally (return t)))))
-        ((char= (aref string (1+ index)) #\O)
-         (>= (+ index 2) limit))
-        (t nil)))))
+      (and (<= (- limit index) +max-incomplete-escape-length+)
+           (cond
+             ((>= (1+ index) limit) t)
+             ((char= (aref string (1+ index)) #\[)
+              (let ((body-start (+ index 2)))
+                (if (>= body-start limit)
+                    t
+                    ;; A CSI runs until its final byte (0x40-0x7E); every earlier
+                    ;; byte is a parameter or intermediate. Treating anything before
+                    ;; that byte as still-incomplete keeps a split parameter list --
+                    ;; including an SGR mouse report's `<Cb;Cx;Cy' -- buffered
+                    ;; instead of being decoded as a bare ESC.
+                    (loop for final-index from body-start below limit
+                          when (<= #x40 (char-code (aref string final-index)) #x7E)
+                            do (return nil)
+                          finally (return t)))))
+             ((char= (aref string (1+ index)) #\O)
+              (>= (+ index 2) limit))
+             (t nil))))))
 
 (defun %paste-marker-event-p (event marker)
   (and (eq :special (key-event-type event))
@@ -28,6 +32,23 @@
 
 (defun %make-paste-event (payload)
   (make-key-event :type :paste :code payload :modifiers nil))
+
+(defun %make-paste-buffer ()
+  (make-array 0
+              :element-type 'character
+              :fill-pointer 0
+              :adjustable t))
+
+(defun %copy-paste-buffer-string (pending-paste)
+  (copy-seq pending-paste))
+
+(defun %assert-decoder-buffer-size (decoder size)
+  "Signal when SIZE would exceed DECODER's retained-state bound."
+  (when (> size (input-decoder-max-pending decoder))
+    (error 'input-buffer-exceeded
+           :limit (input-decoder-max-pending decoder)
+           :size size))
+  size)
 
 (defun %decode-next-event (string index)
   (multiple-value-bind (event consumed)
@@ -57,8 +78,20 @@
              (push event events)
              (setf index (+ index consumed)))))
 
-(defun %append-paste-string (pending-paste chunk)
-  (concatenate 'string pending-paste chunk))
+(defun %append-paste-string (decoder pending-paste chunk)
+  (let* ((old-length (length pending-paste))
+         (chunk-length (length chunk))
+         (new-length (+ old-length chunk-length))
+         (capacity (array-dimension pending-paste 0)))
+    (%assert-decoder-buffer-size decoder new-length)
+    (when (> new-length capacity)
+      (setf pending-paste
+            (adjust-array pending-paste
+                          (max new-length (* 2 (max 1 capacity)))
+                          :fill-pointer old-length)))
+    (setf (fill-pointer pending-paste) new-length)
+    (replace pending-paste chunk :start1 old-length))
+  pending-paste)
 
 (defun %fallback-paste-source (pending-paste suffix)
   (concatenate 'string
@@ -141,20 +174,24 @@ reverse-order accumulator that %COLLECT-PASTE-EVENTS threads through the loop."
   (ecase (first action)
     (:append-paste
      (setf (input-decoder-pending-paste decoder)
-           (%append-paste-string (input-decoder-pending-paste decoder)
+           (%append-paste-string decoder
+                                 (input-decoder-pending-paste decoder)
                                  (second action)))
      events)
     (:emit
      (cons (second action) events))
     (:finish-paste
-     (push (%make-paste-event (input-decoder-pending-paste decoder)) events)
+     (push (%make-paste-event
+            (%copy-paste-buffer-string
+             (input-decoder-pending-paste decoder)))
+           events)
      (setf (input-decoder-pending-paste decoder) nil)
      events)
     (:flush-paste
      (nconc (%flush-pending-paste-events decoder (second action))
             events))
     (:start-paste
-     (setf (input-decoder-pending-paste decoder) "")
+     (setf (input-decoder-pending-paste decoder) (%make-paste-buffer))
      events)))
 
 (defun %collect-paste-events (decoder string eof)
@@ -176,4 +213,3 @@ reverse-order accumulator that %COLLECT-PASTE-EVENTS threads through the loop."
 
 (defun %decode-string-events-with-paste (decoder string &key eof)
   (%collect-paste-events decoder string eof))
-

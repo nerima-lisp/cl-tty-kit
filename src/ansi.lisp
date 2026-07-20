@@ -2,10 +2,18 @@
 
 (defconstant +escape+ #\Esc)
 
+(defun %validate-csi-numeric-parameter (value)
+  (unless (typep value '(integer 0 *))
+    (error "CSI numeric parameter must be a non-negative integer: ~S." value))
+  value)
+
 (defmacro define-ansi-function (name lambda-list docstring format-string &rest format-args)
   `(defun ,name ,lambda-list
      ,docstring
-     (format nil ,format-string +escape+ ,@format-args)))
+     (format nil ,format-string +escape+
+             ,@(mapcar (lambda (arg)
+                         `(%validate-csi-numeric-parameter ,arg))
+                       format-args))))
 
 (define-ansi-function ansi-clear-screen (&optional (mode 2))
     "Return the ANSI sequence that clears the screen."
@@ -133,9 +141,14 @@ MODE follows the kitty keyboard progressive enhancement protocol:
     "Return the ANSI sequence that resets all styles."
   "~C[0m")
 
+(defun %validate-repeat-count (count)
+  (unless (typep count '(integer 0 *))
+    (error "Repeat count ~S must be a non-negative integer." count))
+  count)
+
 (defun ansi-bell (&optional (count 1))
   "Return a string of COUNT BEL (^G) characters that ring the terminal bell."
-  (make-string (max 0 count) :initial-element (code-char 7)))
+  (make-string (%validate-repeat-count count) :initial-element (code-char 7)))
 
 (define-ansi-function ansi-reset-terminal ()
     "Return the RIS sequence that resets the terminal to its initial state."
@@ -152,13 +165,32 @@ tearing."
     "Return the sequence that ends a synchronized screen update and presents it."
   "~C[?2026l")
 
+(defun %sgr-parameter-character-p (character)
+  (or (digit-char-p character)
+      (char= character #\:)))
+
+(defun %validate-sgr-parameter (code)
+  (typecase code
+    ((integer 0 *)
+     code)
+    (string
+     (unless (and (plusp (length code))
+                  (every #'%sgr-parameter-character-p code)
+                  (some #'digit-char-p code))
+       (error "Invalid SGR parameter ~S; expected a non-negative integer or a digit/colon string."
+              code))
+     code)
+    (t
+     (error "Invalid SGR parameter ~S; expected a non-negative integer or a digit/colon string."
+            code))))
+
 (defun ansi-sgr (&rest codes)
   "Return an SGR escape sequence combining CODES into a single `ESC[...m'.
-Each element of CODES is an integer or already-formatted string SGR parameter;
-they are joined with semicolons in order. With no CODES the result is the bare
-`ESC[m' reset. This is the general builder the named emitters like ANSI-BOLD and
-ANSI-UNDERLINE specialize."
-  (format nil "~C[~{~A~^;~}m" +escape+ codes))
+Each element of CODES is a non-negative integer or a digit/colon string SGR
+sub-parameter such as \"4:3\"; they are joined with semicolons in order. With no
+CODES the result is the bare `ESC[m' reset. This is the general builder the
+named emitters like ANSI-BOLD and ANSI-UNDERLINE specialize."
+  (format nil "~C[~{~A~^;~}m" +escape+ (mapcar #'%validate-sgr-parameter codes)))
 
 ;;; --------------------------------------------------------------------------
 ;;; Cursor movement and positioning
@@ -275,13 +307,39 @@ By default MODE is a DEC private mode -- `ESC [ ? MODE h', e.g. 25 (cursor), 104
 it is an ANSI mode -- `ESC [ MODE h'. This is the general primitive the specific
 ANSI-ENABLE-* helpers specialize; use it to toggle a mode this library does not
 wrap."
-  (format nil "~C[~:[~;?~]~Dh" +escape+ private mode))
+  (format nil "~C[~:[~;?~]~Dh" +escape+ private
+          (%validate-csi-numeric-parameter mode)))
 
 (defun ansi-reset-mode (mode &key (private t))
   "Return the sequence that resets terminal MODE (an integer), turning it off.
 The reset counterpart of ANSI-SET-MODE: `ESC [ ? MODE l' for a DEC private mode
 (the default) or `ESC [ MODE l' when PRIVATE is NIL."
-  (format nil "~C[~:[~;?~]~Dl" +escape+ private mode))
+  (format nil "~C[~:[~;?~]~Dl" +escape+ private
+          (%validate-csi-numeric-parameter mode)))
+
+(defun %osc-control-character-p (character)
+  (let ((code (char-code character)))
+    (or (< code #x20)
+        (= code #x7F)
+        (<= #x80 code #x9F))))
+
+(defun %sanitize-osc-string (value)
+  "Return VALUE as a string without control bytes that can break out of OSC."
+  (remove-if #'%osc-control-character-p (princ-to-string value)))
+
+(defun %osc-52-target-character-p (character)
+  (let ((code (char-code character)))
+    (or (<= (char-code #\0) code (char-code #\9))
+        (<= (char-code #\A) code (char-code #\Z))
+        (<= (char-code #\a) code (char-code #\z)))))
+
+(defun %validate-osc-52-target (target)
+  (let ((string (princ-to-string target)))
+    (unless (and (plusp (length string))
+                 (every #'%osc-52-target-character-p string))
+      (error "OSC 52 clipboard target must be non-empty alphanumeric ASCII: ~S."
+             target))
+    string))
 
 ;;; --------------------------------------------------------------------------
 ;;; Window title, cursor shape, and mouse reporting
@@ -293,7 +351,9 @@ Terminals that support OSC 8 render TEXT as a clickable link; those that do not
 show TEXT unchanged. The link is opened and closed with `ESC ] 8 ; ; ... ST'
 using the ST (`ESC \\') terminator."
   (format nil "~C]8;;~A~C\\~A~C]8;;~C\\"
-          +escape+ uri +escape+ text +escape+ +escape+))
+          +escape+ (%sanitize-osc-string uri)
+          +escape+ (%sanitize-osc-string text)
+          +escape+ +escape+))
 
 (defparameter +base64-alphabet+
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
@@ -323,7 +383,7 @@ using the ST (`ESC \\') terminator."
 TARGET selects the buffer (\"c\" clipboard, \"p\" primary); TEXT is encoded as
 UTF-8 and base64 per the protocol. Requires terminal OSC 52 support."
   (format nil "~C]52;~A;~A~C\\"
-          +escape+ target
+          +escape+ (%validate-osc-52-target target)
           (%base64-encode-octets
            (sb-ext:string-to-octets text :external-format :utf-8))
           +escape+))
@@ -331,19 +391,27 @@ UTF-8 and base64 per the protocol. Requires terminal OSC 52 support."
 (defun %rgb-hex-pair (value)
   (format nil "~2,'0X" value))
 
+(defun %validate-ansi-byte (name value)
+  (unless (typep value '(integer 0 255))
+    (error "~A must be an integer in [0, 255]: ~S." name value))
+  value)
+
 (defun ansi-set-palette-color (index red green blue)
   "Return an OSC 4 sequence redefining palette entry INDEX to RGB RED GREEN BLUE.
 Each channel is 0-255. Requires terminal OSC 4 support (query CANCHANGECOLOR)."
   (format nil "~C]4;~D;rgb:~A/~A/~A~C\\"
-          +escape+ index
-          (%rgb-hex-pair red) (%rgb-hex-pair green) (%rgb-hex-pair blue)
+          +escape+ (%validate-ansi-byte "Palette index" index)
+          (%rgb-hex-pair (%validate-ansi-byte "Red channel" red))
+          (%rgb-hex-pair (%validate-ansi-byte "Green channel" green))
+          (%rgb-hex-pair (%validate-ansi-byte "Blue channel" blue))
           +escape+))
 
 (defun ansi-reset-palette (&optional index)
   "Return an OSC 104 sequence resetting palette entry INDEX, or the whole palette
 when INDEX is NIL, to the terminal defaults."
   (if index
-      (format nil "~C]104;~D~C\\" +escape+ index +escape+)
+      (format nil "~C]104;~D~C\\"
+              +escape+ (%validate-ansi-byte "Palette index" index) +escape+)
       (format nil "~C]104~C\\" +escape+ +escape+)))
 
 (defun ansi-request-foreground-color ()
@@ -377,7 +445,7 @@ The reply is parsed by DECODE-COLOR-REPORT."
 (defun ansi-set-window-title (title)
   "Return the OSC sequence that sets the terminal window TITLE.
 The payload is emitted as `ESC ] 0 ; TITLE BEL', the widely supported form."
-  (format nil "~C]0;~A~C" +escape+ title (code-char 7)))
+  (format nil "~C]0;~A~C" +escape+ (%sanitize-osc-string title) (code-char 7)))
 
 (defparameter +cursor-style-codes+
   '((:default . 0)

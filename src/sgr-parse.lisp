@@ -40,10 +40,17 @@ trailing `m'), or STRING itself when it is already a bare parameter body."
 (defun %sgr-modifier-for (token)
   (car (rassoc token +style-sgr-keywords+ :test #'string=)))
 
+(defconstant +max-sgr-parameter-digits+ 12)
+
 (defun %sgr-integer (token)
   (when (and (plusp (length token))
+             (<= (length token) +max-sgr-parameter-digits+)
              (every #'digit-char-p token))
     (parse-integer token)))
+
+(defun %sgr-byte (token)
+  (let ((value (%sgr-integer token)))
+    (and value (<= 0 value 255) value)))
 
 (defun decode-sgr (string)
   "Parse an SGR escape STRING into (VALUES STYLE RESET-P).
@@ -73,15 +80,16 @@ color; unknown parameters are ignored."
                         (kind (and (< (1+ index) count) (aref tokens (1+ index)))))
                     (cond
                       ((and kind (string= kind "5") (< (+ index 2) count))
-                       (push (list channel (%sgr-integer (aref tokens (+ index 2))))
-                             items)
+                       (let ((color (%sgr-byte (aref tokens (+ index 2)))))
+                         (when color
+                           (push (list channel color) items)))
                        (incf index 3))
                       ((and kind (string= kind "2") (< (+ index 4) count))
-                       (push (list channel
-                                   (%sgr-integer (aref tokens (+ index 2)))
-                                   (%sgr-integer (aref tokens (+ index 3)))
-                                   (%sgr-integer (aref tokens (+ index 4))))
-                             items)
+                       (let ((red (%sgr-byte (aref tokens (+ index 2))))
+                             (green (%sgr-byte (aref tokens (+ index 3))))
+                             (blue (%sgr-byte (aref tokens (+ index 4)))))
+                         (when (and red green blue)
+                           (push (list channel red green blue) items)))
                        (incf index 5))
                       (t (incf index)))))
                  ((and code (member code '(39 49 59)))

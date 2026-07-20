@@ -67,9 +67,49 @@ regardless of the order or duplicates in which they were supplied."
              (when (logtest mask 2) '(:alt))
              (when (logtest mask 4) '(:control))))))
 
+(defun %assert-key-event-type (type)
+  (unless (member type '(:character :special :paste) :test #'eq)
+    (error "Key event TYPE ~S must be :CHARACTER, :SPECIAL, or :PASTE."
+           type)))
+
+(defun %assert-key-event-code (type code)
+  (case type
+    (:character
+     (unless (characterp code)
+       (error "Character key event CODE ~S must be a character." code)))
+    (:special
+     (unless (keywordp code)
+       (error "Special key event CODE ~S must be a keyword." code)))
+    (:paste
+     (unless (stringp code)
+       (error "Paste key event CODE ~S must be a string." code)))))
+
+(defun %assert-key-event-kind (kind)
+  (unless (member kind '(:press :repeat :release) :test #'eq)
+    (error "Key event KIND ~S must be :PRESS, :REPEAT, or :RELEASE." kind)))
+
+(defun %assert-optional-key-event-string (name value)
+  (unless (or (null value) (stringp value))
+    (error "Key event ~A ~S must be NIL or a string." name value)))
+
+(defun %assert-optional-key-event-character (name value)
+  (unless (or (null value) (characterp value))
+    (error "Key event ~A ~S must be NIL or a character." name value)))
+
+(defun %assert-key-event (event)
+  (unless (key-event-p event)
+    (error "EVENT ~S must be a key-event." event))
+  event)
+
 (defun make-key-event (&key (type :character) code modifiers (kind :press) text
                             shifted-key base-key)
   "Build a KEY-EVENT with normalized modifier ordering."
+  (%assert-key-event-type type)
+  (%assert-key-event-code type code)
+  (%assert-key-event-kind kind)
+  (%assert-optional-key-event-string "TEXT" text)
+  (%assert-optional-key-event-character "SHIFTED-KEY" shifted-key)
+  (%assert-optional-key-event-character "BASE-KEY" base-key)
   (%make-key-event :type type
                    :code code
                    :modifiers (normalize-modifiers modifiers)
@@ -116,6 +156,7 @@ and otherwise capitalizing hyphen-delimited words (:PAGE-UP -> \"Page-Up\")."
 \"x\", or \"<paste 12 bytes>\". Modifiers become a `C-'/`M-'/`S-' prefix in
 Ctrl-Alt-Shift order; a :SPECIAL code keyword is capitalized (with :CONTROL-x
 shown as `C-x'); a :PASTE event reports its payload length."
+  (%assert-key-event event)
   (concatenate 'string
                (%modifier-prefix (key-event-modifiers event))
                (%key-event-body event)))

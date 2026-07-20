@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- harden terminal escape, input, color, mouse, PTY, and image parsing against
+  malformed or adversarial data, including bounded numeric parsing, OSC/control
+  sanitization, vector element validation, and bracketed-paste preflight limits
+
 ## 0.2.0 - 2026-07-20
 
 - greatly expand the ANSI helper set: cursor motion (`ansi-cursor-up`/`-down`/

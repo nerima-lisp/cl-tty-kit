@@ -40,8 +40,28 @@ row, and a normalized modifier list."
 (setf (documentation 'mouse-event-modifiers 'function)
       "Return the normalized modifier list of MOUSE-EVENT.")
 
+(defun %assert-mouse-button (button)
+  (unless (member button
+                  '(:left :middle :right :wheel-up :wheel-down :wheel-left
+                    :wheel-right :none)
+                  :test #'eq)
+    (error "Mouse event BUTTON ~S must be a supported mouse button." button)))
+
+(defun %assert-mouse-action (action)
+  (unless (member action '(:press :release :drag :move :scroll) :test #'eq)
+    (error "Mouse event ACTION ~S must be :PRESS, :RELEASE, :DRAG, :MOVE, or :SCROLL."
+           action)))
+
+(defun %assert-mouse-coordinate (name value)
+  (unless (typep value '(integer 0))
+    (error "Mouse event ~A ~S must be a non-negative integer." name value)))
+
 (defun make-mouse-event (&key (button :none) (action :press) (x 0) (y 0) modifiers)
   "Build a MOUSE-EVENT with normalized modifier ordering."
+  (%assert-mouse-button button)
+  (%assert-mouse-action action)
+  (%assert-mouse-coordinate "X" x)
+  (%assert-mouse-coordinate "Y" y)
   (%make-mouse-event :button button
                      :action action
                      :x x
@@ -80,8 +100,12 @@ FINAL is #\\M for a press/motion report and #\\m for a release."
                (if (char= final #\m) :release :press)
                modifiers)))))
 
+(defconstant +max-decoded-uint-digits+ 9
+  "Maximum decimal digits accepted in terminal numeric reports.")
+
 (defun %parse-mouse-uint (string start end)
   (when (and (< start end)
+             (<= (- end start) +max-decoded-uint-digits+)
              (loop for index from start below end
                    always (digit-char-p (char string index))))
     (parse-integer string :start start :end end)))
@@ -110,10 +134,12 @@ Returns (VALUES CB CX CY), each NIL when the field is missing or non-numeric."
 Returns two values: a MOUSE-EVENT and the number of characters consumed. When
 INPUT at START is not a complete `ESC [ < ... M/m' report -- a different sequence
 or a fragment still missing its terminator -- returns NIL and 0 so a caller can
-fall back to ordinary decoding. Coordinates are reported 0-based."
+  fall back to ordinary decoding. Coordinates are reported 0-based."
   (let* ((string (%input->string input))
          (limit (length string)))
-    (if (and (< (+ start 3) limit)
+    (if (and (integerp start)
+             (<= 0 start)
+             (< (+ start 3) limit)
              (char= (char string start) #\Esc)
              (char= (char string (1+ start)) #\[)
              (char= (char string (+ start 2)) #\<))

@@ -35,15 +35,58 @@
            (sleep sleep-seconds)
         finally (error condition)))
 
+(defun %list-of-strings-p (value)
+  (and (listp value)
+       (every #'stringp value)))
+
+(defun %validate-pty-spawn-arguments (program args environment directory)
+  (unless (stringp program)
+    (error "PTY program must be a string, got ~S." program))
+  (unless (%list-of-strings-p args)
+    (error "PTY args must be a list of strings, got ~S." args))
+  (unless (or (null environment)
+              (%list-of-strings-p environment))
+    (error "PTY environment must be NIL or a list of strings, got ~S."
+           environment))
+  (unless (or (null directory)
+              (stringp directory)
+              (pathnamep directory))
+    (error "PTY directory must be NIL, a string, or a pathname, got ~S."
+           directory)))
+
+(defun %validate-pty-read-limit (limit)
+  (unless (and (integerp limit) (<= 0 limit))
+    (error "PTY read limit must be a non-negative integer, got ~S." limit)))
+
+(defun %validate-pty-size (columns rows)
+  (unless (and (integerp columns) (plusp columns))
+    (error "PTY columns must be a positive integer, got ~S." columns))
+  (unless (and (integerp rows) (plusp rows))
+    (error "PTY rows must be a positive integer, got ~S." rows)))
+
+(defun %valid-pty-write-octets-p (data)
+  (and (vectorp data)
+       (every (lambda (octet)
+                (typep octet '(unsigned-byte 8)))
+              data)))
+
+(defun %validate-pty-write-data (data)
+  (unless (or (stringp data)
+              (%valid-pty-write-octets-p data))
+    (error "PTY write data must be a string or a vector of octets, got ~S."
+           data)))
+
 #+sbcl
 (defun make-pty (&key (program "/bin/sh") args environment directory)
   "Spawn PROGRAM under a PTY on SBCL, returning a PTY object."
   (handler-case
-      (let* ((process (%run-program-with-pty-retry program args
+      (progn
+        (%validate-pty-spawn-arguments program args environment directory)
+        (let* ((process (%run-program-with-pty-retry program args
                                                    environment
                                                    directory))
-             (stream (sb-ext:process-pty process)))
-        (%make-pty :process process :stream stream))
+               (stream (sb-ext:process-pty process)))
+          (%make-pty :process process :stream stream)))
     (error (condition)
       (%signal-pty-operation-failed :spawn nil condition))))
 
@@ -65,8 +108,9 @@
 (defun pty-write (pty data)
   "Write DATA to PTY and return PTY."
   (%with-pty-operation (:write pty)
+    (%validate-pty-write-data data)
     (let ((stream (%pty-stream-or-error pty)))
-      (etypecase data
+      (typecase data
         (string (write-string data stream))
         (vector (write-string (%utf8-octets-to-string data) stream)))
       (finish-output stream)
@@ -75,6 +119,7 @@
 (defun pty-read (pty &optional (limit 4096))
   "Read up to LIMIT characters from PTY, returning a string when data is available or NIL."
   (%with-pty-operation (:read pty)
+    (%validate-pty-read-limit limit)
     (let ((stream (%pty-stream-or-error pty)))
       (let ((output (with-output-to-string (out)
                       (loop repeat limit
@@ -89,8 +134,9 @@
 Sends TIOCSWINSZ on the PTY's file descriptor, which is how a terminal tells a
 child process its window changed (the child normally receives SIGWINCH). Signals
 PTY-OPERATION-FAILED when the size cannot be set -- for example on a platform
-whose ioctl constant is unknown or a stream without an accessible descriptor."
+  whose ioctl constant is unknown or a stream without an accessible descriptor."
   (%with-pty-operation (:resize pty)
+    (%validate-pty-size columns rows)
     (let* ((stream (%pty-stream-or-error pty))
            (fd (%stream-fd stream)))
       (unless (and fd (%set-terminal-size fd columns rows))

@@ -69,10 +69,29 @@
         (decode-mouse-sequence buffer :start 2)
       (%mouse-is (event) :button :left :action :press :x 0 :y 0 :modifiers nil)
       (is (= 9 consumed))))
+  ;; Invalid offsets are declined rather than indexing before the buffer.
+  (multiple-value-bind (event consumed)
+      (decode-mouse-sequence (%sgr-mouse 0 1 1 #\M) :start -1)
+    (is (null event))
+    (is (= 0 consumed)))
+  (multiple-value-bind (event consumed)
+      (decode-mouse-sequence (%sgr-mouse 0 1 1 #\M) :start 1.5)
+    (is (null event))
+    (is (= 0 consumed)))
+  (multiple-value-bind (event consumed)
+      (decode-mouse-sequence (format nil "~C[<1234567890123;1;1M" #\Esc))
+    (is (null event))
+    (is (= 0 consumed)))
   ;; MAKE-MOUSE-EVENT normalizes its modifier list.
   (is (equal '(:control :shift)
              (mouse-event-modifiers
-              (make-mouse-event :modifiers '(:shift :control :shift))))))
+              (make-mouse-event :modifiers '(:shift :control :shift)))))
+  (%mouse-is ((make-mouse-event :button :left :action :drag :x 2 :y 3))
+             :button :left :action :drag :x 2 :y 3 :modifiers nil)
+  (signals (error c) (make-mouse-event :button :invalid) (is c))
+  (signals (error c) (make-mouse-event :action :invalid) (is c))
+  (signals (error c) (make-mouse-event :x -1) (is c))
+  (signals (error c) (make-mouse-event :y 1.5) (is c)))
 
 (defun %test-mouse-input-integration ()
   ;; DECODE-INPUT surfaces mouse events inline with key events.

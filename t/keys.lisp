@@ -41,6 +41,10 @@
      :special :paste-start nil)
     (,(concatenate 'string (string #\Esc) "[201~")
      :special :paste-end nil)
+    (,(concatenate 'string (string #\Esc) "[x")
+     :special :unknown-csi nil)
+    (,(concatenate 'string (string #\Esc) "[999~")
+     :special :unknown-csi nil)
     (,(concatenate 'string (string #\Esc) "[Z") :special :backtab nil)
     (,(concatenate 'string (string #\Esc) "x") :character #\x (:alt))
     (,(concatenate 'string (string #\Esc) "OA") :special :up nil)
@@ -63,6 +67,9 @@
         (list (concatenate 'string "zz" (string #\Esc) "O")
               :special :escape nil 1 :start 2)
         (list (concatenate 'string (string #\Esc) "[99999999u")
+              :special :escape nil 1)
+        (list (concatenate 'string (string #\Esc) "["
+                           (make-string 19 :initial-element #\9) "u")
               :special :escape nil 1)))
 
 (defparameter +decoded-event-code-cases+
@@ -70,6 +77,11 @@
               '(:escape #\[ #\1 #\; #\a #\C))
         (list (concatenate 'string (string #\Esc) "[99999999u")
               '(:escape #\[ #\9 #\9 #\9 #\9 #\9 #\9 #\9 #\9 #\u))
+        (list (concatenate 'string (string #\Esc) "["
+                           (make-string 19 :initial-element #\9) "u")
+              (append '(:escape #\[)
+                      (make-list 19 :initial-element #\9)
+                      '(#\u)))
         (list (concatenate 'string (string #\Esc) "O")
               '(:escape #\O))))
 
@@ -84,6 +96,18 @@
 (defun %assert-key-event (event expected-type expected-code expected-modifiers)
   (%assert-key-event= event
                       (list expected-type expected-code expected-modifiers)))
+
+(defun %signals-non-type-error (thunk)
+  (handler-case
+      (progn
+        (funcall thunk)
+        (is nil))
+    (type-error (condition)
+      (declare (ignore condition))
+      (is nil))
+    (error (condition)
+      (declare (ignore condition))
+      (is t))))
 
 (defun %assert-single-decode-case (input expected-type expected-code
                                    expected-modifiers)
@@ -101,6 +125,12 @@
       (decode-key-sequence input :start start)
     (%assert-key-event event expected-type expected-code expected-modifiers)
     (is (= expected-consumed consumed))))
+
+(defun %assert-decode-key-sequence-declined (input start)
+  (multiple-value-bind (event consumed)
+      (decode-key-sequence input :start start)
+    (is (null event))
+    (is (= 0 consumed))))
 
 (defun %assert-decoded-event-codes (input expected-codes)
   (let ((events (decode-input input)))
@@ -124,7 +154,9 @@
     (is (string= "F1" (label :special :f1)))
     (is (string= "<paste 5 bytes>" (label :paste "hello")))
     ;; Modifier prefix is Ctrl-Alt-Shift order regardless of input order.
-    (is (string= "C-S-a" (label :character #\a '(:shift :control))))))
+    (is (string= "C-S-a" (label :character #\a '(:shift :control)))))
+  (%signals-non-type-error
+   (lambda () (key-event->string :not-a-key-event))))
 
 (defun %test-focus-decode ()
   (let ((event (first (decode-input (format nil "~C[I" #\Esc)))))
@@ -161,7 +193,23 @@
       (decode-cursor-position-report (format nil "xx~C[3;5R" #\Esc) :start 2)
     (is (= 2 row))
     (is (= 4 col))
-    (is (= 6 consumed))))
+    (is (= 6 consumed)))
+  ;; Invalid offsets are declined rather than indexing before the buffer.
+  (multiple-value-bind (row col consumed)
+      (decode-cursor-position-report (format nil "~C[3;5R" #\Esc) :start -1)
+    (is (null row))
+    (is (null col))
+    (is (= 0 consumed)))
+  (multiple-value-bind (row col consumed)
+      (decode-cursor-position-report (format nil "~C[3;5R" #\Esc) :start 1.5)
+    (is (null row))
+    (is (null col))
+    (is (= 0 consumed)))
+  (multiple-value-bind (row col consumed)
+      (decode-cursor-position-report (format nil "~C[1234567890123;1R" #\Esc))
+    (is (null row))
+    (is (null col))
+    (is (= 0 consumed))))
 
 (defun %test-color-report ()
   ;; 4-hex-digit components scaled to 8-bit, ESC\ terminator.
@@ -186,6 +234,28 @@
   (multiple-value-bind (r g b consumed)
       (decode-color-report (format nil "~C[A" #\Esc))
     (declare (ignore r g b))
+    (is (= 0 consumed)))
+  ;; Invalid offsets are declined without signaling.
+  (multiple-value-bind (r g b consumed)
+      (decode-color-report (format nil "~C]10;rgb:ff/00/00~C" #\Esc (code-char 7))
+                           :start -1)
+    (is (null r))
+    (is (null g))
+    (is (null b))
+    (is (= 0 consumed)))
+  (multiple-value-bind (r g b consumed)
+      (decode-color-report (format nil "~C]10;rgb:ff/00/00~C" #\Esc (code-char 7))
+                           :start 1.5)
+    (is (null r))
+    (is (null g))
+    (is (null b))
+    (is (= 0 consumed)))
+  (multiple-value-bind (r g b consumed)
+      (decode-color-report (format nil "~C]10;rgb:fffffffff/00/00~C" #\Esc
+                                   (code-char 7)))
+    (is (null r))
+    (is (null g))
+    (is (null b))
     (is (= 0 consumed))))
 
 (defun %csi (params final)
@@ -255,6 +325,15 @@
   (multiple-value-bind (params consumed)
       (decode-device-attributes (format nil "~C[?1;2" #\Esc))
     (is (null params))
+    (is (= 0 consumed)))
+  ;; Invalid offsets are declined without signaling.
+  (multiple-value-bind (params consumed)
+      (decode-device-attributes (%csi "?1;2" #\c) :start -1)
+    (is (null params))
+    (is (= 0 consumed)))
+  (multiple-value-bind (params consumed)
+      (decode-device-attributes (%csi "?1;2" #\c) :start 1.5)
+    (is (null params))
     (is (= 0 consumed))))
 
 (defun test-keys ()
@@ -281,6 +360,20 @@
                                :code :enter
                                :modifiers '(:control :control :shift 1))))
     (%assert-key-event= event '(:special :enter (:control :shift))))
+  (%signals-non-type-error
+   (lambda () (make-key-event :type "bad" :code #\a)))
+  (%signals-non-type-error
+   (lambda () (make-key-event :type :character :code :not-a-character)))
+  (%signals-non-type-error
+   (lambda () (make-key-event :type :special :code #\a)))
+  (%signals-non-type-error
+   (lambda () (make-key-event :type :paste :code #\a)))
+  (%signals-non-type-error
+   (lambda () (make-key-event :type :character :code #\a :kind :down)))
+  (%signals-non-type-error
+   (lambda () (make-key-event :type :character :code #\a :text :bad)))
+  (%signals-non-type-error
+   (lambda () (make-key-event :type :character :code #\a :shifted-key "A")))
   (do-test-case-bind
       (case +single-decode-cases+
             (input expected-type expected-code expected-modifiers))
@@ -298,6 +391,9 @@
                                       expected-modifiers
                                       expected-consumed
                                       :start start))
+  (%assert-decode-key-sequence-declined "a" -1)
+  (%assert-decode-key-sequence-declined "a" 1.5)
+  (%assert-decode-key-sequence-declined "a" 1)
   (do-test-case-bind
       (case +decoded-event-code-cases+
             (input expected-codes))
