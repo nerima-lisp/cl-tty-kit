@@ -251,6 +251,10 @@
     "PTY-ALIVE-P"
     "PTY-EXIT-CODE"
     "CLOSE-PTY"
+    "PTY-FD"
+    "PTY-PID"
+    "FD-READ-OCTETS"
+    "FD-WRITE-OCTETS"
     "ANSI-REQUEST-DEVICE-ATTRIBUTES"))
 
 (defparameter +expected-readme-commands+

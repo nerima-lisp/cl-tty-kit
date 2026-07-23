@@ -1,5 +1,35 @@
 (in-package #:cl-tty-kit/test)
 
+#+sbcl
+(defun test-raw-mode-superset ()
+  ;; FR-006: ENABLE-RAW-MODE clears a superset of the classic raw input flags.
+  ;; On top of BRKINT/ICRNL/INPCK/ISTRIP/IXON/IXOFF it must also clear IGNBRK,
+  ;; PARMRK, INLCR and IGNCR, so the resulting mode is byte-transparent enough
+  ;; for a multiplexer feeding the stream verbatim to a child PTY.
+  (let ((superset (logior sb-posix:ignbrk sb-posix:brkint sb-posix:parmrk
+                          sb-posix:istrip sb-posix:inlcr sb-posix:igncr
+                          sb-posix:icrnl sb-posix:inpck sb-posix:ixon
+                          sb-posix:ixoff))
+        (unrelated-iflag-bit #x40000000))
+    (multiple-value-bind (iflag oflag cflag lflag)
+        (cl-tty-kit::%raw-mode-flag-values
+         (logior superset unrelated-iflag-bit) 0 0 0)
+      (declare (ignore oflag cflag lflag))
+      ;; The whole superset is cleared.
+      (is (zerop (logand iflag superset)))
+      ;; Each newly-added flag is cleared individually.
+      (is (zerop (logand iflag sb-posix:ignbrk)))
+      (is (zerop (logand iflag sb-posix:parmrk)))
+      (is (zerop (logand iflag sb-posix:inlcr)))
+      (is (zerop (logand iflag sb-posix:igncr)))
+      ;; Unrelated input flags are preserved (only input processing is removed).
+      (is (not (zerop (logand iflag unrelated-iflag-bit))))))
+  t)
+
+#-sbcl
+(defun test-raw-mode-superset ()
+  t)
+
 (defmacro with-raw-mode-stubs ((enable-result) &body body)
   `(let ((body-ran nil)
          (disabled nil))
@@ -29,6 +59,7 @@
        (logior sb-posix:opost #x20)
        (logior sb-posix:csize sb-posix:parenb #x40)
        (logior sb-posix:echo
+               sb-posix:echonl
                sb-posix:icanon
                sb-posix:iexten
                sb-posix:isig
@@ -46,9 +77,13 @@
     (is (not (zerop (logand cflag sb-posix:cs8))))
     (is (zerop (logand lflag
                        (logior sb-posix:echo
+                               sb-posix:echonl
                                sb-posix:icanon
                                sb-posix:iexten
-                               sb-posix:isig)))))
+                               sb-posix:isig))))
+    ;; ECHONL is cleared alongside the classic local flags, keeping the local-flag
+    ;; set a strict superset of the pre-migration cl-tmux raw mode.
+    (is (zerop (logand lflag sb-posix:echonl))))
   (let ((cc (make-array 32 :initial-element 9)))
     (cl-tty-kit::%set-raw-mode-character-control-values cc)
     (is (= 1 (aref cc sb-posix:vmin)))

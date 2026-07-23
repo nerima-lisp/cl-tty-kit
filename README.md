@@ -417,6 +417,20 @@ cursor restore" path for app render loops.
 - `pty-alive-p`
 - `pty-exit-code`
 - `close-pty`
+- `pty-fd`
+- `pty-pid`
+- `fd-read-octets`
+- `fd-write-octets`
+
+For fd-multiplexing callers (for example a terminal multiplexer running its own
+`select(2)` loop over many descriptors), a byte-transparent, fd-centric layer
+sits alongside the stream API. `pty-fd` returns the PTY master file descriptor
+as an integer and `pty-pid` returns the child process id. `fd-read-octets` and
+`fd-write-octets` perform exact-byte I/O on a bare integer fd using
+`(simple-array (unsigned-byte 8))` buffers, with no character decoding.
+`fd-read-octets` returns a positive count on data, `0` at end of file, or `nil`
+when a non-blocking fd has no data ready; `fd-write-octets` returns the number
+of bytes written. Hard OS errors are wrapped in `pty-operation-failed`.
 
 If PTY startup, shutdown, reads, or writes fail, `make-pty`, `close-pty`,
 `pty-read`, and `pty-write` signal `pty-operation-failed` with the operation
@@ -656,6 +670,9 @@ the operation, file descriptor, and underlying condition.
 Nested `with-raw-mode` or repeated `enable-raw-mode` calls on the same file
 descriptor are reference-counted, so the terminal is restored only when the
 outermost scope exits successfully.
+Raw mode clears a strict superset of `cfmakeraw`'s input flags (also disabling
+break handling, marking, stripping, and CR/NL translation), leaving the stream
+byte-transparent for a multiplexer that feeds it verbatim to a child PTY.
 
 ### Terminal session
 

@@ -297,4 +297,9 @@ relations resolved by this engine.")
    #:pty-resize
    #:pty-alive-p
    #:pty-exit-code
-   #:close-pty))
+   #:close-pty
+   ;; pty fd-centric layer
+   #:pty-fd
+   #:pty-pid
+   #:fd-read-octets
+   #:fd-write-octets))

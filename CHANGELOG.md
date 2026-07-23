@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 - 2026-07-23
+
+- add an fd-centric PTY layer for fd-multiplexing callers: `pty-fd` and `pty-pid`
+  expose the master-side file descriptor and child pid, and `fd-read-octets` /
+  `fd-write-octets` do byte-transparent octet I/O on a bare integer fd (no
+  character decoding, exact bytes preserved). `fd-write-octets` loops over short
+  writes on a blocking fd and stops at EAGAIN with a resumable short count on a
+  non-blocking fd. These coexist with, and do not replace, the stream-based
+  `pty-read` / `pty-write`
+- widen raw mode to clear a strict superset of `cfmakeraw`'s input flags, also
+  clearing `IGNBRK PARMRK ISTRIP INLCR IGNCR ECHONL` so the stream is
+  byte-transparent enough for a multiplexer feeding it verbatim to a child PTY.
+  This is a behavior change for existing `enable-raw-mode` consumers, so it lands
+  as a minor version bump rather than a patch
+
 ## 0.3.0 - 2026-07-20
 
 - harden terminal escape, input, color, mouse, PTY, and image parsing against

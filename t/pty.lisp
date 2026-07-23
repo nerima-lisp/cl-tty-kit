@@ -272,6 +272,140 @@
                                                  :stream (make-string-input-stream "")))))
   t)
 
+#+sbcl
+(defun test-pty-fd ()
+  ;; FR-001 / FR-003: PTY-FD and PTY-PID on a live PTY.
+  (let ((pty (make-pty :program "/bin/sh")))
+    (unwind-protect
+         (let ((fd (pty-fd pty))
+               (pid (pty-pid pty)))
+           (is (integerp fd))
+           (is (plusp fd))
+           (is (eql fd (cl-tty-kit::%stream-fd (pty-stream pty))))
+           (is (integerp pid))
+           (is (plusp pid))
+           (is (eql pid (sb-ext:process-pid (pty-process pty)))))
+      (close-pty pty)))
+  ;; A stream-only PTY has no PID; a PTY whose stream lacks a descriptor signals.
+  (is (null (pty-pid (cl-tty-kit::%make-pty :process nil
+                                            :stream (make-string-input-stream "")))))
+  (let ((fdless (cl-tty-kit::%make-pty :process nil
+                                       :stream (make-string-output-stream))))
+    (signals-pty-operation-failed (:fd fdless "PTY operation FD failed")
+      (pty-fd fdless)))
+  ;; FR-002: byte-transparent octet round-trip over a real pipe. The payload
+  ;; carries a UTF-8 high-byte sequence (#xE2 #x9C #x93) plus NUL and ESC control
+  ;; bytes, all of which must survive verbatim with no character decoding.
+  (multiple-value-bind (rfd wfd) (sb-unix:unix-pipe)
+    (unwind-protect
+         (let ((payload (make-array 6 :element-type '(unsigned-byte 8)
+                                      :initial-contents
+                                      '(#xE2 #x9C #x93 #x00 #x1B #x41))))
+           (is (= 6 (fd-write-octets wfd payload)))
+           (let ((buffer (make-array 32 :element-type '(unsigned-byte 8)
+                                        :initial-element 0)))
+             (let ((count (fd-read-octets rfd buffer)))
+               (is (eql 6 count))
+               (is (equalp payload (subseq buffer 0 count))))))
+      (sb-unix:unix-close wfd)
+      (sb-unix:unix-close rfd)))
+  ;; FR-002: a non-blocking read with no data ready returns NIL (never blocks);
+  ;; once the peer closes, a ready read reports EOF as 0.
+  (multiple-value-bind (rfd wfd) (sb-unix:unix-pipe)
+    (let ((wfd-open t))
+      (unwind-protect
+           (let ((flags (sb-posix:fcntl rfd sb-posix:f-getfl))
+                 (buffer (make-array 16 :element-type '(unsigned-byte 8))))
+             (sb-posix:fcntl rfd sb-posix:f-setfl
+                             (logior flags sb-posix:o-nonblock))
+             (is (null (fd-read-octets rfd buffer)))
+             (sb-unix:unix-close wfd)
+             (setf wfd-open nil)
+             (is (eql 0 (fd-read-octets rfd buffer))))
+        (when wfd-open (sb-unix:unix-close wfd))
+        (sb-unix:unix-close rfd))))
+  ;; FR-002: fd-read-octets honours an explicit LIMIT smaller than the buffer and
+  ;; returns 0 immediately for a zero-count request (early return, no syscall, so
+  ;; it never blocks and consumes nothing).
+  (multiple-value-bind (rfd wfd) (sb-unix:unix-pipe)
+    (unwind-protect
+         (let ((payload (make-array 6 :element-type '(unsigned-byte 8)
+                                      :initial-contents '(1 2 3 4 5 6)))
+               (buffer (make-array 16 :element-type '(unsigned-byte 8)
+                                      :initial-element 0)))
+           (is (= 6 (fd-write-octets wfd payload)))
+           ;; LIMIT caps the read below the buffer length and what is available.
+           (is (eql 3 (fd-read-octets rfd buffer 3)))
+           (is (equalp #(1 2 3) (subseq buffer 0 3)))
+           ;; Zero-count early return leaves the remaining 4 5 6 in the pipe.
+           (is (eql 0 (fd-read-octets rfd buffer 0)))
+           (is (eql 3 (fd-read-octets rfd buffer)))
+           (is (equalp #(4 5 6) (subseq buffer 0 3))))
+      (sb-unix:unix-close wfd)
+      (sb-unix:unix-close rfd)))
+  ;; FR-002: fd-write-octets short-write / non-blocking short-count contract.
+  ;; A payload far larger than any pipe's kernel buffer cannot be written in one
+  ;; shot on a non-blocking fd -- the first call fills the buffer and returns a
+  ;; short count 0 < result < len. Draining the read end and resuming with the
+  ;; remaining octets (subseq payload result) eventually writes every byte. This
+  ;; is the multiplexer-critical resumable-write path.
+  (multiple-value-bind (rfd wfd) (sb-unix:unix-pipe)
+    (unwind-protect
+         (let* ((len (* 1024 1024))
+                (payload (make-array len :element-type '(unsigned-byte 8)
+                                         :initial-element 65))
+                (drain (make-array 65536 :element-type '(unsigned-byte 8))))
+           ;; Both ends non-blocking so neither the resumed write nor the drain
+           ;; loop can block this single-threaded test.
+           (let ((wflags (sb-posix:fcntl wfd sb-posix:f-getfl))
+                 (rflags (sb-posix:fcntl rfd sb-posix:f-getfl)))
+             (sb-posix:fcntl wfd sb-posix:f-setfl
+                             (logior wflags sb-posix:o-nonblock))
+             (sb-posix:fcntl rfd sb-posix:f-setfl
+                             (logior rflags sb-posix:o-nonblock)))
+           (let ((first (fd-write-octets wfd payload)))
+             ;; Short count: some but not all bytes made it into the buffer.
+             (is (< 0 first))
+             (is (< first len))
+             (let ((total first))
+               (loop while (< total len)
+                     repeat 100000
+                     do ;; Fully drain the read end (a non-blocking read returns
+                        ;; NIL once the buffer empties), then resume writing the
+                        ;; leftover octets from where the previous call stopped.
+                        (loop for n = (fd-read-octets rfd drain)
+                              while (and n (plusp n)))
+                        (let ((wrote (fd-write-octets wfd (subseq payload total))))
+                          (is (plusp wrote))
+                          (incf total wrote)))
+               (is (= total len)))))
+      (sb-unix:unix-close wfd)
+      (sb-unix:unix-close rfd)))
+  ;; FR-001: PTY-FD after CLOSE-PTY has cleared the stream signals a structured
+  ;; failure rather than returning a stale descriptor.
+  (let ((closed-pty (make-pty :program "/bin/sh")))
+    (close-pty closed-pty)
+    (signals-pty-operation-failed (:fd closed-pty "PTY operation FD failed")
+      (pty-fd closed-pty)))
+  ;; Validation: a non-octet buffer and a bad fd are wrapped as PTY-OPERATION-FAILED.
+  (signals-pty-operation-failed (:fd-read nil "PTY operation FD-READ failed")
+    (fd-read-octets 0 "not-a-buffer"))
+  (signals-pty-operation-failed (:fd-write nil "PTY operation FD-WRITE failed")
+    (fd-write-octets -1 (make-array 0 :element-type '(unsigned-byte 8))))
+  t)
+
+#-sbcl
+(defun test-pty-fd ()
+  (dolist (thunk (list (lambda () (pty-fd (cl-tty-kit::%make-pty)))
+                       (lambda () (pty-pid (cl-tty-kit::%make-pty)))
+                       (lambda () (fd-read-octets 0 nil))
+                       (lambda () (fd-write-octets 0 nil))))
+    (handler-case
+        (progn (funcall thunk) (is nil))
+      (unsupported-feature (condition)
+        (is (eq :pty (unsupported-feature-feature condition))))))
+  t)
+
 #-sbcl
 (defun test-pty ()
   (handler-case

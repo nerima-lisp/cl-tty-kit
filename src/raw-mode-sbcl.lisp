@@ -28,11 +28,23 @@
 
 #+sbcl
 (defun %raw-mode-flag-values (iflag oflag cflag lflag)
+  ;; Clear a superset of the classic cfmakeraw input flags. The additional
+  ;; IGNBRK, PARMRK, INLCR, and IGNCR clears (on top of the original BRKINT,
+  ;; ICRNL, INPCK, ISTRIP, IXON, IXOFF) make this a strict "more raw"
+  ;; configuration: no break handling, no marking or stripping, and no CR/NL
+  ;; translation of input. This satisfies byte-transparent consumers (such as a
+  ;; terminal multiplexer feeding the stream verbatim to a child PTY) while
+  ;; remaining a valid raw mode for cl-tty-kit's own callers, since every added
+  ;; flag only removes input processing.
   (values (logand iflag
-                  (lognot (logior (%sb-posix-value "BRKINT")
+                  (lognot (logior (%sb-posix-value "IGNBRK")
+                                  (%sb-posix-value "BRKINT")
+                                  (%sb-posix-value "PARMRK")
+                                  (%sb-posix-value "ISTRIP")
+                                  (%sb-posix-value "INLCR")
+                                  (%sb-posix-value "IGNCR")
                                   (%sb-posix-value "ICRNL")
                                   (%sb-posix-value "INPCK")
-                                  (%sb-posix-value "ISTRIP")
                                   (%sb-posix-value "IXON")
                                   (%sb-posix-value "IXOFF"))))
           (logand oflag (lognot (%sb-posix-value "OPOST")))
@@ -40,8 +52,14 @@
                           (lognot (logior (%sb-posix-value "CSIZE")
                                           (%sb-posix-value "PARENB"))))
                   (%sb-posix-value "CS8"))
+          ;; Clear ECHONL in addition to the classic ECHO/ICANON/IEXTEN/ISIG so
+          ;; the local-flag set is likewise a strict superset of the pre-migration
+          ;; cl-tmux raw mode. ECHONL is inert while ICANON is cleared, so this is
+          ;; a no-op at runtime; it only makes the flag set honest and matches the
+          ;; old cl-tmux behavior exactly.
           (logand lflag
                   (lognot (logior (%sb-posix-value "ECHO")
+                                  (%sb-posix-value "ECHONL")
                                   (%sb-posix-value "ICANON")
                                   (%sb-posix-value "IEXTEN")
                                   (%sb-posix-value "ISIG"))))))
