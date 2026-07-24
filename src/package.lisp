@@ -7,34 +7,6 @@
 (error "cl-tty-kit currently requires SBCL (it relies on sb-posix, sb-unicode, ~
 and sb-ext). See the \"Compatibility\" section of the README for details.")
 
-(defpackage #:cl-tty-kit/prolog
-  (:use #:cl)
-  (:nicknames #:tty-prolog)
-  (:documentation
-   "A small embedded logic engine: unification plus CPS resolution over an
-explicit clause database. cl-tty-kit expresses its pure decision logic as
-relations resolved by this engine.")
-  (:export
-   #:clause-db
-   #:make-clause-db
-   #:add-clause
-   #:define-clauses
-   #:add-primitive
-   #:define-primitive
-   #:variable-p
-   #:unify
-   #:subst-bindings
-   #:+no-bindings+
-   #:+fail+
-   #:solutions
-   #:provable-p
-   #:install-standard-primitives
-   ;; advanced standard relations installed by INSTALL-STANDARD-PRIMITIVES
-   #:true
-   #:fail
-   #:call
-   #:findall))
-
 (defpackage #:cl-tty-kit
   (:use #:cl)
   (:export

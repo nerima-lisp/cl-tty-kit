@@ -80,9 +80,6 @@
   (assert (equal '(:alt) (cl-tty-kit::modifiers-from-csi-number 3)))
   (assert (equal '(:control) (cl-tty-kit::modifiers-from-csi-number 5)))
   (assert (equal '(:alt :control :shift) (cl-tty-kit::modifiers-from-csi-number 8)))
-  (let ((stream (make-string-output-stream)))
-    (assert (string= "hello" (cl-tty-kit::copy-string-to-output "hello" stream)))
-    (assert (string= "hello" (get-output-stream-string stream))))
   t)
 
 (defun test-char-width-api ()

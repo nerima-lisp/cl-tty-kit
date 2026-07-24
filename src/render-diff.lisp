@@ -83,10 +83,6 @@
         (incf length 1)))
     length))
 
-(defun %render-commands-length (commands)
-  (loop for command in commands
-        sum (%render-command-length command)))
-
 (defun %diff-render-commands (screen previous &key max-length)
   (block too-long
     (let ((length 0))

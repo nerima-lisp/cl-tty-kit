@@ -35,11 +35,6 @@
   (dolist (command commands stream)
     (%write-render-command command stream)))
 
-(defun %render-command-string (command)
-  (with-output-to-string (stream)
-    (dolist (part (%render-command-parts command))
-      (write-string part stream))))
-
 (defun %render-commands-string (commands)
   (with-output-to-string (stream)
     (%write-render-commands commands stream)))
