@@ -6,18 +6,6 @@
                (if partial (string (code-char partial)) "")
                (make-string pad :initial-element #\Space)))
 
-(defun %signals-non-type-error (thunk)
-  (handler-case
-      (progn
-        (funcall thunk)
-        (is nil))
-    (type-error (condition)
-      (declare (ignore condition))
-      (is nil))
-    (error (condition)
-      (declare (ignore condition))
-      (is t))))
-
 (defun %test-progress-bar-coarse ()
   (is (string= (%blocks 2 nil 2) (format-progress-bar 1/2 4 :fractional nil)))
   (is (string= "    " (format-progress-bar 0 4 :fractional nil)))
@@ -29,12 +17,9 @@
   (is (string= "..." (format-progress-bar 0 3 :fractional nil :empty #\.)))
   (is (string= "" (format-progress-bar 1/2 0)))
   (signals (error c) (format-progress-bar 1/2 -1) (is c))
-  (%signals-non-type-error
-   (lambda () (format-progress-bar "bad" 4)))
-  (%signals-non-type-error
-   (lambda () (format-progress-bar 1/2 4 :full "bad")))
-  (%signals-non-type-error
-   (lambda () (format-progress-bar 1/2 4 :empty "bad"))))
+  (signals-non-type-error (format-progress-bar "bad" 4))
+  (signals-non-type-error (format-progress-bar 1/2 4 :full "bad"))
+  (signals-non-type-error (format-progress-bar 1/2 4 :empty "bad")))
 
 (defun %test-progress-bar-fractional ()
   ;; Whole cells resolve identically to the coarse bar.
@@ -57,18 +42,12 @@
   ;; Custom pad glyph.
   (is (string= "a.." (format-columns '("a") '(3) :pad #\.)))
   (signals (error c) (format-columns '("a") '(1 2)) (is c))
-  (%signals-non-type-error
-   (lambda () (format-columns '(:not-a-string) '(3))))
-  (%signals-non-type-error
-   (lambda () (format-columns '("a") '(:wide))))
-  (%signals-non-type-error
-   (lambda () (format-columns '("a") '(3) :aligns :bad)))
-  (%signals-non-type-error
-   (lambda () (format-columns '("a") '(3) :aligns '(:bad))))
-  (%signals-non-type-error
-   (lambda () (format-columns '("a") '(3) :separator :bad)))
-  (%signals-non-type-error
-   (lambda () (format-columns '("a") '(3) :pad "bad"))))
+  (signals-non-type-error (format-columns '(:not-a-string) '(3)))
+  (signals-non-type-error (format-columns '("a") '(:wide)))
+  (signals-non-type-error (format-columns '("a") '(3) :aligns :bad))
+  (signals-non-type-error (format-columns '("a") '(3) :aligns '(:bad)))
+  (signals-non-type-error (format-columns '("a") '(3) :separator :bad))
+  (signals-non-type-error (format-columns '("a") '(3) :pad "bad")))
 
 (defun %spark (&rest levels)
   (map 'string (lambda (level) (code-char (+ #x2581 level))) levels))
@@ -85,10 +64,8 @@
   (is (string= (%spark 0 7) (format-sparkline '(-5 15) :min 0 :max 10)))
   ;; Accepts a vector too.
   (is (string= (%spark 0 7) (format-sparkline #(0 1))))
-  (%signals-non-type-error
-   (lambda () (format-sparkline '(:bad))))
-  (%signals-non-type-error
-   (lambda () (format-sparkline '(1 2) :min :low))))
+  (signals-non-type-error (format-sparkline '(:bad)))
+  (signals-non-type-error (format-sparkline '(1 2) :min :low)))
 
 (defun %test-format-table ()
   (is (equal '("a   bb" "ccc d ")
@@ -99,16 +76,11 @@
   ;; Per-column alignment.
   (is (equal '("a b")
              (format-table '(("a" "b")) :aligns '(:right :right))))
-  (%signals-non-type-error
-   (lambda () (format-table '((:bad)))))
-  (%signals-non-type-error
-   (lambda () (format-table '(("a")) :aligns :bad)))
-  (%signals-non-type-error
-   (lambda () (format-table '(("a")) :aligns '(:bad))))
-  (%signals-non-type-error
-   (lambda () (format-table '(("a")) :separator :bad)))
-  (%signals-non-type-error
-   (lambda () (format-table '(("a")) :pad "bad")))
+  (signals-non-type-error (format-table '((:bad))))
+  (signals-non-type-error (format-table '(("a")) :aligns :bad))
+  (signals-non-type-error (format-table '(("a")) :aligns '(:bad)))
+  (signals-non-type-error (format-table '(("a")) :separator :bad))
+  (signals-non-type-error (format-table '(("a")) :pad "bad"))
   (is (equal '() (format-table '()))))
 
 (defun %test-spinner-frame ()
@@ -122,12 +94,9 @@
   (is (string= "y" (spinner-frame 3 :frames #("x" "y"))))
   (is (string= "" (spinner-frame 0 :frames "")))
   (signals (error c) (spinner-frame 0 :frames :nope) (is c))
-  (%signals-non-type-error
-   (lambda () (spinner-frame 1.5 :frames :line)))
-  (%signals-non-type-error
-   (lambda () (spinner-frame 0 :frames 42)))
-  (%signals-non-type-error
-   (lambda () (spinner-frame 0 :frames #(1)))))
+  (signals-non-type-error (spinner-frame 1.5 :frames :line))
+  (signals-non-type-error (spinner-frame 0 :frames 42))
+  (signals-non-type-error (spinner-frame 0 :frames #(1))))
 
 (defun %test-sixel ()
   ;; 1x1 red: DCS q, palette (196 = cube red), one data byte '@', ST.
@@ -147,8 +116,7 @@
     (is (search (format nil "~C\\" #\Esc) sixel)))
   ;; A buffer whose length does not match WIDTH*HEIGHT*3 signals.
   (signals (error c) (format-sixel #(1 2 3) 2 2) (is c))
-  (%signals-non-type-error
-   (lambda () (format-sixel '(1 2 3 4 5 6) 1 2)))
+  (signals-non-type-error (format-sixel '(1 2 3 4 5 6) 1 2))
   (signals (error c) (format-sixel #(1 2 :invalid) 1 1) (is c))
   (signals (error c) (format-sixel #(1 2 256) 1 1) (is c)))
 
@@ -175,10 +143,8 @@
     (is (search "m=0" image)))
   ;; A buffer whose length does not match WIDTH*HEIGHT*bytes-per-pixel signals.
   (signals (error c) (ansi-kitty-image #(1 2) 1 1) (is c))
-  (%signals-non-type-error
-   (lambda () (ansi-kitty-image '(1 2 3 4 5 6) 1 2)))
-  (%signals-non-type-error
-   (lambda () (ansi-kitty-image #(1 2 3) 1 1 :format 16)))
+  (signals-non-type-error (ansi-kitty-image '(1 2 3 4 5 6) 1 2))
+  (signals-non-type-error (ansi-kitty-image #(1 2 3) 1 1 :format 16))
   (signals (error c) (ansi-kitty-image #(1 2 :invalid) 1 1) (is c))
   (signals (error c) (ansi-kitty-image #(1 2 256) 1 1) (is c)))
 

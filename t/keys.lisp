@@ -97,18 +97,6 @@
   (%assert-key-event= event
                       (list expected-type expected-code expected-modifiers)))
 
-(defun %signals-non-type-error (thunk)
-  (handler-case
-      (progn
-        (funcall thunk)
-        (is nil))
-    (type-error (condition)
-      (declare (ignore condition))
-      (is nil))
-    (error (condition)
-      (declare (ignore condition))
-      (is t))))
-
 (defun %assert-single-decode-case (input expected-type expected-code
                                    expected-modifiers)
   (let ((events (decode-input input)))
@@ -155,8 +143,7 @@
     (is (string= "<paste 5 bytes>" (label :paste "hello")))
     ;; Modifier prefix is Ctrl-Alt-Shift order regardless of input order.
     (is (string= "C-S-a" (label :character #\a '(:shift :control)))))
-  (%signals-non-type-error
-   (lambda () (key-event->string :not-a-key-event))))
+  (signals-non-type-error (key-event->string :not-a-key-event)))
 
 (defun %test-focus-decode ()
   (let ((event (first (decode-input (format nil "~C[I" #\Esc)))))
@@ -360,20 +347,13 @@
                                :code :enter
                                :modifiers '(:control :control :shift 1))))
     (%assert-key-event= event '(:special :enter (:control :shift))))
-  (%signals-non-type-error
-   (lambda () (make-key-event :type "bad" :code #\a)))
-  (%signals-non-type-error
-   (lambda () (make-key-event :type :character :code :not-a-character)))
-  (%signals-non-type-error
-   (lambda () (make-key-event :type :special :code #\a)))
-  (%signals-non-type-error
-   (lambda () (make-key-event :type :paste :code #\a)))
-  (%signals-non-type-error
-   (lambda () (make-key-event :type :character :code #\a :kind :down)))
-  (%signals-non-type-error
-   (lambda () (make-key-event :type :character :code #\a :text :bad)))
-  (%signals-non-type-error
-   (lambda () (make-key-event :type :character :code #\a :shifted-key "A")))
+  (signals-non-type-error (make-key-event :type "bad" :code #\a))
+  (signals-non-type-error (make-key-event :type :character :code :not-a-character))
+  (signals-non-type-error (make-key-event :type :special :code #\a))
+  (signals-non-type-error (make-key-event :type :paste :code #\a))
+  (signals-non-type-error (make-key-event :type :character :code #\a :kind :down))
+  (signals-non-type-error (make-key-event :type :character :code #\a :text :bad))
+  (signals-non-type-error (make-key-event :type :character :code #\a :shifted-key "A"))
   (do-test-case-bind
       (case +single-decode-cases+
             (input expected-type expected-code expected-modifiers))

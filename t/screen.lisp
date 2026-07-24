@@ -25,59 +25,28 @@
                      do (screen-put-cell screen x y char)))
     screen))
 
-(defun %screen-signals-non-type-error (thunk)
-  (handler-case
-      (progn
-        (funcall thunk)
-        (is nil))
-    (type-error (condition)
-      (declare (ignore condition))
-      (is nil))
-    (error (condition)
-      (declare (ignore condition))
-      (is t))))
-
 (defun %test-screen-public-validation ()
   (let ((screen (make-screen 3 2 :initial-cell #\.)))
-    (%screen-signals-non-type-error
-     (lambda () (make-screen 1 1 :initial-cell :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-clear screen :cell :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-resize screen 3 3 :initial-cell :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (setf (screen-cell screen 0 0) :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-put-cell screen 0 0 :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-fill-rect screen 0 0 1 1 :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-fill screen :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-scroll screen :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-copy :not-a-screen)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-cell :not-a-screen 0 0)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-row-string :not-a-screen 0)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-row-string screen 0 :end nil)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-string screen 0 0 :bad)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-string screen 0 0 "x" :end nil)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-crop screen :not-a-rect)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-blit :not-a-screen screen)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-blit screen :not-a-screen)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-blit screen screen :dest-x :bad))))
+    (signals-non-type-error (make-screen 1 1 :initial-cell :bad))
+    (signals-non-type-error (screen-clear screen :cell :bad))
+    (signals-non-type-error (screen-resize screen 3 3 :initial-cell :bad))
+    (signals-non-type-error (setf (screen-cell screen 0 0) :bad))
+    (signals-non-type-error (screen-put-cell screen 0 0 :bad))
+    (signals-non-type-error (screen-fill-rect screen 0 0 1 1 :bad))
+    (signals-non-type-error (screen-fill screen :bad))
+    (signals-non-type-error (screen-scroll screen :bad))
+    (signals-non-type-error (screen-copy :not-a-screen))
+    (signals-non-type-error (screen-cell :not-a-screen 0 0))
+    (signals-non-type-error (screen-row-string :not-a-screen 0))
+    (signals-non-type-error (screen-row-string screen 0 :end nil))
+    (signals-non-type-error (screen-write-string screen 0 0 :bad))
+    (signals-non-type-error (screen-write-string screen 0 0 "x" :end nil))
+    (signals-non-type-error (screen-crop screen :not-a-rect))
+    (signals-non-type-error (screen-blit :not-a-screen screen))
+    (signals-non-type-error (screen-blit screen :not-a-screen))
+    (signals-non-type-error (screen-blit screen screen :dest-x :bad)))
   (let ((screen (%screen-rows "A" "B" "C")))
-    (%screen-signals-non-type-error
-     (lambda () (screen-scroll screen 1 :fill :bad)))
+    (signals-non-type-error (screen-scroll screen 1 :fill :bad))
     (is (string= (format nil "A~%B~%C") (screen-to-string screen)))))
 
 (defun %test-screen-fill ()
@@ -170,16 +139,11 @@
     (screen-write-lines screen 0 0 '("hi") :style '(:bold))
     (cell-is (screen 0 0) #\h '(:bold)))
   (let ((screen (make-screen 4 1)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-lines :not-a-screen 0 0 '("ok"))))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-lines screen :x 0 '("ok"))))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-lines screen 0 :y '("ok"))))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-lines screen 0 0 '("ok" . "bad"))))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-lines screen 0 0 '("ok" :bad))))))
+    (signals-non-type-error (screen-write-lines :not-a-screen 0 0 '("ok")))
+    (signals-non-type-error (screen-write-lines screen :x 0 '("ok")))
+    (signals-non-type-error (screen-write-lines screen 0 :y '("ok")))
+    (signals-non-type-error (screen-write-lines screen 0 0 '("ok" . "bad")))
+    (signals-non-type-error (screen-write-lines screen 0 0 '("ok" :bad)))))
 
 (defun %test-screen-write-wrapped ()
   (let ((screen (make-screen 6 3)))
@@ -191,19 +155,15 @@
       (is (string= (format nil "the   ~%quick ~%brown ")
                    (screen-to-string screen)))))
   (let ((screen (make-screen 4 1)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-wrapped :not-a-screen 0 0 3 "text")))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-wrapped screen :x 0 3 "text")))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-wrapped screen 0 :y 3 "text")))))
+    (signals-non-type-error (screen-write-wrapped :not-a-screen 0 0 3 "text"))
+    (signals-non-type-error (screen-write-wrapped screen :x 0 3 "text"))
+    (signals-non-type-error (screen-write-wrapped screen 0 :y 3 "text"))))
 
 (defun %test-screen-to-string ()
   (let ((screen (%screen-rows "AB" "CD")))
     (is (string= (format nil "AB~%CD") (screen-to-string screen))))
   (is (string= "" (screen-to-string (make-screen 0 0))))
-  (%screen-signals-non-type-error
-   (lambda () (screen-to-string :not-a-screen))))
+  (signals-non-type-error (screen-to-string :not-a-screen)))
 
 (defun %test-screen-write-aligned ()
   (let ((rect (make-rect :width 7 :height 3)))
@@ -230,16 +190,11 @@
     (cell-is (screen 3 0) #\x '(:bold)))
   (let ((screen (make-screen 4 1))
         (rect (make-rect :width 4 :height 1)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-aligned :not-a-screen rect "x")))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-aligned screen :not-a-rect "x")))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-aligned screen rect :not-a-string)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-aligned screen rect "x" :align :diagonal)))
-    (%screen-signals-non-type-error
-     (lambda () (screen-write-aligned screen rect "x" :vertical :sideways)))))
+    (signals-non-type-error (screen-write-aligned :not-a-screen rect "x"))
+    (signals-non-type-error (screen-write-aligned screen :not-a-rect "x"))
+    (signals-non-type-error (screen-write-aligned screen rect :not-a-string))
+    (signals-non-type-error (screen-write-aligned screen rect "x" :align :diagonal))
+    (signals-non-type-error (screen-write-aligned screen rect "x" :vertical :sideways))))
 
 (defun %test-screen-crop ()
   (let* ((screen (%screen-rows "ABCD" "EFGH" "IJKL"))

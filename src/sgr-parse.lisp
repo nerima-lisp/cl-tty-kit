@@ -40,6 +40,32 @@ trailing `m'), or STRING itself when it is already a bare parameter body."
 (defun %sgr-modifier-for (token)
   (car (rassoc token +style-sgr-keywords+ :test #'string=)))
 
+(defun %sgr-color-reset-channel (code)
+  "Return the style channel keyword the SGR color-reset parameter CODE clears.
+CODE is 39 (foreground), 49 (background), or 59 (underline color)."
+  (case code (39 :fg) (49 :bg) (t :underline-color)))
+
+(defun %sgr-extended-color-item (tokens index count)
+  "Parse an extended-color SGR parameter (38/48/58 at TOKENS[INDEX]) into
+5;N (indexed) or 2;R;G;B (truecolor) form.
+Returns (VALUES ITEM NEXT-INDEX): ITEM is the parsed style item, or NIL when
+the parameter is malformed, truncated, or an unrecognized subtype; NEXT-INDEX
+is how far the caller should advance past the whole parameter."
+  (let ((channel (cond ((string= (aref tokens index) "38") :fg)
+                       ((string= (aref tokens index) "48") :bg)
+                       (t :underline-color)))
+        (kind (and (< (1+ index) count) (aref tokens (1+ index)))))
+    (cond
+      ((and kind (string= kind "5") (< (+ index 2) count))
+       (let ((color (%sgr-byte (aref tokens (+ index 2)))))
+         (values (and color (list channel color)) (+ index 3))))
+      ((and kind (string= kind "2") (< (+ index 4) count))
+       (let ((red (%sgr-byte (aref tokens (+ index 2))))
+             (green (%sgr-byte (aref tokens (+ index 3))))
+             (blue (%sgr-byte (aref tokens (+ index 4)))))
+         (values (and red green blue (list channel red green blue)) (+ index 5))))
+      (t (values nil (1+ index))))))
+
 (defconstant +max-sgr-parameter-digits+ 12)
 
 (defun %sgr-integer (token)
@@ -74,26 +100,12 @@ color; unknown parameters are ignored."
                   (setf items '() reset-p t)
                   (incf index))
                  ((member token '("38" "48" "58") :test #'string=)
-                  (let ((channel (cond ((string= token "38") :fg)
-                                       ((string= token "48") :bg)
-                                       (t :underline-color)))
-                        (kind (and (< (1+ index) count) (aref tokens (1+ index)))))
-                    (cond
-                      ((and kind (string= kind "5") (< (+ index 2) count))
-                       (let ((color (%sgr-byte (aref tokens (+ index 2)))))
-                         (when color
-                           (push (list channel color) items)))
-                       (incf index 3))
-                      ((and kind (string= kind "2") (< (+ index 4) count))
-                       (let ((red (%sgr-byte (aref tokens (+ index 2))))
-                             (green (%sgr-byte (aref tokens (+ index 3))))
-                             (blue (%sgr-byte (aref tokens (+ index 4)))))
-                         (when (and red green blue)
-                           (push (list channel red green blue) items)))
-                       (incf index 5))
-                      (t (incf index)))))
+                  (multiple-value-bind (item next-index)
+                      (%sgr-extended-color-item tokens index count)
+                    (when item (push item items))
+                    (setf index next-index)))
                  ((and code (member code '(39 49 59)))
-                  (let ((channel (case code (39 :fg) (49 :bg) (t :underline-color))))
+                  (let ((channel (%sgr-color-reset-channel code)))
                     (setf items (remove channel items
                                         :key (lambda (item)
                                                (and (consp item) (first item))))))

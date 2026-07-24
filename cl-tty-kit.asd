@@ -70,7 +70,7 @@
   :author "takeokunn"
   :license "MIT"
   :serial t
-  :depends-on (#:cl-tty-kit)
+  :depends-on (#:cl-tty-kit #:cl-weave)
   :components ((:file "t/package")
                (:file "t/package-data")
                (:file "t/suite")
@@ -100,7 +100,9 @@
                (:file "t/box")
                (:file "t/render-examples")
                (:file "t/render-core")
+               (:file "t/sgr-prolog-oracle")
                (:file "t/render-diff")
                (:file "t/render")
                (:file "t/renderer")
-               (:file "t/cursor")))
+               (:file "t/cursor")
+               (:file "t/properties")))

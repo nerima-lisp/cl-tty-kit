@@ -126,12 +126,37 @@
   (multiple-value-bind (style reset-p) (decode-sgr (format nil "~C[0m" #\Esc))
     (is (null style))
     (is reset-p))
+  ;; The full basic/extended color and color-reset grammar of DECODE-SGR: each
+  ;; case pairs an SGR parameter body with the normalized style it must recover.
+  (do-test-case-bind (sgr-case
+                      '(("91"         ((:fg 9)))               ; bright foreground (90-97)
+                        ("41"         ((:bg 1)))               ; background (40-47)
+                        ("101"        ((:bg 9)))               ; bright background (100-107)
+                        ("48;5;9"     ((:bg 9)))               ; extended indexed background
+                        ("58;5;9"     ((:underline-color 9)))  ; extended underline color
+                        ("38;2;1;2;3" ((:fg 1 2 3)))           ; truecolor foreground
+                        ("31;39"      nil)                     ; 39 clears the foreground
+                        ("41;49"      nil)                     ; 49 clears the background
+                        ("58;5;9;59"  nil)                     ; 59 clears the underline color
+                        ("38"         nil)                     ; truncated extended color
+                        ("999"        nil))                    ; unknown parameter ignored
+                      (body expected))
+    (is-equal expected (decode-sgr body)
+              (format nil "decode-sgr ~S" body)))
   ;; PARSE-STYLED-STRING recovers text and accumulated style per run.
   (is (equal '(("A" :bold) ("B" :bold (:fg 1)) ("C"))
              (parse-styled-string
               (concatenate 'string (style-ansi :bold) "A"
                            (style-ansi (style-fg 1)) "B"
                            (ansi-reset-style) "C"))))
+  ;; ...and tolerates malformed or non-SGR escape sequences without losing the
+  ;; surrounding text.
+  (is-equal nil (parse-styled-string (format nil "~C[1" #\Esc))
+            "unterminated CSI yields no segments")
+  (is-equal '(("X")) (parse-styled-string (format nil "~C[HX" #\Esc))
+            "non-SGR CSI (cursor move) is dropped")
+  (is-equal '(("AB")) (parse-styled-string (format nil "A~CMB" #\Esc))
+            "non-CSI escape is skipped, surrounding text kept")
   (let ((screen (make-screen 2 1))
         (stream (make-string-output-stream)))
     (screen-put-cell screen 0 0 #\H)

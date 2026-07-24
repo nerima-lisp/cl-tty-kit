@@ -3,18 +3,6 @@
 (defun %chars (&rest code-points)
   (map 'string #'code-char code-points))
 
-(defun %box-signals-non-type-error (thunk)
-  (handler-case
-      (progn
-        (funcall thunk)
-        (is nil))
-    (type-error (condition)
-      (declare (ignore condition))
-      (is nil))
-    (error (condition)
-      (declare (ignore condition))
-      (is t))))
-
 (defun %test-box-single ()
   (let* ((screen (make-screen 3 3))
          (result (screen-draw-box screen 0 0 3 3)))
@@ -70,10 +58,8 @@
         (screen-draw-box screen 0 0 -1 3)
       (is c))
     (signals (error c) (screen-draw-box screen 0 0 3 3 :border :nope) (is c))
-    (%box-signals-non-type-error
-     (lambda () (screen-draw-box screen 0 0 3 3 :title :bad)))
-    (%box-signals-non-type-error
-     (lambda () (screen-draw-box screen 0 0 3 3 :title-align :bad)))
+    (signals-non-type-error (screen-draw-box screen 0 0 3 3 :title :bad))
+    (signals-non-type-error (screen-draw-box screen 0 0 3 3 :title-align :bad))
     ;; A zero-area box is a no-op even with an off-screen origin.
     (is (eq screen (screen-draw-box screen 9 9 0 0)))))
 

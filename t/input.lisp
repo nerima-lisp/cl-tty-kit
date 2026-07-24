@@ -145,7 +145,9 @@
     (signals (cl-tty-kit::input-buffer-exceeded condition)
         (decode-input-chunk decoder "0123456789")
       (is (= 8 (cl-tty-kit::input-buffer-exceeded-limit condition)))
-      (is (= 10 (cl-tty-kit::input-buffer-exceeded-size condition)))))
+      (is (= 10 (cl-tty-kit::input-buffer-exceeded-size condition)))
+      (is (string= "Input decoder buffer of 10 units exceeds the 8 unit limit."
+                   (format nil "~A" condition)))))
   (let ((decoder (make-input-decoder :max-pending 2)))
     (is (null (decode-input-chunk decoder #(227 129))))
     (signals (cl-tty-kit::input-buffer-exceeded condition)

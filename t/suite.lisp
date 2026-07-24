@@ -52,6 +52,23 @@
        ,@body
        t)))
 
+(defmacro signals-non-type-error (form)
+  "Assert FORM signals an ERROR that is not a TYPE-ERROR.
+
+Every public entry point in this codebase validates its arguments and
+signals a domain condition (never a bare TYPE-ERROR) on bad input; this
+macro is the shared assertion for that contract across the test suite."
+  `(handler-case
+       (progn
+         ,form
+         (is nil))
+     (type-error (condition)
+       (declare (ignore condition))
+       (is nil))
+     (error (condition)
+       (declare (ignore condition))
+       (is t))))
+
 (defmacro cell-is ((screen x y) char &optional style)
   (let ((cell (gensym "CELL-")))
     `(let ((,cell (screen-cell ,screen ,x ,y)))
@@ -113,6 +130,7 @@
                  ("pty-fd" . cl-tty-kit/test::test-pty-fd)
                  ("screen" . cl-tty-kit/test::test-screen)
                  ("box" . cl-tty-kit/test::test-box)
+                 ("sgr-prolog-oracle" . cl-tty-kit/test::test-sgr-prolog-oracle)
                  ("render" . cl-tty-kit/test::test-render)
                  ("renderer" . cl-tty-kit/test::test-renderer)
                  ("cursor" . cl-tty-kit/test::test-cursor))))
@@ -121,4 +139,12 @@
   (finish-output)
   (when *test-failures*
     (error "Some tests failed: ~S" (nreverse *test-failures*)))
+  ;; The example-based suite above is complemented by the cl-weave
+  ;; property-based suite, which searches each pure function's input space for a
+  ;; counterexample to its stated algebraic law. Resolve it at runtime so this
+  ;; file need not be compiled after t/properties.lisp.
+  (run-test "properties"
+            (lambda ()
+              (unless (uiop:symbol-call '#:cl-tty-kit/property-tests '#:run-tests)
+                (error "Property-based suite reported a failing invariant."))))
   t)

@@ -6,32 +6,14 @@
     (is (= 2 (renderer-height renderer)))
     (is (typep (renderer-screen renderer) (quote screen)))))
 
-(defun %signals-non-type-error (thunk)
-  (handler-case
-      (progn
-        (funcall thunk)
-        (is nil))
-    (type-error (condition)
-      (declare (ignore condition))
-      (is nil))
-    (error (condition)
-      (declare (ignore condition))
-      (is t))))
-
 (defun %test-renderer-public-validation ()
-  (%signals-non-type-error
-   (lambda () (renderer-width :not-a-renderer)))
-  (%signals-non-type-error
-   (lambda () (renderer-height :not-a-renderer)))
-  (%signals-non-type-error
-   (lambda () (renderer-render :not-a-renderer)))
-  (%signals-non-type-error
-   (lambda () (renderer-clear :not-a-renderer)))
-  (%signals-non-type-error
-   (lambda () (renderer-resize :not-a-renderer 1 1)))
-  (%signals-non-type-error
-   (lambda () (renderer-render (make-renderer 1 1)
-                               :cursor :not-a-cursor))))
+  (signals-non-type-error (renderer-width :not-a-renderer))
+  (signals-non-type-error (renderer-height :not-a-renderer))
+  (signals-non-type-error (renderer-render :not-a-renderer))
+  (signals-non-type-error (renderer-clear :not-a-renderer))
+  (signals-non-type-error (renderer-resize :not-a-renderer 1 1))
+  (signals-non-type-error (renderer-render (make-renderer 1 1)
+                               :cursor :not-a-cursor)))
 
 (defun %test-renderer-render ()
   (let ((renderer (make-renderer 4 1)))
