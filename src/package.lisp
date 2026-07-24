@@ -189,6 +189,8 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:rect-y
    #:rect-width
    #:rect-height
+   #:rect-right
+   #:rect-bottom
    #:rect-inset
    #:rect-split-horizontal
    #:rect-split-vertical

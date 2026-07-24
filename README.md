@@ -317,6 +317,8 @@ The public API is intentionally small and grouped by subsystem.
 - `rect-y`
 - `rect-width`
 - `rect-height`
+- `rect-right`
+- `rect-bottom`
 - `rect-inset`
 - `rect-split-horizontal`
 - `rect-split-vertical`

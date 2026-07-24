@@ -21,17 +21,22 @@
 (setf (documentation 'rect-width 'function) "Return the column extent of RECT.")
 (setf (documentation 'rect-height 'function) "Return the row extent of RECT.")
 
+(defun rect-right (rect)
+  "Return the column just past RECT's right edge (RECT-X + RECT-WIDTH)."
+  (+ (rect-x rect) (rect-width rect)))
+
+(defun rect-bottom (rect)
+  "Return the row just past RECT's bottom edge (RECT-Y + RECT-HEIGHT)."
+  (+ (rect-y rect) (rect-height rect)))
+
 (defun %assert-rect-extent (name value)
-  (unless (typep value '(integer 0 *))
-    (error "RECT ~A ~S must be a non-negative integer." name value)))
+  (%assert (typep value '(integer 0 *)) "RECT ~A ~S must be a non-negative integer." name value))
 
 (defun %assert-rect-integer (name value)
-  (unless (integerp value)
-    (error "RECT ~A ~S must be an integer." name value)))
+  (%assert (integerp value) "RECT ~A ~S must be an integer." name value))
 
 (defun %assert-constraint-real (name value constraint)
-  (unless (realp value)
-    (error "Layout constraint ~S has non-real ~A ~S." constraint name value)))
+  (%assert (realp value) "Layout constraint ~S has non-real ~A ~S." constraint name value))
 
 (defun make-rect (&key (x 0) (y 0) (width 0) (height 0))
   "Create a RECT at (X, Y) with the given WIDTH and HEIGHT.
@@ -94,8 +99,8 @@ zero-height. The columns are unchanged."
   "Return true when column X and row Y fall inside RECT."
   (%assert-rect-integer :x x)
   (%assert-rect-integer :y y)
-  (and (<= (rect-x rect) x) (< x (+ (rect-x rect) (rect-width rect)))
-       (<= (rect-y rect) y) (< y (+ (rect-y rect) (rect-height rect)))))
+  (and (<= (rect-x rect) x) (< x (rect-right rect))
+       (<= (rect-y rect) y) (< y (rect-bottom rect))))
 
 (defun rect-empty-p (rect)
   "Return true when RECT encloses no cells (zero width or zero height)."
@@ -112,8 +117,8 @@ the clipping primitive: intersect a draw region with the screen bounds before
 writing."
   (let* ((x (max (rect-x a) (rect-x b)))
          (y (max (rect-y a) (rect-y b)))
-         (right (min (+ (rect-x a) (rect-width a)) (+ (rect-x b) (rect-width b))))
-         (bottom (min (+ (rect-y a) (rect-height a)) (+ (rect-y b) (rect-height b)))))
+         (right (min (rect-right a) (rect-right b)))
+         (bottom (min (rect-bottom a) (rect-bottom b))))
     (%make-rect :x x :y y
                 :width (max 0 (- right x))
                 :height (max 0 (- bottom y)))))
@@ -233,6 +238,6 @@ over a set of damaged regions yields their bounding box."
     ((rect-empty-p b) a)
     (t (let* ((x (min (rect-x a) (rect-x b)))
               (y (min (rect-y a) (rect-y b)))
-              (right (max (+ (rect-x a) (rect-width a)) (+ (rect-x b) (rect-width b))))
-              (bottom (max (+ (rect-y a) (rect-height a)) (+ (rect-y b) (rect-height b)))))
+              (right (max (rect-right a) (rect-right b)))
+              (bottom (max (rect-bottom a) (rect-bottom b))))
          (%make-rect :x x :y y :width (- right x) :height (- bottom y))))))
