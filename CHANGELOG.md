@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.5.0 - 2026-07-24
+
+- add `rect-right` and `rect-bottom` accessors returning a rectangle's exclusive
+  right and bottom edges (`rect-x + rect-width` and `rect-y + rect-height`), and
+  use them internally in `rect-contains-p`, `rect-intersection`, and
+  `rect-union`
+- split the largest source files along their internal seams into focused
+  modules with no change to the public API: `ansi-control` (cursor/scroll/mode
+  control) and `ansi-osc` (title/hyperlink) alongside the core `ansi` builders,
+  `screen-regions` (copy/blit/scroll/crop) alongside `screen`, `pty-fd` (bare-fd
+  octet I/O) alongside `pty`, and a dedicated `prolog-package` for the embedded
+  logic engine's package
+- introduce a shared `%assert` argument-validation macro in `conditions.lisp`
+  and adopt it across the color, cursor, format, keys, mouse, box, screen-text,
+  text-layout, and rect validators, removing dozens of duplicated
+  `unless`/`error` bodies while preserving every error message and condition
+- remove the unused `output-utils` helper and dead render-command string/length
+  helpers that no longer had callers
+- add a Prolog-based SGR oracle test that cross-checks `decode-sgr` against an
+  independent model of the SGR color grammar, and property-based tests for
+  `clamp`, hex-color round-tripping, the rect edge accessors, and pad/truncate
+  width contracts; consolidate the per-file non-type-error test helper into a
+  single shared macro
+- add an opt-in `cl-tty-kit-weave-mutation-tests` contrib system that measures
+  test effectiveness by mutation
+- bump the vendored `cl-prolog` (v0.7.0) and `cl-weave` (v0.10.0) submodules
+- migrate repository URLs from the `takeokunn` user to the `nerima-lisp`
+  organization
+
 ## 0.4.0 - 2026-07-23
 
 - add an fd-centric PTY layer for fd-multiplexing callers: `pty-fd` and `pty-pid`

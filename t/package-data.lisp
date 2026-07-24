@@ -8,7 +8,7 @@
     (:homepage . "https://github.com/nerima-lisp/cl-tty-kit")
     (:bug-tracker . "https://github.com/nerima-lisp/cl-tty-kit/issues")
     (:source-control . "git https://github.com/nerima-lisp/cl-tty-kit.git")
-    (:version . "0.3.0")))
+    (:version . "0.5.0")))
 
 (defparameter +expected-external-symbols+
   '("TTY-KIT-ERROR"
@@ -178,6 +178,8 @@
     "RECT-Y"
     "RECT-WIDTH"
     "RECT-HEIGHT"
+    "RECT-RIGHT"
+    "RECT-BOTTOM"
     "RECT-INSET"
     "RECT-SPLIT-HORIZONTAL"
     "RECT-SPLIT-VERTICAL"
