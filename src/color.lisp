@@ -20,8 +20,7 @@
 
 (defun %hex-nibble (char)
   (let ((digit (digit-char-p char 16)))
-    (unless digit
-      (error "Invalid hex digit ~S in color string." char))
+    (%assert digit "Invalid hex digit ~S in color string." char)
     digit))
 
 (defun parse-hex-color (string)
@@ -45,8 +44,7 @@ doubled). Any other length or a non-hex digit signals an error."
   "Return (VALUES R G B) for the xterm 256-color palette INDEX (0-255).
 Indices 0-15 are the system colors, 16-231 the 6x6x6 cube, and 232-255 the
 grayscale ramp. An out-of-range INDEX signals an error."
-  (unless (typep index '(integer 0 255))
-    (error "Color index ~S must be an integer in [0, 255]." index))
+  (%assert (typep index '(integer 0 255)) "Color index ~S must be an integer in [0, 255]." index)
   (cond
     ((< index 16)
      (let ((rgb (aref +xterm-system-colors+ index)))
@@ -71,14 +69,17 @@ grayscale ramp. An out-of-range INDEX signals an error."
 (defun %rgb-distance (r1 g1 b1 r2 g2 b2)
   (+ (expt (- r1 r2) 2) (expt (- g1 g2) 2) (expt (- b1 b2) 2)))
 
+(defun %assert-rgb-channels (r g b)
+  (dolist (channel (list r g b))
+    (%assert (typep channel '(integer 0 255))
+             "RGB channel ~S must be an integer in [0, 255]." channel)))
+
 (defun rgb-to-256 (r g b)
   "Return the xterm 256-color palette index closest to the RGB triple R G B.
 Both the 6x6x6 cube and the grayscale ramp are considered and the nearer match
 (by squared RGB distance) wins, so near-gray inputs map to the smoother gray
 ramp. Each channel must be an integer in [0, 255]."
-  (dolist (channel (list r g b))
-    (unless (typep channel '(integer 0 255))
-      (error "RGB channel ~S must be an integer in [0, 255]." channel)))
+  (%assert-rgb-channels r g b)
   (let* ((cube-index (+ 16
                         (* 36 (%nearest-cube-level-index r))
                         (* 6 (%nearest-cube-level-index g))
@@ -106,9 +107,7 @@ nearest integer."
   "Return the 0-15 system-palette index closest to the RGB triple R G B.
 Distance is squared RGB against the sixteen standard colors, for terminals that
 support only the base palette. Each channel must be an integer in [0, 255]."
-  (dolist (channel (list r g b))
-    (unless (typep channel '(integer 0 255))
-      (error "RGB channel ~S must be an integer in [0, 255]." channel)))
+  (%assert-rgb-channels r g b)
   (let ((best 0)
         (best-distance nil))
     (dotimes (index 16 best)
@@ -122,9 +121,7 @@ support only the base palette. Each channel must be an integer in [0, 255]."
 [0, 255], using the Rec. 601 weighting (0.299 R + 0.587 G + 0.114 B). Useful for
 choosing a readable foreground (dark text over a light background and vice
 versa). Each channel must be an integer in [0, 255]."
-  (dolist (channel (list r g b))
-    (unless (typep channel '(integer 0 255))
-      (error "RGB channel ~S must be an integer in [0, 255]." channel)))
+  (%assert-rgb-channels r g b)
   (round (+ (* 299/1000 r) (* 587/1000 g) (* 114/1000 b))))
 
 (defun rgb-to-hsl (r g b)
@@ -258,8 +255,7 @@ inputs styling layers accept."
        (t
         (multiple-value-bind (symbol status)
             (find-symbol (string-upcase spec) :keyword)
-          (unless (and symbol status)
-            (error "Unknown color name ~S." spec))
+          (%assert (and symbol status) "Unknown color name ~S." spec)
           (color-256-to-rgb (named-color symbol))))))))
 
 (defun color-gradient (from to steps)
@@ -268,8 +264,7 @@ FROM and TO are (R G B) lists; the first result is FROM and, when STEPS > 1, the
 last is TO, with the rest evenly spaced (via BLEND-COLORS). STEPS must be a
 positive integer. Handy for heatmaps and status ramps feeding STYLE-FG/STYLE-BG
 through RGB-TO-256."
-  (unless (and (integerp steps) (plusp steps))
-    (error "Gradient STEPS ~S must be a positive integer." steps))
+  (%assert (and (integerp steps) (plusp steps)) "Gradient STEPS ~S must be a positive integer." steps)
   (if (= steps 1)
       (list (blend-colors from to 0))
       (loop for index from 0 below steps

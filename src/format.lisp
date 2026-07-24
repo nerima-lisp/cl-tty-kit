@@ -11,24 +11,19 @@
   "The full block glyph used as the default filled cell of a progress bar.")
 
 (defun %assert-real (name value)
-  (unless (realp value)
-    (error "~A ~S must be a real number." name value)))
+  (%assert (realp value) "~A ~S must be a real number." name value))
 
 (defun %assert-non-negative-width (name value)
-  (unless (typep value '(integer 0 *))
-    (error "~A ~S must be a non-negative integer." name value)))
+  (%assert (typep value '(integer 0 *)) "~A ~S must be a non-negative integer." name value))
 
 (defun %assert-string-field (name value)
-  (unless (stringp value)
-    (error "~A ~S must be a string." name value)))
+  (%assert (stringp value) "~A ~S must be a string." name value))
 
 (defun %assert-character-field (name value)
-  (unless (characterp value)
-    (error "~A ~S must be a character." name value)))
+  (%assert (characterp value) "~A ~S must be a character." name value))
 
 (defun %assert-column-align (name value)
-  (unless (member value '(:left :right :center) :test #'eq)
-    (error "~A ~S must be :LEFT, :RIGHT, or :CENTER." name value)))
+  (%assert (member value '(:left :right :center) :test #'eq) "~A ~S must be :LEFT, :RIGHT, or :CENTER." name value))
 
 (defun %assert-aligns (aligns)
   (unless (or (null aligns) (listp aligns))

@@ -9,20 +9,16 @@
 ;;; --------------------------------------------------------------------------
 
 (defun %assert-screen-text-screen (screen)
-  (unless (screen-p screen)
-    (error "SCREEN ~S must be a screen." screen)))
+  (%assert (screen-p screen) "SCREEN ~S must be a screen." screen))
 
 (defun %assert-screen-text-rect (rect)
-  (unless (rect-p rect)
-    (error "RECT ~S must be a rect." rect)))
+  (%assert (rect-p rect) "RECT ~S must be a rect." rect))
 
 (defun %assert-screen-text-string (name value)
-  (unless (stringp value)
-    (error "~A ~S must be a string." name value)))
+  (%assert (stringp value) "~A ~S must be a string." name value))
 
 (defun %assert-screen-text-coordinate (name value)
-  (unless (integerp value)
-    (error "~A ~S must be an integer coordinate." name value)))
+  (%assert (integerp value) "~A ~S must be an integer coordinate." name value))
 
 (defun %proper-screen-text-list-p (value)
   (loop for rest = value then (cdr rest)
@@ -30,17 +26,14 @@
         finally (return (null rest))))
 
 (defun %assert-screen-text-lines (lines)
-  (unless (and (%proper-screen-text-list-p lines)
-               (every #'stringp lines))
-    (error "LINES ~S must be a proper list of strings." lines)))
+  (%assert (and (%proper-screen-text-list-p lines)
+               (every #'stringp lines)) "LINES ~S must be a proper list of strings." lines))
 
 (defun %assert-screen-text-align (align)
-  (unless (member align '(:left :right :center) :test #'eq)
-    (error "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align)))
+  (%assert (member align '(:left :right :center) :test #'eq) "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align))
 
 (defun %assert-screen-text-vertical (vertical)
-  (unless (member vertical '(:top :middle :bottom) :test #'eq)
-    (error "VERTICAL ~S must be one of :TOP, :MIDDLE, or :BOTTOM." vertical)))
+  (%assert (member vertical '(:top :middle :bottom) :test #'eq) "VERTICAL ~S must be one of :TOP, :MIDDLE, or :BOTTOM." vertical))
 
 (defun screen-write-aligned (screen rect text &key (align :left) (vertical :top) style)
   "Write the single line TEXT inside RECT, returning SCREEN.

@@ -1,7 +1,5 @@
 (in-package #:cl-tty-kit/test)
 
-(defun %rgb-list (r g b) (list r g b))
-
 (defun %color-256-list (index)
   (multiple-value-list (color-256-to-rgb index)))
 

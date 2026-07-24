@@ -57,6 +57,18 @@
     (t
      (values count nil))))
 
+(defun %event-loop-screen (count last-event donep)
+  (let ((screen (cl-tty-kit:make-screen 34 6)))
+    (cl-tty-kit:screen-write-string screen 0 0 "TTY loop demo" :style '(:bold))
+    (cl-tty-kit:screen-write-string screen 0 1 "j / Up: increment")
+    (cl-tty-kit:screen-write-string screen 0 2 "paste: add payload length")
+    (cl-tty-kit:screen-write-string screen 0 3 (format nil "count: ~D" count))
+    (cl-tty-kit:screen-write-string screen 0 4 (format nil "last: ~A" last-event))
+    (cl-tty-kit:screen-write-string screen 0 5 (if donep
+                                                   "state: stopping"
+                                                   "state: running"))
+    screen))
+
 (defun %event-loop-render-frame (state stream)
   (let* ((screen (%event-loop-screen (event-loop-state-count state)
                                      (event-loop-state-last-event state)
@@ -86,18 +98,6 @@
           (event-loop-state-last-event state)
           (%event-loop-event-label event))
     state))
-
-(defun %event-loop-screen (count last-event donep)
-  (let ((screen (cl-tty-kit:make-screen 34 6)))
-    (cl-tty-kit:screen-write-string screen 0 0 "TTY loop demo" :style '(:bold))
-    (cl-tty-kit:screen-write-string screen 0 1 "j / Up: increment")
-    (cl-tty-kit:screen-write-string screen 0 2 "paste: add payload length")
-    (cl-tty-kit:screen-write-string screen 0 3 (format nil "count: ~D" count))
-    (cl-tty-kit:screen-write-string screen 0 4 (format nil "last: ~A" last-event))
-    (cl-tty-kit:screen-write-string screen 0 5 (if donep
-                                                   "state: stopping"
-                                                   "state: running"))
-    screen))
 
 (defun event-loop-example ()
   "Return the decoded event trace produced by the demo input stream."

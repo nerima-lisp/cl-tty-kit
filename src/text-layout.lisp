@@ -10,22 +10,18 @@
 ;;; --------------------------------------------------------------------------
 
 (defun %assert-layout-string (name value)
-  (unless (stringp value)
-    (error "~A ~S must be a string." name value)))
+  (%assert (stringp value) "~A ~S must be a string." name value))
 
 (defun %assert-layout-width (name value &key positive)
-  (unless (and (integerp value)
-               (if positive (plusp value) t))
-    (error "~A ~S must be ~:[an integer~;a positive integer~]."
-           name value positive)))
+  (%assert (and (integerp value)
+               (if positive (plusp value) t)) "~A ~S must be ~:[an integer~;a positive integer~]."
+           name value positive))
 
 (defun %assert-layout-character (name value)
-  (unless (characterp value)
-    (error "~A ~S must be a character." name value)))
+  (%assert (characterp value) "~A ~S must be a character." name value))
 
 (defun %assert-layout-align (align)
-  (unless (member align '(:left :right :center) :test #'eq)
-    (error "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align)))
+  (%assert (member align '(:left :right :center) :test #'eq) "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align))
 
 (defun %width-prefix-end (string budget &key (start 0) (end (length string)))
   "Return the largest index E in [START, END] whose column span from START is
@@ -96,8 +92,7 @@ unchanged -- PAD-STRING never truncates. A negative WIDTH is treated as zero."
   (%assert-layout-width "WIDTH" width)
   (%assert-layout-character "PAD" pad)
   (%assert-layout-align align)
-  (unless (= 1 (char-width pad))
-    (error "PAD ~S must be a single-column character." pad))
+  (%assert (= 1 (char-width pad)) "PAD ~S must be a single-column character." pad)
   (let* ((width (max 0 width))
          (current (string-width string))
          (deficit (- width current)))
@@ -194,8 +189,7 @@ its own becomes a lone over-width chunk rather than causing an endless loop."
 The column is tracked by display width and reset by a newline, so the stops line
 up the way a terminal renders them. TAB-WIDTH must be a positive integer."
   (%assert-layout-string "STRING" string)
-  (unless (and (integerp tab-width) (plusp tab-width))
-    (error "TAB-WIDTH ~S must be a positive integer." tab-width))
+  (%assert (and (integerp tab-width) (plusp tab-width)) "TAB-WIDTH ~S must be a positive integer." tab-width)
   (with-output-to-string (out)
     (let ((column 0))
       (loop for char across string

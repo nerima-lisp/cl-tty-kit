@@ -8,26 +8,10 @@
   (visible t :type boolean))
 
 (defun %assert-cursor-coordinate (parameter value)
-  (unless (typep value '(integer 0 *))
-    (error
-      'cursor-parameter-invalid
-      :parameter
-      parameter
-      :value
-      value
-      :expected
-      "a non-negative integer")))
+  (%assert (typep value '(integer 0 *)) 'cursor-parameter-invalid :parameter parameter :value value :expected "a non-negative integer"))
 
 (defun %assert-cursor-visibility (value)
-  (unless (typep value 'boolean)
-    (error
-      'cursor-parameter-invalid
-      :parameter
-      :visible
-      :value
-      value
-      :expected
-      "a boolean")))
+  (%assert (typep value 'boolean) 'cursor-parameter-invalid :parameter :visible :value value :expected "a boolean"))
 
 (defun %validated-cursor-coordinate (parameter value)
   (%assert-cursor-coordinate parameter value)

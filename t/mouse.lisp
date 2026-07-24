@@ -26,7 +26,10 @@
   (%mouse-is ((decode-mouse-sequence (%sgr-mouse 2 10 20 #\M)))
              :button :right :action :press :x 9 :y 19 :modifiers nil)
   (%mouse-is ((decode-mouse-sequence (%sgr-mouse 1 2 2 #\M)))
-             :button :middle :action :press :x 1 :y 1 :modifiers nil))
+             :button :middle :action :press :x 1 :y 1 :modifiers nil)
+  ;; Low button bits of 3 are not a real button: reported as :NONE, still a press.
+  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 3 5 5 #\M)))
+             :button :none :action :press :x 4 :y 4 :modifiers nil))
 
 (defun %test-mouse-wheel-and-motion ()
   (%mouse-is ((decode-mouse-sequence (%sgr-mouse 64 5 5 #\M)))
@@ -47,6 +50,9 @@
 (defun %test-mouse-modifiers ()
   (%mouse-is ((decode-mouse-sequence (%sgr-mouse 4 1 1 #\M)))
              :button :left :action :press :x 0 :y 0 :modifiers '(:shift))
+  ;; Alt (button bit 8) on a left press.
+  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 8 1 1 #\M)))
+             :button :left :action :press :x 0 :y 0 :modifiers '(:alt))
   ;; Shift (4) + Control (16) on a left press, normalized and sorted.
   (%mouse-is ((decode-mouse-sequence (%sgr-mouse 20 1 1 #\M)))
              :button :left :action :press :x 0 :y 0
@@ -61,6 +67,11 @@
   ;; A non-mouse CSI is declined.
   (multiple-value-bind (event consumed)
       (decode-mouse-sequence (format nil "~C[A" #\Esc))
+    (is (null event))
+    (is (= 0 consumed)))
+  ;; A terminated report whose body lacks the two `;' separators is declined.
+  (multiple-value-bind (event consumed)
+      (decode-mouse-sequence (format nil "~C[<0;5M" #\Esc))
     (is (null event))
     (is (= 0 consumed)))
   ;; Decoding can start partway through a buffer.

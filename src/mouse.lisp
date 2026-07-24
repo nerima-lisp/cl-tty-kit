@@ -41,20 +41,17 @@ row, and a normalized modifier list."
       "Return the normalized modifier list of MOUSE-EVENT.")
 
 (defun %assert-mouse-button (button)
-  (unless (member button
+  (%assert (member button
                   '(:left :middle :right :wheel-up :wheel-down :wheel-left
                     :wheel-right :none)
-                  :test #'eq)
-    (error "Mouse event BUTTON ~S must be a supported mouse button." button)))
+                  :test #'eq) "Mouse event BUTTON ~S must be a supported mouse button." button))
 
 (defun %assert-mouse-action (action)
-  (unless (member action '(:press :release :drag :move :scroll) :test #'eq)
-    (error "Mouse event ACTION ~S must be :PRESS, :RELEASE, :DRAG, :MOVE, or :SCROLL."
-           action)))
+  (%assert (member action '(:press :release :drag :move :scroll) :test #'eq) "Mouse event ACTION ~S must be :PRESS, :RELEASE, :DRAG, :MOVE, or :SCROLL."
+           action))
 
 (defun %assert-mouse-coordinate (name value)
-  (unless (typep value '(integer 0))
-    (error "Mouse event ~A ~S must be a non-negative integer." name value)))
+  (%assert (typep value '(integer 0)) "Mouse event ~A ~S must be a non-negative integer." name value))
 
 (defun make-mouse-event (&key (button :none) (action :press) (x 0) (y 0) modifiers)
   "Build a MOUSE-EVENT with normalized modifier ordering."

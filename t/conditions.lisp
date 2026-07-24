@@ -89,4 +89,26 @@
             (invalid-utf8-sequence-reason condition))))
   (signals (unsupported-feature condition)
       (cl-tty-kit::unsupported :poll)
-    (is (eq :poll (unsupported-feature-feature condition)))))
+    (is (eq :poll (unsupported-feature-feature condition))))
+  ;; The condition-defining macros are only ever expanded within
+  ;; conditions.lisp itself, so exercising them here pins their expansion
+  ;; contract (and covers their bodies, which no runtime call site reaches).
+  (is (eq 'unless (first (macroexpand-1 '(cl-tty-kit::%assert pred "m ~A" arg)))))
+  (let ((form (macroexpand-1
+               '(cl-tty-kit::define-tty-kit-condition demo-condition (error) () "doc"))))
+    (is (eq 'define-condition (first form)))
+    (is (member '(:documentation "doc") (cddr form) :test #'equal)))
+  (flet ((reportp (option) (and (consp option) (eq :report (first option)))))
+    ;; Both branches expand into a define-tty-kit-condition carrying a :report
+    ;; option -- a report lambda for the format-string form...
+    (let ((form (macroexpand-1
+                 '(cl-tty-kit::define-formatted-tty-kit-condition demo-condition (error)
+                   ((x :initarg :x)) "doc" "value ~A" x))))
+      (is (eq 'cl-tty-kit::define-tty-kit-condition (first form)))
+      (is (find-if #'reportp (cddddr form))))
+    ;; ...and the explicit :report spec passed straight through for the other.
+    (let ((form (macroexpand-1
+                 '(cl-tty-kit::define-formatted-tty-kit-condition demo-condition (error)
+                   () "doc" :report demo-reporter))))
+      (is (eq 'cl-tty-kit::define-tty-kit-condition (first form)))
+      (is (find-if #'reportp (cddddr form))))))

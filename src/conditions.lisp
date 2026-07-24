@@ -1,5 +1,14 @@
 (in-package #:cl-tty-kit)
 
+(defmacro %assert (predicate format-string &rest format-args)
+  "Signal an ERROR via FORMAT-STRING/FORMAT-ARGS unless PREDICATE holds.
+
+Every argument-validating %ASSERT-* helper in this codebase reduces to this one
+control-flow shape (check a predicate, signal a formatted error on failure);
+centralizing it here removes dozens of duplicated UNLESS/ERROR bodies."
+  `(unless ,predicate
+     (error ,format-string ,@format-args)))
+
 (defmacro define-tty-kit-condition (name superclasses slots documentation &body options)
   `(define-condition ,name ,superclasses
      ,slots

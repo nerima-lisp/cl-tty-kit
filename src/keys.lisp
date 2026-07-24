@@ -68,9 +68,8 @@ regardless of the order or duplicates in which they were supplied."
              (when (logtest mask 4) '(:control))))))
 
 (defun %assert-key-event-type (type)
-  (unless (member type '(:character :special :paste) :test #'eq)
-    (error "Key event TYPE ~S must be :CHARACTER, :SPECIAL, or :PASTE."
-           type)))
+  (%assert (member type '(:character :special :paste) :test #'eq) "Key event TYPE ~S must be :CHARACTER, :SPECIAL, or :PASTE."
+           type))
 
 (defun %assert-key-event-code (type code)
   (case type
@@ -85,16 +84,13 @@ regardless of the order or duplicates in which they were supplied."
        (error "Paste key event CODE ~S must be a string." code)))))
 
 (defun %assert-key-event-kind (kind)
-  (unless (member kind '(:press :repeat :release) :test #'eq)
-    (error "Key event KIND ~S must be :PRESS, :REPEAT, or :RELEASE." kind)))
+  (%assert (member kind '(:press :repeat :release) :test #'eq) "Key event KIND ~S must be :PRESS, :REPEAT, or :RELEASE." kind))
 
 (defun %assert-optional-key-event-string (name value)
-  (unless (or (null value) (stringp value))
-    (error "Key event ~A ~S must be NIL or a string." name value)))
+  (%assert (or (null value) (stringp value)) "Key event ~A ~S must be NIL or a string." name value))
 
 (defun %assert-optional-key-event-character (name value)
-  (unless (or (null value) (characterp value))
-    (error "Key event ~A ~S must be NIL or a character." name value)))
+  (%assert (or (null value) (characterp value)) "Key event ~A ~S must be NIL or a character." name value))
 
 (defun %assert-key-event (event)
   (unless (key-event-p event)
