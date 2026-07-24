@@ -3,9 +3,9 @@
   :author "takeokunn"
   :maintainer "takeokunn"
   :license "MIT"
-  :homepage "https://github.com/takeokunn/cl-tty-kit"
-  :bug-tracker "https://github.com/takeokunn/cl-tty-kit/issues"
-  :source-control "git https://github.com/takeokunn/cl-tty-kit.git"
+  :homepage "https://github.com/nerima-lisp/cl-tty-kit"
+  :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
+  :source-control "git https://github.com/nerima-lisp/cl-tty-kit.git"
   :version "0.4.0"
   ;; SB-POSIX is only used by the SBCL-specific raw-mode layer (which requires
   ;; it itself under #+sbcl). Gating the dependency on the feature keeps ASDF

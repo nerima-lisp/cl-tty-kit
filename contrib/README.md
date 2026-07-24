@@ -6,10 +6,10 @@ system keeps its single `sb-posix` dependency. These modules pull additional
 libraries from Quicklisp, or from the vendored git submodules under
 `vendor/`, and are loaded explicitly.
 
-## `cl-tty-kit-cl-prolog-csi-grammar` — DCG grammar via takeokunn/cl-prolog
+## `cl-tty-kit-cl-prolog-csi-grammar` — DCG grammar via nerima-lisp/cl-prolog
 
 A declarative recognizer for the ECMA-48 CSI (Control Sequence Introducer)
-byte-class grammar, built on [`takeokunn/cl-prolog`](https://github.com/takeokunn/cl-prolog)
+byte-class grammar, built on [`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
 (vendored at `vendor/cl-prolog`, pinned to its latest upstream HEAD — it is
 not distributed by Quicklisp). `src/input-decode.lisp` already decodes CSI
 sequences imperatively on the render loop's hot path; this module instead
@@ -27,9 +27,9 @@ independently of the hand-written decoder.
 (tty-csi-grammar:csi-sequence-valid-p "1;1")       ; => NIL (no final byte)
 ```
 
-## `cl-tty-kit-weave-tests` — property-based fuzz tests via takeokunn/cl-weave
+## `cl-tty-kit-weave-tests` — property-based fuzz tests via nerima-lisp/cl-weave
 
-Property-based tests built on [`takeokunn/cl-weave`](https://github.com/takeokunn/cl-weave)
+Property-based tests built on [`nerima-lisp/cl-weave`](https://github.com/nerima-lisp/cl-weave)
 (vendored at `vendor/cl-weave`, pinned to its latest upstream HEAD — it is
 not distributed by Quicklisp). `cl-weave`'s `it-property` generators
 (`gen-vector`, `gen-string`, `gen-character`, ...) fuzz `src/utf8.lisp`'s

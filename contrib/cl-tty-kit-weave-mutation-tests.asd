@@ -1,6 +1,6 @@
 ;;;; Optional contrib system. NOT part of the core cl-tty-kit build or CI.
 ;;;;
-;;;; Mutation tests built on the vendored takeokunn/cl-weave
+;;;; Mutation tests built on the vendored nerima-lisp/cl-weave
 ;;;; (vendor/cl-weave, latest HEAD): mutate a pure function's body (read live
 ;;;; from its SRC/ source file) and confirm the same case battery a unit test
 ;;;; would use kills every mutation. This measures whether the tests actually
@@ -13,7 +13,7 @@
 ;;;;   (cl-tty-kit/weave-mutation-tests:run-tests)
 
 (asdf:defsystem #:cl-tty-kit-weave-mutation-tests
-  :description "Mutation tests for cl-tty-kit, built on takeokunn/cl-weave."
+  :description "Mutation tests for cl-tty-kit, built on nerima-lisp/cl-weave."
   :author "takeokunn"
   :license "MIT"
   :depends-on (#:cl-tty-kit #:cl-weave)

@@ -5,9 +5,9 @@
     (:author . "takeokunn")
     (:maintainer . "takeokunn")
     (:license . "MIT")
-    (:homepage . "https://github.com/takeokunn/cl-tty-kit")
-    (:bug-tracker . "https://github.com/takeokunn/cl-tty-kit/issues")
-    (:source-control . "git https://github.com/takeokunn/cl-tty-kit.git")
+    (:homepage . "https://github.com/nerima-lisp/cl-tty-kit")
+    (:bug-tracker . "https://github.com/nerima-lisp/cl-tty-kit/issues")
+    (:source-control . "git https://github.com/nerima-lisp/cl-tty-kit.git")
     (:version . "0.3.0")))
 
 (defparameter +expected-external-symbols+

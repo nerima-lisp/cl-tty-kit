@@ -9,7 +9,7 @@
 
 (in-package #:cl-tty-kit/weave-mutation-tests)
 
-;;; Mutation testing: takeokunn/cl-weave systematically mutates a pure
+;;; Mutation testing: nerima-lisp/cl-weave systematically mutates a pure
 ;;; function's body (flipping arithmetic/comparison operators, boolean
 ;;; literals, and conditional branches) and re-checks each variant against the
 ;;; same case battery a unit test would use. A mutation the battery fails to

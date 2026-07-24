@@ -1,6 +1,6 @@
 # cl-tty-kit
 
-[![CI](https://github.com/takeokunn/cl-tty-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/takeokunn/cl-tty-kit/actions/workflows/ci.yml)
+[![CI](https://github.com/nerima-lisp/cl-tty-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/nerima-lisp/cl-tty-kit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 `cl-tty-kit` is a small Common Lisp toolkit for terminal and TTY work.
@@ -96,20 +96,21 @@ degrading.
 
 The implementation is split by concern:
 
-- `src/prolog-bindings.lisp`, `src/prolog-db.lisp`, `src/prolog-engine.lisp`, and
-  `src/prolog-primitives.lisp` for the embedded logic engine and its data/logic split
-- `src/conditions.lisp` for public condition types and signaling helpers
-- `src/clamp.lisp`, `src/string-empty.lisp`, `src/output-utils.lisp`, and `src/utf8.lisp` for reusable utilities and codec helpers
+- `src/prolog-package.lisp` for the embedded logic engine's package, and
+  `src/prolog-bindings.lisp`, `src/prolog-db.lisp`, `src/prolog-engine.lisp`, and
+  `src/prolog-primitives.lisp` for the engine and its data/logic split
+- `src/conditions.lisp` for public condition types and signaling helpers (including the `%assert` validation macro)
+- `src/clamp.lisp`, `src/string-empty.lisp`, and `src/utf8.lisp` for reusable utilities and codec helpers
 - `src/char-width.lisp` for Unicode terminal column width, expressed as width
   relations over East Asian and combining-mark data tables in `src/char-width-data.lisp`
 - `src/text-layout.lisp` for display-width-aware truncation, padding, and wrapping
 - `src/color.lisp` for hex/RGB/xterm-256 color conversions, `src/format.lisp` for progress-bar/sparkline/column widgets, and `src/rect.lisp` for layout geometry
 - `src/raw-mode.lisp` for SBCL-specific terminal mode control and `src/terminal-size.lisp` for the ioctl window-size query
-- `src/ansi.lisp` for escape-sequence string builders
+- `src/ansi.lisp` for core escape-sequence string builders, `src/ansi-control.lisp` for cursor/scroll/mode-control sequences, and `src/ansi-osc.lisp` for OSC (title/hyperlink) sequences
 - `src/key-tables.lisp` for key decoding tables and `src/keys.lisp`, `src/input-state.lisp`, and `src/input-decode.lisp` for decoding logic
 - `src/mouse.lisp` for SGR mouse-report decoding, integrated into the CSI decode path
-- `src/cell.lisp` for cell/style data, `src/screen.lisp` and `src/cursor.lisp` for state transitions, `src/screen-text.lisp` for multi-line/wrapped/aligned text placement, `src/box.lisp` for box drawing, `src/render-style.lisp` for ANSI style emission, `src/render.lisp` for repaint/diff output, and `src/renderer.lisp` for the double-buffered render loop
-- `src/pty.lisp` for the SBCL PTY wrapper
+- `src/cell.lisp` for cell/style data, `src/screen.lisp` and `src/cursor.lisp` for state transitions, `src/screen-regions.lisp` for copy/blit/scroll/crop region operations, `src/screen-text.lisp` for multi-line/wrapped/aligned text placement, `src/box.lisp` for box drawing, `src/render-style.lisp` for ANSI style emission, `src/render.lisp` for repaint/diff output, and `src/renderer.lisp` for the double-buffered render loop
+- `src/pty.lisp` for the SBCL PTY struct/stream wrapper and `src/pty-fd.lisp` for the bare-fd octet I/O layer
 
 The pure parts stay easy to test, while platform-specific code is isolated.
 

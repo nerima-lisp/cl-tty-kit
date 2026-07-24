@@ -1,6 +1,6 @@
 ;;;; Optional contrib system. NOT part of the core cl-tty-kit build or CI.
 ;;;;
-;;;; Property-based fuzz tests built on the vendored takeokunn/cl-weave
+;;;; Property-based fuzz tests built on the vendored nerima-lisp/cl-weave
 ;;;; (vendor/cl-weave, latest HEAD), exercising the UTF-8 and input decoders
 ;;;; against arbitrary octets plus the DCG-based CSI grammar. Load and run it
 ;;;; explicitly once the submodules are checked out:
@@ -10,7 +10,7 @@
 ;;;;   (cl-tty-kit/weave-property-tests:run-tests)
 
 (asdf:defsystem #:cl-tty-kit-weave-tests
-  :description "Property-based fuzz tests for cl-tty-kit, built on takeokunn/cl-weave."
+  :description "Property-based fuzz tests for cl-tty-kit, built on nerima-lisp/cl-weave."
   :author "takeokunn"
   :license "MIT"
   :depends-on (#:cl-tty-kit #:cl-weave #:cl-tty-kit-cl-prolog-csi-grammar)

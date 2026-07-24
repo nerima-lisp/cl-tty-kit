@@ -3,7 +3,7 @@
   (:import-from #:cl-prolog #:make-rulebase #:def-dcg-rule #:dcg-star #:phrase)
   (:nicknames #:tty-csi-grammar)
   (:documentation
-   "Advanced usage of takeokunn/cl-prolog: a DCG recognizer for the ECMA-48 CSI
+   "Advanced usage of nerima-lisp/cl-prolog: a DCG recognizer for the ECMA-48 CSI
 (Control Sequence Introducer) byte-class grammar. `src/input-decode.lisp`
 already decodes CSI sequences imperatively for the render loop's hot path;
 this module instead gives that same sequence shape a declarative grammar

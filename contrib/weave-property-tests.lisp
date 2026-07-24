@@ -9,7 +9,7 @@
 
 (in-package #:cl-tty-kit/weave-property-tests)
 
-;;; Advanced usage of takeokunn/cl-weave: property-based fuzzing of the two
+;;; Advanced usage of nerima-lisp/cl-weave: property-based fuzzing of the two
 ;;; decoders that consume attacker-controlled PTY bytes, plus regression
 ;;; coverage for contrib/cl-prolog-csi-grammar.lisp's DCG recognizer. Every
 ;;; decoder property below encodes the same contract each decoder already

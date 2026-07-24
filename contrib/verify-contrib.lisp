@@ -6,7 +6,7 @@
 ;;;;
 ;;;; It exercises cl-prolog2 (via the bridge translation layer) and clweb (via
 ;;;; tangling the literate module) from Quicklisp, plus the vendored
-;;;; takeokunn/cl-prolog DCG grammar and takeokunn/cl-weave property tests
+;;;; nerima-lisp/cl-prolog DCG grammar and nerima-lisp/cl-weave property tests
 ;;;; from vendor/ (both pinned at their latest upstream HEAD; see
 ;;;; .gitmodules). The vendored checks are skipped, not failed, when the
 ;;;; submodules have not been checked out.
@@ -55,7 +55,7 @@
                 (equal '(:- (ancestor ?a ?b) (parent ?a ?b))
                        (funcall fn '((ancestor ?a ?b) (parent ?a ?b))))))))
 
-;;; --- vendored takeokunn/cl-prolog DCG grammar (vendor/, latest HEAD) -------
+;;; --- vendored nerima-lisp/cl-prolog DCG grammar (vendor/, latest HEAD) -------
 (if (probe-file (merge-pathnames "vendor/cl-prolog/cl-prolog.asd" *root*))
     (progn
       (handler-bind ((warning #'muffle-warning))
@@ -68,7 +68,7 @@
                            "1;1"))))
     (format t "~&[SKIP] vendor/cl-prolog not checked out (git submodule update --init)~%"))
 
-;;; --- vendored takeokunn/cl-weave property tests (vendor/, latest HEAD) -----
+;;; --- vendored nerima-lisp/cl-weave property tests (vendor/, latest HEAD) -----
 (if (probe-file (merge-pathnames "vendor/cl-weave/cl-weave.asd" *root*))
     (progn
       (handler-bind ((warning #'muffle-warning))

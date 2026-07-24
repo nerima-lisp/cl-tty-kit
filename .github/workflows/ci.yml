@@ -62,7 +62,7 @@ jobs:
           if-no-files-found: error
 
   # Best-effort: exercises contrib/, which pulls Quicklisp plus the
-  # vendor/ git submodules (takeokunn/cl-prolog, takeokunn/cl-weave). Kept
+  # vendor/ git submodules (nerima-lisp/cl-prolog, nerima-lisp/cl-weave). Kept
   # separate from `verify` and allowed to fail so that submodule/network
   # flakiness never blocks a core merge, per contrib/README.md's policy
   # that contrib is opt-in and isolated from the core build and CI.

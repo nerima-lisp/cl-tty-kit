@@ -1,6 +1,6 @@
 [submodule "vendor/cl-prolog"]
 	path = vendor/cl-prolog
-	url = https://github.com/takeokunn/cl-prolog.git
+	url = https://github.com/nerima-lisp/cl-prolog.git
 [submodule "vendor/cl-weave"]
 	path = vendor/cl-weave
-	url = https://github.com/takeokunn/cl-weave.git
+	url = https://github.com/nerima-lisp/cl-weave.git

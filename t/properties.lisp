@@ -8,7 +8,7 @@
 (in-package #:cl-tty-kit/property-tests)
 
 ;;; --------------------------------------------------------------------------
-;;; Property-based invariants for the pure core, built on takeokunn/cl-weave.
+;;; Property-based invariants for the pure core, built on nerima-lisp/cl-weave.
 ;;;
 ;;; This is a FIRST-CLASS test system (wired into cl-tty-kit's ASDF test-op),
 ;;; not a contrib add-on. Where t/*.lisp pins behaviour with worked examples,
