@@ -1,8 +1,23 @@
 # Changelog
 
-## Unreleased
+All notable changes to this project are documented in this file.
 
-## 1.0.0 - 2026-07-26
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+<!--
+Heading format is fixed across the org:
+
+    ## [X.Y.Z] - YYYY-MM-DD
+
+release.yml extracts the section matching the pushed tag as the GitHub Release
+body, so a heading that deviates makes the release fail rather than publish a
+release with empty notes. Keep `## [Unreleased]` at the top at all times.
+-->
+
+## [Unreleased]
+
+## [1.0.0] - 2026-07-26
 
 First stable release. The public API -- the symbols exported from the
 `cl-tty-kit` package, enumerated in `README.md`'s "API Overview" and asserted
@@ -279,7 +294,7 @@ about the stability of a surface that had already settled, not a rewrite.
 - add `.github/actions/setup-nix`, a reusable composite action (Nix install +
   optional Cachix) shared by `ci.yml`, mirroring `nerima-lisp/cl-prolog`'s own
 
-## 0.6.0 - 2026-07-25
+## [0.6.0] - 2026-07-25
 
 - add an explicit timeout to `scripts/source-registry-smoke.lisp`, the one
   documented `docs/QUALITY-GATES.md` entrypoint that lacked one --
@@ -862,7 +877,7 @@ about the stability of a surface that had already settled, not a rewrite.
   project's governance docs — published to GitHub Pages by a new
   `.github/workflows/docs.yml` on every push to `docs/**`
 
-## 0.5.0 - 2026-07-24
+## [0.5.0] - 2026-07-24
 
 - add `rect-right` and `rect-bottom` accessors returning a rectangle's exclusive
   right and bottom edges (`rect-x + rect-width` and `rect-y + rect-height`), and
@@ -891,7 +906,7 @@ about the stability of a surface that had already settled, not a rewrite.
 - migrate repository URLs from the `takeokunn` user to the `nerima-lisp`
   organization
 
-## 0.4.0 - 2026-07-23
+## [0.4.0] - 2026-07-23
 
 - add an fd-centric PTY layer for fd-multiplexing callers: `pty-fd` and `pty-pid`
   expose the master-side file descriptor and child pid, and `fd-read-octets` /
@@ -906,7 +921,7 @@ about the stability of a surface that had already settled, not a rewrite.
   This is a behavior change for existing `enable-raw-mode` consumers, so it lands
   as a minor version bump rather than a patch
 
-## 0.3.0 - 2026-07-20
+## [0.3.0] - 2026-07-20
 
 - harden terminal escape, input, color, mouse, PTY, and image parsing against
   malformed or adversarial data, including bounded numeric parsing, OSC/control
@@ -925,7 +940,7 @@ about the stability of a surface that had already settled, not a rewrite.
 - make coverage verification fail when SB-COVER produces an empty source report
   instead of silently accepting a non-instrumented run
 
-## 0.2.0 - 2026-07-20
+## [0.2.0] - 2026-07-20
 
 - greatly expand the ANSI helper set: cursor motion (`ansi-cursor-up`/`-down`/
   `-forward`/`-back`/`-column`), `ansi-save-cursor`/`ansi-restore-cursor`,
@@ -1068,7 +1083,7 @@ about the stability of a surface that had already settled, not a rewrite.
 - add `examples/sixel-image.lisp` demonstrating `format-sixel` on a small
   red-to-blue gradient; with this every major subsystem has a runnable example
 
-## 0.1.0 - 2026-07-20
+## [0.1.0] - 2026-07-20
 
 - correct the README "Compatibility" section: the library requires SBCL and no
   longer claims that its pure subsystems run on other Common Lisp
