@@ -1,6 +1,7 @@
 # cl-tty-kit
 
 [![CI](https://github.com/nerima-lisp/cl-tty-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/nerima-lisp/cl-tty-kit/actions/workflows/ci.yml)
+[![Documentation](https://github.com/nerima-lisp/cl-tty-kit/actions/workflows/docs.yml/badge.svg)](https://nerima-lisp.github.io/cl-tty-kit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 `cl-tty-kit` is a small Common Lisp toolkit for terminal and TTY work.
@@ -9,6 +10,7 @@ without turning the library into a UI framework or shell.
 
 ## Status
 
+- full documentation site: <https://nerima-lisp.github.io/cl-tty-kit/>
 - requires SBCL (see [Compatibility](#compatibility)) and intentionally small
 - test-backed public API
 - PTY support is limited to SBCL
@@ -23,6 +25,11 @@ without turning the library into a UI framework or shell.
 classification, and `sb-ext` for UTF-8 transcoding and process/PTY handling.
 Loading the system on another Common Lisp implementation fails fast with a
 clear "requires SBCL" error rather than a confusing missing-dependency report.
+Its other dependency, [`cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
+(the embedded logic engine; see "Design: relations and continuations" below),
+is itself dependency-free and portable, and is vendored as a git submodule at
+`vendor/cl-prolog` rather than distributed by Quicklisp -- `git submodule
+update --init vendor/cl-prolog` once per checkout is all it needs.
 
 Internally the code is still organized by portability of *concern*, which keeps
 the OS-facing surface small and isolated and makes the pure logic easy to test:
@@ -96,9 +103,6 @@ degrading.
 
 The implementation is split by concern:
 
-- `src/prolog-package.lisp` for the embedded logic engine's package, and
-  `src/prolog-bindings.lisp`, `src/prolog-db.lisp`, `src/prolog-engine.lisp`, and
-  `src/prolog-primitives.lisp` for the engine and its data/logic split
 - `src/conditions.lisp` for public condition types and signaling helpers (including the `%assert` validation macro)
 - `src/clamp.lisp`, `src/string-empty.lisp`, and `src/utf8.lisp` for reusable utilities and codec helpers
 - `src/char-width.lisp` for Unicode terminal column width, expressed as width
@@ -470,6 +474,10 @@ Then load the repository-local bootstrap and core sources:
 (cl-tty-kit/bootstrap:load-core-system)
 ```
 
+With [Nix](https://nixos.org) installed, `nix develop` drops into a shell
+with SBCL and Git (for `git submodule update --init`) on `PATH`, and
+`nix run .#test` / `.#verify` / `.#coverage` run the same scripts CI does.
+
 ## Quick Start
 
 ```lisp
@@ -609,39 +617,34 @@ callers can align text that mixes ASCII, CJK, and emoji.
 
 ### Design: relations and continuations
 
-The toolkit ships a small, self-contained embedded logic engine, split across
-`src/prolog-bindings.lisp`, `src/prolog-db.lisp`, `src/prolog-engine.lisp`, and
-`src/prolog-primitives.lisp`, and exposed as the `cl-tty-kit/prolog` package
-(nickname `tty-prolog`). It provides unification with an occurs check, a
-continuation-passing resolver with branch-local cycle detection and
-ground-goal failure memoization, and an explicit clause database. Rules are
-kept separate from the plain data tables they reason about (width ranges, key
-decoding tables, style codes), so the classification logic can be expressed as
-relations while the data stays ordinary Lisp.
-
-The engine is a first-class part of the public API. `install-standard-primitives`
-installs the relational combinators `and/*`, `or/*`, and `not/1`, unification
-`=/2`, and the advanced predicates `true/0`, `fail/0`, meta-call `call/1`, and
-aggregation `findall/3`. Clauses are added in O(1) amortized time, so large
-rule sets load in linear time.
+The toolkit's embedded logic engine is
+[`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog) itself —
+vendored as a git submodule at `vendor/cl-prolog` and depended on directly
+(see "Compatibility" above), not reimplemented. It provides ISO-flavored
+unification and proof search — ISO built-ins (cut, arithmetic, `findall/3`,
+`assert`/`retract`, DCG grammars, and more), a continuation-passing resolver,
+and an explicit, immutable-by-default rulebase. Rules are kept separate from
+the plain data tables they reason about (width ranges, key decoding tables,
+style codes), so the classification logic can be expressed as relations while
+the data stays ordinary Lisp.
 
 ```lisp
-(let ((db (tty-prolog:install-standard-primitives (tty-prolog:make-clause-db))))
-  (tty-prolog:define-clauses db
-    ((parent abraham isaac))
-    ((parent isaac jacob))
-    ((parent jacob joseph))
-    ((ancestor ?a ?b) (parent ?a ?b))
-    ((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b)))
-  (tty-prolog:solutions db '(tty-prolog:findall ?d (ancestor abraham ?d) ?ds) '?ds))
-;; => ((ISAAC JACOB JOSEPH))
+(cl-prolog:define-rulebase *family*
+  ((parent abraham isaac))
+  ((parent isaac jacob))
+  ((parent jacob joseph))
+  ((ancestor ?a ?b) (parent ?a ?b))
+  ((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b)))
+
+(mapcar (lambda (solution) (cl-prolog:solution-binding '?d solution))
+        (cl-prolog:query-prolog *family* '(ancestor abraham ?d)))
+;; => (ISAAC JACOB JOSEPH)
 ```
 
-For advanced usage beyond this embedded engine — a DCG grammar for the
-ECMA-48 CSI byte-class shape, property-based fuzz testing of the untrusted-
-input decoders, and bridges to an external ISO Prolog and to a literate
-"weave" toolchain — see the opt-in integrations under `contrib/` (not part of
-the core build or CI; `contrib/README.md` has the full list).
+For further advanced usage of the same engine — a DCG grammar for the
+ECMA-48 CSI byte-class shape, and property-based fuzz testing of the
+untrusted-input decoders — see the opt-in integrations under `contrib/` (not
+part of the core build or CI; `contrib/README.md` has the full list).
 
 ### ANSI helpers
 

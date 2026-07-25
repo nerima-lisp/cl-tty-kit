@@ -37,7 +37,7 @@ against that boundary, not against full terminal emulation.
 | Synchronized output (DEC 2026) | GAP → DONE | `ansi-begin-synchronized-update`/`-end-synchronized-update` (flicker-free repaints) |
 | Terminal soft reset | GAP → DONE | `ansi-reset-terminal` (RIS) |
 | Runtime terminal size | GAP → DONE | `terminal-size` (ioctl TIOCGWINSZ; returns NIL off a tty) |
-| PTY window-size propagation | DEFERRED | `pty-resize` needs stable access to the PTY's underlying fd; broader PTY coverage is already a ROADMAP item |
+| PTY window-size propagation | DONE (third pass) | `pty-resize` (ioctl TIOCSWINSZ) |
 
 ## B. ANSI escape building
 
@@ -69,7 +69,7 @@ against that boundary, not against full terminal emulation.
 | Focus in/out | DONE | `:focus-in`/`:focus-out` |
 | Cursor position report | DONE | standalone `decode-cursor-position-report` |
 | Human-readable key labels | DONE | `key-event->string` |
-| Device attributes (DA) response decode | DEFERRED | rarely needed by applications; add only if a concrete use appears |
+| Device attributes (DA) response decode | DONE (third pass) | `ansi-request-device-attributes` + `decode-device-attributes` |
 
 ## D. Unicode and text measurement
 
@@ -80,7 +80,7 @@ against that boundary, not against full terminal emulation.
 | Width-aware truncation (+ ellipsis) | DONE | `truncate-string` |
 | Width-aware padding / alignment | DONE | `pad-string` |
 | Word wrapping (+ hard split) | DONE | `wrap-string` |
-| Grapheme-cluster segmentation | DEFERRED | correct clustering needs the Unicode grapheme-break tables shipped in the image; against the "intentionally small" ethos. Combining marks are handled conservatively (each consumes its own column) and documented |
+| Grapheme-cluster segmentation | DONE (fourth pass) | `string-graphemes`, `grapheme-count`, `grapheme-width` via `sb-unicode:graphemes`, already in the SBCL image |
 
 ## E. Screen / cell model
 
@@ -95,6 +95,7 @@ against that boundary, not against full terminal emulation.
 | Multi-line / wrapped / aligned placement | DONE | `screen-write-lines`/`-wrapped`/`-aligned` |
 | Blank-cell predicate | DONE | `cell-blank-p` |
 | Resize preserving content | DONE | `screen-resize` |
+| Region extraction | DONE (second pass) | `screen-crop` |
 
 ## F. Rendering
 
@@ -117,6 +118,8 @@ against that boundary, not against full terminal emulation.
 | RGB blend / gradient ramp | DONE | `blend-colors`, `color-gradient` |
 | RGB → nearest 16-color | GAP → DONE | `rgb-to-ansi16` (for low-color terminals) |
 | Perceived luminance | GAP → DONE | `color-luminance` (e.g. to pick readable fg over a bg) |
+| HSL / HSV round-tripping | DONE (second pass) | `rgb-to-hsl`/`hsl-to-rgb`, `rgb-to-hsv`/`hsv-to-rgb` |
+| Unified color parsing | DONE (second pass) | `parse-color` (hex / `rgb(...)` / name), `contrast-color` |
 
 ## H. Layout geometry
 
@@ -128,7 +131,8 @@ against that boundary, not against full terminal emulation.
 | Point-in-rect | DONE | `rect-contains-p` |
 | Emptiness / area | GAP → DONE | `rect-empty-p`, `rect-area` |
 | Intersection / union | GAP → DONE | `rect-intersect`, `rect-union` (clipping & damage bounds) |
-| Full flex/grid constraint solver | DEFERRED | application-framework territory; `rect-split`/`rect-inset` cover panel layout |
+| Constraint-based layout split | DONE (fourth pass) | `layout-split` (ratatui-style `:length`/`:percentage`/`:ratio`/`:min`/`:fill`) |
+| Full flex/grid constraint solver (Cassowary) | DEFERRED | application-framework territory; `layout-split`/`rect-inset` cover panel layout |
 
 ## I. Widgets and formatting
 
@@ -141,6 +145,7 @@ against that boundary, not against full terminal emulation.
 | Aligned columns (single row) | DONE | `format-columns` |
 | Multi-row table (auto widths) | GAP → DONE | `format-table` |
 | Spinner frames | GAP → DONE | `spinner-frame` |
+| Bitmap graphics (sixel) | DONE (fifth pass) | `format-sixel` |
 
 ## J. PTY / process
 
@@ -148,13 +153,14 @@ against that boundary, not against full terminal emulation.
 |---|---|---|
 | Spawn under PTY | DONE | `make-pty` |
 | Read / write / close | DONE | `pty-read`, `pty-write`, `close-pty` |
-| Window-size propagation | DEFERRED | see A |
+| Window-size propagation | DONE (third pass) | `pty-resize`, see A |
+| Fd-centric byte-transparent I/O (multiplexer use) | DONE | `pty-fd`, `pty-pid`, `fd-read-octets`, `fd-write-octets` |
 
 ## K. Embedded logic engine
 
 | Capability | Status | Notes |
 |---|---|---|
-| Unification + CPS resolution + clause DB | DONE | `cl-tty-kit/prolog` package (self-contained) |
+| Unification + CPS resolution + clause DB | DONE | `nerima-lisp/cl-prolog`, depended on directly |
 
 ---
 
