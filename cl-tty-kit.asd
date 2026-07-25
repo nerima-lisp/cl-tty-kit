@@ -10,11 +10,32 @@
 ;; same way scripts/bootstrap.lisp does for every project script -- this makes
 ;; plain (asdf:load-system :cl-tty-kit) work standalone, independent of
 ;; whichever script or REPL loads this file first.
+;;
+;; This registers the directory through ASDF:*CENTRAL-REGISTRY*, NOT through
+;; ASDF:INITIALIZE-SOURCE-REGISTRY. The latter replaces the source registry
+;; outright, and :INHERIT-CONFIGURATION inherits the environment and user
+;; configuration -- not a registry a caller has already installed
+;; programmatically. Loading this file therefore used to erase the caller's
+;; registry:
+;;
+;;   (asdf:initialize-source-registry '(:source-registry (:tree "/a/") ...))
+;;   (asdf:initialize-source-registry '(:source-registry (:tree "/b/") ...))
+;;   ;; systems under /a/ are now unfindable
+;;
+;; cl-cc-javascript hit this for real. Its cl-cc-repl system depends on
+;; :CL-TTY-KIT and then :CL-BOUNDARY-KIT, so loading this file dropped the
+;; entry that would have resolved the very next name in its own :DEPENDS-ON,
+;; and the build failed with `Component :CL-BOUNDARY-KIT not found`. Under
+;; CL_SOURCE_REGISTRY the damage is invisible, because an environment-provided
+;; registry *is* inherited -- which is why nix builds here never showed it.
+;;
+;; Pushing onto *CENTRAL-REGISTRY* is additive and destroys nothing. ASDF
+;; consults it before the source registry, so standalone
+;; (asdf:load-system :cl-tty-kit) still works from a bare image.
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (asdf:initialize-source-registry
-   `(:source-registry
-     (:tree ,(uiop:pathname-directory-pathname *load-truename*))
-     :inherit-configuration)))
+  (pushnew (uiop:pathname-directory-pathname *load-truename*)
+           asdf:*central-registry*
+           :test #'equal))
 
 ;;; System names are written as STRINGS, not #:symbols or :keywords: a string
 ;;; does not depend on the reader's package state at the moment this file is
