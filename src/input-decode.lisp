@@ -80,13 +80,8 @@ its decode signals INVALID-UTF8-SEQUENCE instead."
          input))
     ((%octet-input-p input)
      (%decoder-decode-octets decoder input eof))
-    ((vectorp input)
-     (unless (loop for index below (length input)
-                   always (characterp (aref input index)))
-       (error "Unsupported input vector element in ~S." input))
-     (coerce input 'string))
     (t
-     (error "Unsupported input type: ~S" (type-of input)))))
+     (%coerce-character-vector input))))
 
 (defun decode-input-chunk (decoder input &key eof)
   "Feed INPUT (a string or octet vector) into DECODER, returning its events.

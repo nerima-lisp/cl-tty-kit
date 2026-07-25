@@ -41,6 +41,17 @@ horizontal, vertical, top-left, top-right, bottom-left, bottom-right.")
       (screen-put-cell screen x y char :style style)
       (screen-put-cell screen x y char)))
 
+(defun %screen-draw-line (screen glyph length style style-supplied-p cell-at)
+  "Paint LENGTH cells of GLYPH along a line, calling CELL-AT with each offset
+from 0 below LENGTH to get that cell's (VALUES X Y). Shared by
+SCREEN-DRAW-HORIZONTAL-LINE and SCREEN-DRAW-VERTICAL-LINE, which differ only in
+how an offset maps to a screen coordinate."
+  (when (plusp length)
+    (loop for offset below length
+          do (multiple-value-bind (x y) (funcall cell-at offset)
+               (%box-put screen x y glyph style style-supplied-p))))
+  screen)
+
 (defun screen-draw-horizontal-line (screen x y length
                                     &key (border :single) (style nil style-supplied-p))
   "Draw a LENGTH-column horizontal line at (X, Y) in SCREEN, returning SCREEN.
@@ -48,11 +59,8 @@ BORDER selects the glyph set (:SINGLE, :ROUNDED, :DOUBLE, :HEAVY, or :ASCII) and
 STYLE, when supplied, is applied to every cell. A zero LENGTH is a no-op; a line
 that leaves the screen signals SCREEN-INDEX-OUT-OF-BOUNDS."
   (%assert-screen-rect-bounds screen x y length 1)
-  (when (plusp length)
-    (let ((h (first (%box-border-chars border))))
-      (loop for column from x below (+ x length)
-            do (%box-put screen column y h style style-supplied-p))))
-  screen)
+  (%screen-draw-line screen (first (%box-border-chars border)) length style style-supplied-p
+                     (lambda (offset) (values (+ x offset) y))))
 
 (defun screen-draw-vertical-line (screen x y length
                                   &key (border :single) (style nil style-supplied-p))
@@ -61,11 +69,8 @@ BORDER selects the glyph set (:SINGLE, :ROUNDED, :DOUBLE, :HEAVY, or :ASCII) and
 STYLE, when supplied, is applied to every cell. A zero LENGTH is a no-op; a line
 that leaves the screen signals SCREEN-INDEX-OUT-OF-BOUNDS."
   (%assert-screen-rect-bounds screen x y 1 length)
-  (when (plusp length)
-    (let ((v (second (%box-border-chars border))))
-      (loop for row from y below (+ y length)
-            do (%box-put screen x row v style style-supplied-p))))
-  screen)
+  (%screen-draw-line screen (second (%box-border-chars border)) length style style-supplied-p
+                     (lambda (offset) (values x (+ y offset)))))
 
 (defun %box-title-column (x width title-cells align)
   "Return the starting column for a TITLE-CELLS-wide title on a box's top edge,

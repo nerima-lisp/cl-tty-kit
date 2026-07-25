@@ -118,11 +118,16 @@ regardless of the order or duplicates in which they were supplied."
   (make-key-event :type type :code code :modifiers modifiers
                   :kind kind :text text))
 
+(defparameter +modifier-prefixes+
+  '((:control . "C-") (:alt . "M-") (:shift . "S-"))
+  "Maps a modifier keyword to its %MODIFIER-PREFIX label, in Ctrl-Alt-Shift
+order regardless of how MODIFIERS was stored.")
+
 (defun %modifier-prefix (modifiers)
   "Return the `C-'/`M-'/`S-' prefix string for MODIFIERS, in Ctrl-Alt-Shift
 order regardless of how they were stored."
   (with-output-to-string (out)
-    (dolist (entry '((:control . "C-") (:alt . "M-") (:shift . "S-")))
+    (dolist (entry +modifier-prefixes+)
       (when (member (car entry) modifiers :test #'eq)
         (write-string (cdr entry) out)))))
 
@@ -136,16 +141,15 @@ and otherwise capitalizing hyphen-delimited words (:PAGE-UP -> \"Page-Up\")."
         (string-capitalize name))))
 
 (defun %key-event-body (event)
+  "Render EVENT's CODE per its TYPE's invariant, guaranteed by
+%ASSERT-KEY-EVENT-CODE: :CHARACTER carries a character, :PASTE a string, and
+:SPECIAL (the only remaining TYPE) a keyword."
   (let ((type (key-event-type event))
         (code (key-event-code event)))
     (case type
       (:character (string code))
-      (:paste (format nil "<paste ~D bytes>"
-                      (if (stringp code) (length code) 0)))
-      (t (cond
-           ((characterp code) (string code))
-           ((keywordp code) (%format-key-keyword code))
-           (t (princ-to-string code)))))))
+      (:paste (format nil "<paste ~D bytes>" (length code)))
+      (t (%format-key-keyword code)))))
 
 (defun key-event->string (event)
   "Return a human-readable label for EVENT, such as \"C-a\", \"S-Up\", \"Enter\",

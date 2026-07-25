@@ -103,7 +103,23 @@ CELLS are literal specifications, so callers write them inline without quoting."
       (%assert-render-output (render-frame-diff screen screen cursor
                                                 :previous-cursor previous-cursor)
                              (%ansi-string (ansi-move-cursor 1 1)
-                                           (ansi-show-cursor))))))
+                                           (ansi-show-cursor))))
+    ;; An unchanged screen with a moved cursor still emits cursor commands --
+    ;; X differing alone is enough, independent of Y or visibility.
+    (let ((cursor (make-cursor :x 1 :y 0))
+          (previous-cursor (make-cursor :x 0 :y 0)))
+      (%assert-render-output (render-frame-diff screen screen cursor
+                                                :previous-cursor previous-cursor)
+                             (%ansi-string (ansi-move-cursor 1 2)
+                                           (ansi-show-cursor)))))
+  ;; Y differing alone (X and visibility equal) is likewise enough.
+  (let ((screen (%screen-from-rows "Hi" "Yo"))
+        (cursor (make-cursor :x 0 :y 1))
+        (previous-cursor (make-cursor :x 0 :y 0)))
+    (%assert-render-output (render-frame-diff screen screen cursor
+                                              :previous-cursor previous-cursor)
+                           (%ansi-string (ansi-move-cursor 2 1)
+                                         (ansi-show-cursor)))))
 
 (defun %test-render-diff-style-cases ()
   (do-test-case-bind

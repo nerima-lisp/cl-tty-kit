@@ -52,7 +52,8 @@
     (,(concatenate 'string (string #\Esc) "OS") :special :f4 nil)
     (,(string (code-char 3)) :special :control-c nil)
     (,(string #\Return) :special :enter nil)
-    (,(string #\Tab) :special :tab nil)))
+    (,(string #\Tab) :special :tab nil)
+    (,(string #\Rubout) :special :backspace nil)))
 
 (defparameter +decode-key-sequence-cases+
   (list (list (concatenate 'string (string #\Esc) "[")
@@ -141,6 +142,7 @@
     (is (string= "C-a" (label :special :control-a)))
     (is (string= "F1" (label :special :f1)))
     (is (string= "<paste 5 bytes>" (label :paste "hello")))
+    (is (string= "<paste 0 bytes>" (label :paste "")))
     ;; Modifier prefix is Ctrl-Alt-Shift order regardless of input order.
     (is (string= "C-S-a" (label :character #\a '(:shift :control)))))
   (signals-non-type-error (key-event->string :not-a-key-event)))
@@ -174,6 +176,12 @@
   (multiple-value-bind (row col consumed)
       (decode-cursor-position-report (format nil "~C[A" #\Esc))
     (declare (ignore row col))
+    (is (= 0 consumed)))
+  ;; A complete report body missing its `;' separator is declined.
+  (multiple-value-bind (row col consumed)
+      (decode-cursor-position-report (format nil "~C[12R" #\Esc))
+    (is (null row))
+    (is (null col))
     (is (= 0 consumed)))
   ;; Decoding can start partway through a buffer.
   (multiple-value-bind (row col consumed)
@@ -220,6 +228,11 @@
     (is (= 0 consumed)))
   (multiple-value-bind (r g b consumed)
       (decode-color-report (format nil "~C[A" #\Esc))
+    (declare (ignore r g b))
+    (is (= 0 consumed)))
+  ;; A well-formed OSC prefix whose body never contains "rgb:" is declined.
+  (multiple-value-bind (r g b consumed)
+      (decode-color-report (format nil "~C]11;notrgb~C\\" #\Esc #\Esc))
     (declare (ignore r g b))
     (is (= 0 consumed)))
   ;; Invalid offsets are declined without signaling.
@@ -292,7 +305,24 @@
   ;; No alternates on a plain key.
   (let ((event (first (decode-input "a"))))
     (is (null (key-event-shifted-key event)))
-    (is (null (key-event-base-key event)))))
+    (is (null (key-event-base-key event))))
+  ;; Multi-code-point text (colon-separated within field 3).
+  (let ((event (first (decode-input (%csi "97;1;104:105" #\u)))))
+    (is (string= "hi" (key-event-text event))))
+  ;; An empty text field (nothing between the second `;' and the final byte)
+  ;; is NIL, same as when field 3 is absent entirely.
+  (let ((event (first (decode-input (%csi "97;1;" #\u)))))
+    (is (null (key-event-text event))))
+  ;; A code point in field 3 out of the Unicode range is malformed; the
+  ;; whole text field is dropped rather than partially decoded.
+  (let ((event (first (decode-input (%csi "97;1;9999999" #\u)))))
+    (is (null (key-event-text event))))
+  ;; More than three `;'-separated fields is not a form this decoder
+  ;; recognizes -- it declines and falls back to raw character decoding
+  ;; rather than misinterpreting the extra field.
+  (is (eq :escape (key-event-code (first (decode-input (%csi "97;1;104;200" #\u))))))
+  ;; A non-digit character embedded in a field is likewise declined.
+  (is (eq :unknown-csi (key-event-code (first (decode-input (%csi "9x;1" #\u)))))))
 
 (defun %test-device-attributes ()
   (multiple-value-bind (params consumed)
@@ -308,6 +338,17 @@
       (decode-device-attributes (%csi "" #\c))
     (is (null params))
     (is (= 3 consumed)))
+  ;; Non-ESC-prefixed input is declined.
+  (multiple-value-bind (params consumed)
+      (decode-device-attributes "hello")
+    (is (null params))
+    (is (= 0 consumed)))
+  ;; A bare `ESC [' with nothing after is declined before the `?'/`>' prefix
+  ;; check even looks past the end of the string.
+  (multiple-value-bind (params consumed)
+      (decode-device-attributes (format nil "~C[" #\Esc))
+    (is (null params))
+    (is (= 0 consumed)))
   ;; Incomplete input is declined.
   (multiple-value-bind (params consumed)
       (decode-device-attributes (format nil "~C[?1;2" #\Esc))

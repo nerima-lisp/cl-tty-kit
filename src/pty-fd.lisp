@@ -61,6 +61,11 @@ FD-READ-OCTETS / FD-WRITE-OCTETS."
 
 #+sbcl
 (defun %fd-would-block-errno-p (errno)
+  "Return true when ERRNO means \"no data/space right now, try again\" rather
+than a hard failure. EWOULDBLOCK is checked separately from EAGAIN for POSIX
+portability even though on this project's CI platforms (Linux and macOS) they
+share the same numeric value, so a real syscall can never independently reach
+the EWOULDBLOCK disjunct -- EAGAIN's `eql' always matches first."
   (and errno
        (or (eql errno sb-unix:eagain)
            (eql errno sb-unix:ewouldblock)
@@ -119,6 +124,10 @@ in PTY-OPERATION-FAILED."
           (cond
             (result (incf offset result))
             ((eql errno sb-unix:eintr) nil)
+            ;; EWOULDBLOCK is checked for POSIX portability alongside EAGAIN,
+            ;; as in %FD-WOULD-BLOCK-ERRNO-P above; the two share a numeric
+            ;; value on this project's CI platforms, so only the EAGAIN arm
+            ;; is reachable there.
             ((or (eql errno sb-unix:eagain)
                  (eql errno sb-unix:ewouldblock))
              (return))

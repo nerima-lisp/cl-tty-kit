@@ -125,11 +125,11 @@ its own becomes a lone over-width chunk rather than causing an endless loop."
                (setf index next)))
     (nreverse chunks)))
 
-(defun %split-on-newline (string)
+(defun %split-on-char (string char)
   (let ((parts '())
         (start 0)
         (length (length string)))
-    (loop for position = (position #\Newline string :start start)
+    (loop for position = (position char string :start start)
           do (push (subseq string start (or position length)) parts)
              (if position
                  (setf start (1+ position))
@@ -269,5 +269,5 @@ single separator, but embedded newlines are honored as forced breaks, so a blank
 line in the input yields an empty string in the result. WIDTH must be positive."
   (%assert-layout-string "STRING" string)
   (%assert-layout-width "WIDTH" width :positive t)
-  (loop for paragraph in (%split-on-newline string)
+  (loop for paragraph in (%split-on-char string #\Newline)
         append (%wrap-paragraph paragraph width)))

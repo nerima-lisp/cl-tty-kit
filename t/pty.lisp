@@ -98,8 +98,14 @@
       (make-pty :program :not-a-program))
   (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
       (make-pty :program "/bin/sh" :args '("-c" :not-a-string)))
+  ;; ARGS/ENVIRONMENT that are not lists at all, as opposed to lists
+  ;; containing a bad element.
+  (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
+      (make-pty :program "/bin/sh" :args :bad))
   (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
       (make-pty :program "/bin/sh" :environment '(:not-a-string)))
+  (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
+      (make-pty :program "/bin/sh" :environment :bad))
   (signals-pty-operation-failed (:spawn nil "PTY operation SPAWN failed")
       (make-pty :program "/bin/sh" :directory :not-a-directory))
   (let ((alive-count 0))
@@ -250,6 +256,21 @@
                                     :stream (make-string-output-stream))))
     (signals-pty-operation-failed (:resize pty "PTY operation RESIZE failed")
       (pty-resize pty 80 24)))
+  ;; Invalid COLUMNS/ROWS are rejected before the ioctl is ever attempted.
+  (let ((pty (make-pty :program "/bin/sh")))
+    (signals-pty-operation-failed (:resize pty "PTY operation RESIZE failed")
+      (pty-resize pty 0 24))
+    (signals-pty-operation-failed (:resize pty "PTY operation RESIZE failed")
+      (pty-resize pty -1 24))
+    (signals-pty-operation-failed (:resize pty "PTY operation RESIZE failed")
+      (pty-resize pty 80 0))
+    (signals-pty-operation-failed (:resize pty "PTY operation RESIZE failed")
+      (pty-resize pty 80 -1))
+    (signals-pty-operation-failed (:resize pty "PTY operation RESIZE failed")
+      (pty-resize pty 1.5 24))
+    (signals-pty-operation-failed (:resize pty "PTY operation RESIZE failed")
+      (pty-resize pty 80 1.5))
+    (close-pty pty))
   ;; PTY-ALIVE-P tracks the child's lifetime.
   (let ((pty (make-pty :program "/bin/sh")))
     (is (pty-alive-p pty))
@@ -392,6 +413,17 @@
     (fd-read-octets 0 "not-a-buffer"))
   (signals-pty-operation-failed (:fd-write nil "PTY operation FD-WRITE failed")
     (fd-write-octets -1 (make-array 0 :element-type '(unsigned-byte 8))))
+  ;; A negative LIMIT is rejected before any syscall is attempted.
+  (signals-pty-operation-failed (:fd-read nil "PTY operation FD-READ failed")
+    (fd-read-octets 0 (make-array 1 :element-type '(unsigned-byte 8)) -1))
+  ;; A syntactically valid but unopened fd reaches the real syscall and
+  ;; surfaces its OS error (EBADF), distinct from the EAGAIN/EINTR retry path.
+  (signals-pty-operation-failed (:fd-read nil "PTY operation FD-READ failed")
+    (fd-read-octets 987654 (make-array 1 :element-type '(unsigned-byte 8))))
+  (signals-pty-operation-failed (:fd-write nil "PTY operation FD-WRITE failed")
+    (fd-write-octets 987654
+                     (make-array 1 :element-type '(unsigned-byte 8)
+                                   :initial-element 1)))
   t)
 
 #-sbcl

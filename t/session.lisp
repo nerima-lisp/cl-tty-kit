@@ -50,6 +50,10 @@
                                                   :keyboard-enhancements keyboard-enhancements)
                output)))
 
+(defvar *terminal-size-synonym-target* nil
+  "A dynamically rebindable target for exercising %STREAM-FD's SYNONYM-STREAM
+case in %TEST-TERMINAL-SIZE.")
+
 (defun %test-terminal-size ()
   ;; Under the test harness FD 0 is usually not a tty, so TERMINAL-SIZE either
   ;; reports the real size (two positive integers) or NIL/NIL -- never an error.
@@ -62,7 +66,32 @@
   (signals (error condition) (terminal-size -1)
     (declare (ignore condition)))
   (signals (error condition) (terminal-size "fd")
-    (declare (ignore condition))))
+    (declare (ignore condition)))
+  ;; An FD that passes %ASSERT-TERMINAL-FD's own validation (a non-negative
+  ;; integer) but overflows the C int SB-UNIX:UNIX-IOCTL marshals it into
+  ;; raises a genuine Lisp error at the FFI boundary -- distinct from an
+  ;; ordinary ioctl failure (e.g. a closed FD), which UNIX-IOCTL reports by
+  ;; returning NIL, not by signaling. TERMINAL-SIZE/%SET-TERMINAL-SIZE catch
+  ;; that error too, reporting it the same as "size unavailable".
+  (is (equal '(nil nil) (multiple-value-list (terminal-size (expt 2 40)))))
+  (is (null (cl-tty-kit::%set-terminal-size (expt 2 40) 80 24)))
+  ;; An unrecognized platform (no known TIOCGWINSZ/TIOCSWINSZ constant) reports
+  ;; size as unavailable and PTY-RESIZE's setter as unsupported, rather than
+  ;; erroring -- +TIOCGWINSZ+/+TIOCSWINSZ+ are ordinary special variables, so
+  ;; this is exercised directly by rebinding them to NIL.
+  (let ((cl-tty-kit::+tiocgwinsz+ nil))
+    (is (equal '(nil nil) (multiple-value-list (terminal-size)))))
+  (let ((cl-tty-kit::+tiocswinsz+ nil))
+    (is (null (cl-tty-kit::%set-terminal-size 0 80 24))))
+  ;; %STREAM-FD unwraps TWO-WAY-STREAM and SYNONYM-STREAM to the underlying fd
+  ;; stream's descriptor, the same way a PTY's bidirectional stream does.
+  (let ((two-way (make-two-way-stream *standard-input* *standard-output*)))
+    (is (eql (cl-tty-kit::%stream-fd *standard-output*)
+             (cl-tty-kit::%stream-fd two-way))))
+  (let ((*terminal-size-synonym-target* *standard-output*))
+    (is (eql (cl-tty-kit::%stream-fd *standard-output*)
+             (cl-tty-kit::%stream-fd
+              (make-synonym-stream '*terminal-size-synonym-target*))))))
 
 (defun test-terminal-session ()
   (%test-terminal-size)

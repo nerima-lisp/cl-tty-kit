@@ -105,6 +105,14 @@
                     '((:fill 1) (:fill 3)))
     (%rect-is a 0 0 25 10)
     (%rect-is b 25 0 75 10))
+  ;; A remainder that does not divide evenly among the weights is handed out
+  ;; one unit at a time by descending fractional share (largest-remainder).
+  (destructuring-bind (a b c)
+      (layout-split (make-rect :width 10 :height 4) :horizontal
+                    '((:fill 1) (:fill 1) (:fill 1)))
+    (%rect-is a 0 0 4 4)
+    (%rect-is b 4 0 3 4)
+    (%rect-is c 7 0 3 4))
   ;; Spacing sits between segments.
   (destructuring-bind (a b)
       (layout-split (make-rect :width 10 :height 4) :horizontal

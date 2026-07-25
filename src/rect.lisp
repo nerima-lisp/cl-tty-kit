@@ -63,37 +63,43 @@ box (inset by 1 on every side)."
               :width (max 0 (- (rect-width rect) (max 0 left) (max 0 right)))
               :height (max 0 (- (rect-height rect) (max 0 top) (max 0 bottom)))))
 
-(defun rect-split-horizontal (rect at &key (gap 0))
-  "Split RECT into (VALUES LEFT RIGHT) at column offset AT within the rect.
+(defmacro %define-rect-split (name doc extent-accessor first-part second-part)
+  "Define a RECT-splitting function NAME with DOC that partitions RECT along one
+axis at offset AT, with a GAP between the two parts -- the shared shape of
+RECT-SPLIT-HORIZONTAL and RECT-SPLIT-VERTICAL, which differ only in which axis
+EXTENT-ACCESSOR reads and how FIRST-PART/SECOND-PART build each result. Both part
+forms see FIRST-EXTENT, SECOND-OFFSET, and SECOND-EXTENT bound in scope."
+  `(defun ,name (rect at &key (gap 0))
+     ,doc
+     (%assert-rect-integer :at at)
+     (%assert-rect-integer :gap gap)
+     (let* ((extent (,extent-accessor rect))
+            (first-extent (clamp at 0 extent))
+            (second-offset (min extent (+ first-extent (max 0 gap))))
+            (second-extent (- extent second-offset)))
+       (values ,first-part ,second-part))))
+
+(%define-rect-split rect-split-horizontal
+    "Split RECT into (VALUES LEFT RIGHT) at column offset AT within the rect.
 LEFT receives AT columns; RIGHT begins GAP columns further right and receives the
 remainder. AT and GAP are clamped so both parts stay inside RECT, each possibly
 zero-width. The rows are unchanged."
-  (%assert-rect-integer :at at)
-  (%assert-rect-integer :gap gap)
-  (let* ((width (rect-width rect))
-         (left-width (clamp at 0 width))
-         (right-x (min width (+ left-width (max 0 gap))))
-         (right-width (- width right-x)))
-    (values (%make-rect :x (rect-x rect) :y (rect-y rect)
-                        :width left-width :height (rect-height rect))
-            (%make-rect :x (+ (rect-x rect) right-x) :y (rect-y rect)
-                        :width right-width :height (rect-height rect)))))
+  rect-width
+  (%make-rect :x (rect-x rect) :y (rect-y rect)
+             :width first-extent :height (rect-height rect))
+  (%make-rect :x (+ (rect-x rect) second-offset) :y (rect-y rect)
+             :width second-extent :height (rect-height rect)))
 
-(defun rect-split-vertical (rect at &key (gap 0))
-  "Split RECT into (VALUES TOP BOTTOM) at row offset AT within the rect.
+(%define-rect-split rect-split-vertical
+    "Split RECT into (VALUES TOP BOTTOM) at row offset AT within the rect.
 TOP receives AT rows; BOTTOM begins GAP rows further down and receives the
 remainder. AT and GAP are clamped so both parts stay inside RECT, each possibly
 zero-height. The columns are unchanged."
-  (%assert-rect-integer :at at)
-  (%assert-rect-integer :gap gap)
-  (let* ((height (rect-height rect))
-         (top-height (clamp at 0 height))
-         (bottom-y (min height (+ top-height (max 0 gap))))
-         (bottom-height (- height bottom-y)))
-    (values (%make-rect :x (rect-x rect) :y (rect-y rect)
-                        :width (rect-width rect) :height top-height)
-            (%make-rect :x (rect-x rect) :y (+ (rect-y rect) bottom-y)
-                        :width (rect-width rect) :height bottom-height))))
+  rect-height
+  (%make-rect :x (rect-x rect) :y (rect-y rect)
+             :width (rect-width rect) :height first-extent)
+  (%make-rect :x (rect-x rect) :y (+ (rect-y rect) second-offset)
+             :width (rect-width rect) :height second-extent))
 
 (defun rect-contains-p (rect x y)
   "Return true when column X and row Y fall inside RECT."
@@ -146,9 +152,9 @@ writing."
       (:fill 0))))
 
 (defun %constraint-weight (constraint)
-  "Return the flexible-growth weight of a CONSTRAINT (0 for fixed constraints)."
-  (unless (consp constraint)
-    (error "Layout constraint ~S must be a non-empty list." constraint))
+  "Return the flexible-growth weight of a CONSTRAINT (0 for fixed constraints).
+CONSTRAINT's shape is already validated by %CONSTRAINT-BASELINE, which
+%LAYOUT-SOLVE-SIZES always runs across every constraint first."
   (destructuring-bind (kind &rest args) constraint
     (case kind
       (:fill
@@ -166,6 +172,19 @@ writing."
                 take))
             sizes)))
 
+(defun %largest-remainder-order (shares weights)
+  "Return the indices of SHARES (each a weighted fractional share of the
+leftover being distributed), sorted by descending fractional remainder and
+skipping any index whose WEIGHT is zero -- the order the largest-remainder
+method hands out leftover whole units in."
+  (mapcar #'car
+          (sort (loop for share in shares
+                      for weight in weights
+                      for index from 0
+                      when (plusp weight)
+                        collect (cons index (- share (floor share))))
+                #'> :key #'cdr)))
+
 (defun %distribute-remaining (sizes weights remaining)
   "Add REMAINING cells to SIZES in proportion to WEIGHTS, using the
 largest-remainder method so the integer sizes still sum exactly."
@@ -176,13 +195,7 @@ largest-remainder method so the integer sizes still sum exactly."
                                weights))
                (floors (mapcar #'floor shares))
                (leftover (- remaining (reduce #'+ floors)))
-               (order (mapcar #'car
-                              (sort (loop for share in shares
-                                          for weight in weights
-                                          for index from 0
-                                          when (plusp weight)
-                                            collect (cons index (- share (floor share))))
-                                    #'> :key #'cdr)))
+               (order (%largest-remainder-order shares weights))
                (result (mapcar #'+ sizes floors)))
           (loop repeat leftover
                 for index in order

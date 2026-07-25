@@ -51,6 +51,15 @@
   (funcall emit '(:clear-line 0)))
 
 (defun %emit-diff-run (screen previous x y emit)
+  "Emit one run of changed cells starting at (X, Y), returning the column just
+past it. The (UNLESS (> NEXT-X X) ...) check below cannot currently fail:
+%DIFF-RENDER-COMMANDS, this function's only caller, calls it exclusively from
+the branch already guarded by (NOT (%CELL-EQUAL-P current old)) at X, and
+%WRITE-DIFF-RUN re-checks that identical, unmutated comparison first -- so its
+loop always writes at least one cell before it can return early. Kept as a
+guard against the alternative -- the caller's outer DO loop advancing X by
+NEXT-X, so a failure here would hang it in an infinite loop -- rather than a
+merely cosmetic assertion."
   (multiple-value-bind (run-string next-x)
       (%collect-diff-run-output screen previous x y)
     (unless (> next-x x)
@@ -113,6 +122,16 @@
           (values (finish) length nil))))))
 
 (defun %preferred-diff-commands (screen previous)
+  "Return the diff commands bringing SCREEN to its current state from PREVIOUS,
+or a full repaint when that is shorter or the frames differ in size.
+The final (T ...) clause below cannot currently fire: %DIFF-RENDER-COMMANDS is
+only ever called here with MAX-LENGTH SCREEN-LENGTH, and its EMIT-COUNTED
+helper returns TOO-LONG-P as soon as any partial length would reach
+MAX-LENGTH -- so whenever it instead returns normally, the length it
+committed on every step, including the last, was already confirmed below
+MAX-LENGTH, meaning DIFF-LENGTH < SCREEN-LENGTH always holds and the
+preceding clause always matches first. Kept as a safety net -- worst case if
+it ever did fire is an unnecessary full repaint, not incorrect output."
   (if (not (%same-screen-dimensions-p screen previous))
       (%screen-render-commands screen)
       (let ((screen-length (%screen-render-length screen)))

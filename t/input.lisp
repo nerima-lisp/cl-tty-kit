@@ -217,8 +217,11 @@
    :invalid-leading-byte
    "Invalid leading bytes should fail immediately.")
   (signals (error c) (decode-input #(#\a 1)) (is c))
+  (signals (error c) (decode-input 42) (is c))
   (let ((decoder (make-input-decoder)))
     (signals (error c) (decode-input-chunk decoder #(#\a 1)) (is c)))
+  (let ((decoder (make-input-decoder)))
+    (signals (error c) (decode-input-chunk decoder 42) (is c)))
   (%assert-flush-case
    (list (concatenate 'string (string #\Esc) "[200~ab"))
    `((:special :paste-start nil)

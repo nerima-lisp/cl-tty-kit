@@ -18,17 +18,6 @@ trailing `m'), or STRING itself when it is already a bare parameter body."
         (subseq string (1+ open) close)
         string)))
 
-(defun %split-semicolons (string)
-  (let ((parts '())
-        (start 0)
-        (length (length string)))
-    (loop for position = (position #\; string :start start)
-          do (push (subseq string start (or position length)) parts)
-             (if position
-                 (setf start (1+ position))
-                 (return)))
-    (nreverse parts)))
-
 (defun %sgr-basic-color-item (code)
   (cond
     ((<= 30 code 37) (list :fg (- code 30)))
@@ -87,7 +76,7 @@ attributes (bold, dim, italic, the underline styles, blink, reverse, hidden,
 strikethrough, overline), 30-37/90-97 and 40-47/100-107 basic colors, and 38/48/58
 with a 5;N (indexed) or 2;R;G;B (truecolor) argument. 39/49/59 drop the matching
 color; unknown parameters are ignored."
-  (let* ((tokens (coerce (%split-semicolons (%sgr-parameter-body string)) 'vector))
+  (let* ((tokens (coerce (%split-on-char (%sgr-parameter-body string) #\;) 'vector))
          (count (length tokens))
          (items '())
          (reset-p nil)

@@ -14,7 +14,13 @@
 (defun test-cursor ()
   (let ((cursor (make-cursor)))
     (is (= 0 (cursor-x cursor)))
-    (is (= 0 (cursor-y cursor)))
+    (progn
+      (is (= 0 (cursor-y cursor)))
+      ;; No WIDTH/HEIGHT supplied: the coordinate is stored verbatim, exercising
+      ;; the un-clamped branch of MOVE-CURSOR.
+      (move-cursor cursor 15 20)
+      (is (= 15 (cursor-x cursor)))
+      (is (= 20 (cursor-y cursor))))
     (is (cursor-visible-p cursor))
     (move-cursor cursor 5 6 :width 10 :height 10)
     (is (= 5 (cursor-x cursor)))

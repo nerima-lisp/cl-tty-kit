@@ -94,11 +94,6 @@ macro is the shared assertion for that contract across the test suite."
      (is (string= ,expected-output
                   (get-output-stream-string ,stream)))))
 
-(defmacro is-fail (form &optional description)
-  `(is (eq tty-prolog:+fail+ ,form)
-       ,(or description
-            `(format nil "~S should fail" ',form))))
-
 (defun run-test (name thunk)
   (format t "~&[RUN] ~A~%" name)
   (finish-output)

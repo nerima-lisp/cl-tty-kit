@@ -77,18 +77,31 @@
   (is (equal '(120 100 50) (multiple-value-list (rgb-to-hsl 0 255 0))))
   (is (equal '(0 0 100) (multiple-value-list (rgb-to-hsl 255 255 255))))
   (is (equal '(0 0 50) (multiple-value-list (rgb-to-hsl 128 128 128))))
+  ;; Blue as the dominant channel selects the hue formula's third branch;
+  ;; lightness above 50% selects the saturation formula's other branch.
+  (is (equal '(240 100 89) (multiple-value-list (rgb-to-hsl 200 200 255))))
+  (is (equal '(240 100 50) (multiple-value-list (rgb-to-hsl 0 0 255))))
   ;; Pure colors round-trip exactly.
   (is (equal '(255 0 0) (multiple-value-list (hsl-to-rgb 0 100 50))))
   (is (equal '(0 0 255) (multiple-value-list (hsl-to-rgb 240 100 50))))
-  (is (equal '(128 128 128) (multiple-value-list (hsl-to-rgb 0 0 50)))))
+  (is (equal '(128 128 128) (multiple-value-list (hsl-to-rgb 0 0 50))))
+  ;; Lightness below 50% selects Q's other branch.
+  (is (equal '(153 0 0) (multiple-value-list (hsl-to-rgb 0 100 30)))))
 
 (defun %test-hsv ()
   (is (equal '(0 100 100) (multiple-value-list (rgb-to-hsv 255 0 0))))
   (is (equal '(120 100 100) (multiple-value-list (rgb-to-hsv 0 255 0))))
   (is (equal '(0 0 0) (multiple-value-list (rgb-to-hsv 0 0 0))))
+  ;; Blue as the dominant channel selects the hue formula's third branch.
+  (is (equal '(240 100 100) (multiple-value-list (rgb-to-hsv 0 0 255))))
   (is (equal '(255 0 0) (multiple-value-list (hsv-to-rgb 0 100 100))))
   (is (equal '(0 0 255) (multiple-value-list (hsv-to-rgb 240 100 100))))
-  (is (equal '(0 0 0) (multiple-value-list (hsv-to-rgb 0 0 0)))))
+  (is (equal '(0 0 0) (multiple-value-list (hsv-to-rgb 0 0 0))))
+  ;; Every ECASE sextant of the hue wheel, not just i=0 and i=4.
+  (is (equal '(128 255 0) (multiple-value-list (hsv-to-rgb 90 100 100))))
+  (is (equal '(0 255 128) (multiple-value-list (hsv-to-rgb 150 100 100))))
+  (is (equal '(0 128 255) (multiple-value-list (hsv-to-rgb 210 100 100))))
+  (is (equal '(255 0 128) (multiple-value-list (hsv-to-rgb 330 100 100)))))
 
 (defun %test-parse-and-contrast ()
   (is (equal '(255 136 0) (multiple-value-list (parse-color "#ff8800"))))
@@ -99,6 +112,9 @@
   (signals (error c) (parse-color "rgb(1234, 0, 0)") (is c))
   (signals (error c) (parse-color "rgb(-1, 0, 0)") (is c))
   (signals (error c) (parse-color "rgb(1, 2") (is c))
+  ;; Well-formed parens but the wrong component count.
+  (signals (error c) (parse-color "rgb(1, 2)") (is c))
+  (signals (error c) (parse-color "rgb(1, 2, 3, 4)") (is c))
   (signals (error c) (parse-color "rgb(1, 2, 3)junk") (is c))
   (is (equal '(128 0 0) (multiple-value-list (parse-color "red"))))
   (is (equal '(0 255 0) (multiple-value-list (parse-color :bright-green))))

@@ -22,6 +22,11 @@
               kind))
 
 (defun %code-point-character (code)
+  "Return the character for CODE, an integer in [0, #x10FFFF] (the only range
+%CSI-U-EVENT calls this with). On SBCL this never signals in practice:
+CHAR-CODE-LIMIT is #x110000, one past #x10FFFF, so CODE-CHAR always succeeds
+for every value CODE can hold here -- the signal exists as a portability
+guard against a CL implementation whose CODE-CHAR is stricter."
   (let ((char (code-char code)))
     (unless char
       (error 'unsupported-code-point :code-point code))
@@ -52,6 +57,19 @@ Ctrl-letter events (:CONTROL-A ... :CONTROL-Z); everything else becomes a
 (defun %esc-o-event (final)
   (%lookup-event-code final +esc-o-events+ :test #'char=))
 
+(defun %parse-esc-o-prefixed (string start limit)
+  "Parse the `ESC O X' SS3 form (an application-keypad/F1-F4 report)
+starting at START, mirroring %PARSE-CSI-PREFIXED's shape for its `ESC [ ...'
+sibling. Returns (VALUES EVENT CONSUMED), or NIL when the sequence is
+incomplete or its final byte is unrecognized."
+  (let ((final-index (+ start 2)))
+    (when (< final-index limit)
+      (let* ((final (aref string final-index))
+             (code (%esc-o-event final)))
+        (when code
+          (values (%key-event :special code nil)
+                  (- (1+ final-index) start)))))))
+
 (defun %csi-final-index (string start limit)
   "Return the index of the CSI final byte (0x40-0x7E) at or after START.
 Parameter and intermediate bytes precede it; NIL means the CSI sequence has no
@@ -75,13 +93,7 @@ terminating byte within [START, LIMIT), i.e. it is still incomplete."
                (decode-mouse-sequence string :start start)
                (%parse-csi-prefixed string start limit)))
           ((char= prefix #\O)
-           (let ((final-index (+ start 2)))
-             (when (< final-index limit)
-               (let ((final (aref string final-index)))
-                 (let ((code (%esc-o-event final)))
-                   (when code
-                     (values (%key-event :special code nil)
-                             (- (1+ final-index) start))))))))
+           (%parse-esc-o-prefixed string start limit))
           (t
            (values (nth-value 0 (%plain-key-event prefix '(:alt)))
                    2)))))))

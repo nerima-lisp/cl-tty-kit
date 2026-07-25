@@ -85,6 +85,48 @@
     (expect (equal (make-style (style-fg index))
                    (decode-sgr (style-ansi (style-fg index)))))))
 
+(describe "%split-on-char inverts joining with the same delimiter"
+  (it-property "splitting a semicolon-joined triple recovers the original pieces"
+      ((a (cl-weave:gen-string :min-length 0 :max-length 8 :alphabet "abcXYZ"))
+       (b (cl-weave:gen-string :min-length 0 :max-length 8 :alphabet "abcXYZ"))
+       (c (cl-weave:gen-string :min-length 0 :max-length 8 :alphabet "abcXYZ")))
+    (expect (equal (list a b c)
+                   (cl-tty-kit::%split-on-char (format nil "~A;~A;~A" a b c) #\;)))))
+
+(describe "blend-colors is idempotent when both colors match"
+  (it-property "blending a color with itself returns that color at any ratio"
+      ((rgb (cl-weave:gen-tuple (cl-weave:gen-integer :min 0 :max 255)
+                                (cl-weave:gen-integer :min 0 :max 255)
+                                (cl-weave:gen-integer :min 0 :max 255)))
+       (ratio-numerator (cl-weave:gen-integer :min 0 :max 100)))
+    (expect (equal rgb (blend-colors rgb rgb (/ ratio-numerator 100))))))
+
+(describe "render-diff never exceeds a full repaint"
+  ;; A model-based property, not a pure algebraic law like the ones above:
+  ;; GEN-STATE-MACHINE drives SCREEN-COPY/SCREEN-PUT-CELL through random
+  ;; mutation sequences and replays the resulting screen states, so RENDER-DIFF
+  ;; is checked against every adjacent (PREVIOUS, CURRENT) pair the trace
+  ;; reaches rather than the fixed handful of examples in t/render-diff.lisp.
+  ;; %PREFERRED-DIFF-COMMANDS (src/render-diff.lisp) is documented to fall
+  ;; back to a full repaint whenever the diff would not be shorter, so this
+  ;; length bound is a real invariant, not an incidental one.
+  (it-property "the diff for any reachable screen state stays no longer than RENDER-SCREEN"
+      ((trace (cl-weave:gen-state-machine
+               (make-screen 4 3)
+               (lambda (screen event)
+                 (let ((next (screen-copy screen)))
+                   (destructuring-bind (x y ch) event
+                     (screen-put-cell next x y ch))
+                   next))
+               (cl-weave:gen-tuple (cl-weave:gen-integer :min 0 :max 3)
+                                   (cl-weave:gen-integer :min 0 :max 2)
+                                   (cl-weave:gen-character :alphabet "ab "))
+               :min-length 0 :max-length 8)))
+    (loop for (previous current) on (getf trace :states)
+          while current
+          do (expect (<= (length (render-diff current previous))
+                          (length (render-screen current)))))))
+
 (defun run-tests ()
   "Run every property block registered above and return true iff all passed."
   (run-all :reporter :spec))

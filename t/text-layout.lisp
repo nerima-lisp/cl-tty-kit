@@ -28,6 +28,8 @@
   (is (string= "   hi" (pad-string "hi" 5 :align :right)))
   (is (string= " hi  " (pad-string "hi" 5 :align :center)))
   (is (string= "..hi.." (pad-string "hi" 6 :align :center :pad #\.)))
+  ;; An odd deficit splits unevenly: the shorter (left) side can be zero.
+  (is (string= "hi " (pad-string "hi" 3 :align :center)))
   ;; Already wide enough -> unchanged, never truncated.
   (is (string= "hello" (pad-string "hello" 3)))
   (is (string= "hello" (pad-string "hello" 5)))
@@ -66,6 +68,7 @@
                 (expand-tabs (format nil "ab~%c~Cd" #\Tab) :tab-width 4)))
   (is (string= "" (expand-tabs "")))
   (signals (error c) (expand-tabs "x" :tab-width 0) (is c))
+  (signals (error c) (expand-tabs "x" :tab-width 1.5) (is c))
   (signals-non-type-error (expand-tabs :not-a-string)))
 
 (defun %test-chop-string ()
@@ -77,6 +80,9 @@
     (is (equal (list (format nil "~C~C" #\U+4E00 #\U+4E8C)
                       (format nil "~C" #\U+4E09))
                 (chop-string cjk 4))))
+  ;; A glyph wider than WIDTH on its own becomes a lone over-width chunk
+  ;; instead of stalling with zero progress.
+  (is (equal (list (format nil "~C" #\U+4E00)) (chop-string (format nil "~C" #\U+4E00) 1)))
   (signals (error c) (chop-string "x" 0) (is c))
   (signals-non-type-error (chop-string :not-a-string 3))
   (signals-non-type-error (chop-string "x" :wide)))
@@ -98,6 +104,13 @@
                              (string (code-char 7))
                              "b")))
     (is (string= "ab" (strip-ansi nested))))
+  ;; A trailing bare ESC (nothing after it) is dropped, not indexed past the
+  ;; end of the string.
+  (is (string= "a" (strip-ansi (concatenate 'string "a" (string #\Esc)))))
+  ;; An unterminated CSI or OSC (no final byte / no BEL or ST before the
+  ;; string ends) is dropped wholesale rather than left dangling.
+  (is (string= "a" (strip-ansi (concatenate 'string "a" (string #\Esc) "[1"))))
+  (is (string= "a" (strip-ansi (concatenate 'string "a" (string #\Esc) "]52;abc"))))
   (signals-non-type-error (strip-ansi :not-a-string)))
 
 (defun %test-ambiguous-width ()
@@ -111,10 +124,22 @@
   (signals (error c) (string-width "abc" :start -1) (is c))
   (signals (error c) (string-width "abc" :start 2 :end 1) (is c))
   (signals (error c) (string-width "abc" :end 4) (is c))
+  (signals (error c) (string-width "abc" :start 1.5) (is c))
   (let ((*east-asian-ambiguous-wide* t))
     (is (= 2 (char-width (code-char #xA7))))
     ;; ASCII is unaffected by the policy.
-    (is (= 1 (char-width #\A)))))
+    (is (= 1 (char-width #\A))))
+  ;; A format-control (:CF) code point is zero-width, except U+00AD (soft
+  ;; hyphen), which terminals render as a visible hyphen rather than
+  ;; dropping -- the one explicit exception to the :CF rule.
+  (is (= 0 (char-width (code-char #x200D))))
+  (is (= 1 (char-width (code-char #xAD))))
+  ;; The Hangul Jamo range (U+1160-U+11FF) is zero-width by explicit range,
+  ;; not by general category.
+  (is (= 0 (char-width (code-char #x1160))))
+  ;; C0/C1 control code points (including DEL) are zero-width.
+  (is (= 0 (char-width (code-char #x7F))))
+  (is (= 0 (char-width (code-char #x80)))))
 
 (defun %test-graphemes ()
   (let ((combining (coerce (list #\e (code-char #x0301) #\a) 'string)))

@@ -46,14 +46,18 @@
           continuation-octets
           :initial-value (logand first payload-mask)))
 
-(defun %utf8-validate-code-point (index first code-point second-octet min-code-point)
+(defun %utf8-validate-code-point (index first code-point min-code-point)
+  "Signal a structured error when CODE-POINT (already fully assembled from
+FIRST and its continuation octets) violates a UTF-8 or Unicode invariant.
+There is no separate F4-leading-byte overflow check: for a 4-byte sequence
+whose leading byte is F4, any second octet above #x8F already assembles a
+CODE-POINT above #x10FFFF, so the general upper-bound check below already
+covers it."
   (when (< code-point min-code-point)
     (%signal-invalid-utf8-sequence index first :overlong-sequence))
   (when (<= #xD800 code-point #xDFFF)
     (%signal-invalid-utf8-sequence index first :surrogate-half))
   (when (> code-point #x10FFFF)
-    (%signal-invalid-utf8-sequence index first :code-point-too-large))
-  (when (and (= first #xF4) (> second-octet #x8F))
     (%signal-invalid-utf8-sequence index first :code-point-too-large)))
 
 (defun %utf8-decode-multibyte (vector index length first rule)
@@ -71,7 +75,6 @@
       (%utf8-validate-code-point index
                                  first
                                  code-point
-                                 (first continuation-octets)
                                  min-code-point)
       (values (%utf8-emit-code-point code-point)
               (+ index sequence-length)))))
@@ -110,6 +113,21 @@ vectors do not."
        (or (subtypep (array-element-type input) '(unsigned-byte 8))
            (and (plusp (length input))
                 (integerp (aref input 0))))))
+
+(defun %coerce-character-vector (input)
+  "Coerce a non-octet vector INPUT to a string when every element is a
+character. Signals when INPUT is a vector containing a non-character element,
+or is not a vector at all -- the shared fallback for %INPUT->STRING and
+%DECODER-DECODE-CHUNK-STRING once STRINGP and %OCTET-INPUT-P have both
+declined it."
+  (cond
+    ((vectorp input)
+     (unless (loop for index below (length input)
+                   always (characterp (aref input index)))
+       (error "Unsupported input vector element in ~S." input))
+     (coerce input 'string))
+    (t
+     (error "Unsupported input type: ~S" (type-of input)))))
 
 (defun %utf8-incomplete-tail-start (vector)
   "Return the start index of an incomplete trailing UTF-8 multibyte sequence in

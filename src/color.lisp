@@ -224,16 +224,12 @@ as a foreground over the background RGB triple R G B, decided by COLOR-LUMINANCE
                          always (char= (char string index) #\Space)))
         (malformed))
       (let* ((body (subseq string (1+ open) close))
-             (parts (loop with start = 0
-                          for index = (position-if (lambda (c)
-                                                     (or (char= c #\,)
-                                                         (char= c #\Space)))
-                                                   body :start start)
-                          for piece = (string-trim " " (subseq body start
-                                                                (or index
-                                                                    (length body))))
-                          when (plusp (length piece)) collect piece
-                          while index do (setf start (1+ index)))))
+             ;; Splitting on comma after mapping every space to a comma
+             ;; handles "r, g, b" and "r g b" the same way, and dropping
+             ;; empty pieces absorbs the extra delimiters that produces
+             ;; (e.g. the run of two commas at each ", ").
+             (parts (remove-if (lambda (part) (zerop (length part)))
+                                (%split-on-char (substitute #\, #\Space body) #\,))))
         (unless (= 3 (length parts))
           (malformed))
         (values-list (mapcar #'parse-component parts))))))

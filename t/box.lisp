@@ -80,11 +80,20 @@
     (screen-draw-box screen 0 0 6 3 :border :ascii :title "verylong")
     (is (char= #\+ (cell-char (screen-cell screen 0 0))))
     (is (char= #\+ (cell-char (screen-cell screen 5 0)))))
+  ;; An empty TITLE is a no-op for the title row -- a plain border, since it
+  ;; clips to zero cells even though the interior has room.
+  (let ((screen (make-screen 9 3)))
+    (screen-draw-box screen 0 0 9 3 :border :ascii :title "")
+    (is (string= "+-------+" (screen-row-string screen 0))))
   ;; Title style is applied.
   (let ((screen (make-screen 9 3)))
     (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi"
                      :title-style '(:bold))
-    (cell-is (screen 3 0) #\H '(:bold))))
+    (cell-is (screen 3 0) #\H '(:bold)))
+  ;; With no TITLE-STYLE, a supplied box STYLE colors the title too.
+  (let ((screen (make-screen 9 3)))
+    (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi" :style '(:underline))
+    (cell-is (screen 3 0) #\H '(:underline))))
 
 (defun test-box ()
   (%test-box-single)

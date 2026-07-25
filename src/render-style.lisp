@@ -89,12 +89,6 @@ caching by style list turns repeat lookups into an O(1) hash hit.")
                   (when codes
                     (format nil "~C[~{~A~^;~}m" +escape+ codes))))))))
 
-(defun %terminal-control-character-p (char)
-  (let ((code (char-code char)))
-    (or (< code #x20)
-        (= code #x7f)
-        (<= #x80 code #x9f))))
-
 (defun %render-safe-cell-character (char)
   (if (%terminal-control-character-p char)
       #\Space

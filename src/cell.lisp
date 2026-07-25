@@ -99,16 +99,11 @@ more clearly than the bare integer. An unknown NAME signals an error."
   (and (consp item)
        (member (first item) '(:fg :bg :underline-color) :test #'eq)))
 
-(defun %proper-style-list-p (value)
-  (loop for rest = value then (cdr rest)
-        while (consp rest)
-        finally (return (null rest))))
-
 (defun %cell-style-items (style)
   (cond
     ((null style) nil)
     ((%color-style-item-p style) (list style))
-    ((%proper-style-list-p style) style)
+    ((%proper-list-p style) style)
     (t (list style))))
 
 (defun %valid-color-byte-p (value)
@@ -118,7 +113,7 @@ more clearly than the bare integer. An unknown NAME signals an error."
   (when (%color-style-item-p item)
     (let ((channel (first item))
           (payload (rest item)))
-      (when (%proper-style-list-p payload)
+      (when (%proper-list-p payload)
         (cond
           ((and (= (length payload) 1)
                 (%valid-color-byte-p (first payload)))

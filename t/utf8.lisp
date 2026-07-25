@@ -54,4 +54,13 @@
   (signals (invalid-utf8-sequence condition)
       (cl-tty-kit::%utf8-decode-prefix #(97 :not-an-octet))
     (is (= 1 (invalid-utf8-sequence-position condition)))
-    (is (eq :non-octet (invalid-utf8-sequence-reason condition)))))
+    (is (eq :non-octet (invalid-utf8-sequence-reason condition))))
+  ;; %OCTET-INPUT-P's own contract, verified directly: a string is never
+  ;; octet input regardless of being a vector, nor is a character vector;
+  ;; only a vector of integers (or one typed (UNSIGNED-BYTE 8)) is. Neither
+  ;; caller of this predicate (%INPUT->STRING, %DECODER-DECODE-CHUNK-STRING)
+  ;; reaches it with a string -- both check STRINGP first -- so this is the
+  ;; only place the string case is exercised at all.
+  (is (null (cl-tty-kit::%octet-input-p "abc")))
+  (is (null (cl-tty-kit::%octet-input-p (coerce (list #\a #\b) 'vector))))
+  (is (cl-tty-kit::%octet-input-p (%u8 97 98 99))))

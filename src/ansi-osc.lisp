@@ -8,7 +8,7 @@
 ;;; their own sanitization (control-byte stripping, base64) before framing.
 ;;; --------------------------------------------------------------------------
 
-(defun %osc-control-character-p (character)
+(defun %terminal-control-character-p (character)
   (let ((code (char-code character)))
     (or (< code #x20)
         (= code #x7F)
@@ -16,7 +16,7 @@
 
 (defun %sanitize-osc-string (value)
   "Return VALUE as a string without control bytes that can break out of OSC."
-  (remove-if #'%osc-control-character-p (princ-to-string value)))
+  (remove-if #'%terminal-control-character-p (princ-to-string value)))
 
 (defun %osc-52-target-character-p (character)
   (let ((code (char-code character)))
@@ -101,15 +101,22 @@ when INDEX is NIL, to the terminal defaults."
               +escape+ (%validate-ansi-byte "Palette index" index) +escape+)
       (format nil "~C]104~C\\" +escape+ +escape+)))
 
-(defun ansi-request-foreground-color ()
-  "Return the OSC 10 query asking the terminal for its default foreground color.
-The reply (`ESC]10;rgb:RRRR/GGGG/BBBB ST') is parsed by DECODE-COLOR-REPORT."
-  (format nil "~C]10;?~C\\" +escape+ +escape+))
+(defmacro %define-osc-color-query (name osc-number docstring)
+  "Define an OSC query function NAME that asks the terminal for a default color
+via OSC-NUMBER (10 for foreground, 11 for background), matching the shape of
+ANSI-REQUEST-FOREGROUND-COLOR and ANSI-REQUEST-BACKGROUND-COLOR, which differ
+only in which OSC number they query."
+  `(defun ,name ()
+     ,docstring
+     (format nil "~C]~D;?~C\\" +escape+ ,osc-number +escape+)))
 
-(defun ansi-request-background-color ()
+(%define-osc-color-query ansi-request-foreground-color 10
+  "Return the OSC 10 query asking the terminal for its default foreground color.
+The reply (`ESC]10;rgb:RRRR/GGGG/BBBB ST') is parsed by DECODE-COLOR-REPORT.")
+
+(%define-osc-color-query ansi-request-background-color 11
   "Return the OSC 11 query asking the terminal for its default background color.
-The reply is parsed by DECODE-COLOR-REPORT."
-  (format nil "~C]11;?~C\\" +escape+ +escape+))
+The reply is parsed by DECODE-COLOR-REPORT.")
 
 (defun ansi-set-window-title (title)
   "Return the OSC sequence that sets the terminal window TITLE.

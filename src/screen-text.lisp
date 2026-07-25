@@ -20,13 +20,8 @@
 (defun %assert-screen-text-coordinate (name value)
   (%assert (integerp value) "~A ~S must be an integer coordinate." name value))
 
-(defun %proper-screen-text-list-p (value)
-  (loop for rest = value then (cdr rest)
-        while (consp rest)
-        finally (return (null rest))))
-
 (defun %assert-screen-text-lines (lines)
-  (%assert (and (%proper-screen-text-list-p lines)
+  (%assert (and (%proper-list-p lines)
                (every #'stringp lines)) "LINES ~S must be a proper list of strings." lines))
 
 (defun %assert-screen-text-align (align)

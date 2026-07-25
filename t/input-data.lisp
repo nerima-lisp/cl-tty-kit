@@ -40,6 +40,11 @@ ordinary decoding instead of parsing an unbounded bignum.")))
     ((,(concatenate 'string (string #\Esc) "O") "P")
      ((:special :f1 nil))
      "SS3 sequences should survive chunk boundaries.")
+    ((,(string #\Esc) "z")
+     ((:character ,#\z (:alt)))
+     "An ESC immediately followed by a plain character (neither a CSI nor an
+SS3 prefix) decodes as Alt+char right away instead of staying held pending
+across the chunk boundary.")
     ((#(227 129) #(130 98))
      ((:character ,#\あ nil)
       (:character ,#\b nil))

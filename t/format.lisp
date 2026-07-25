@@ -42,6 +42,8 @@
   ;; Custom pad glyph.
   (is (string= "a.." (format-columns '("a") '(3) :pad #\.)))
   (signals (error c) (format-columns '("a") '(1 2)) (is c))
+  (signals-non-type-error (format-columns :not-a-list '(3)))
+  (signals-non-type-error (format-columns '("a") :not-a-list))
   (signals-non-type-error (format-columns '(:not-a-string) '(3)))
   (signals-non-type-error (format-columns '("a") '(:wide)))
   (signals-non-type-error (format-columns '("a") '(3) :aligns :bad))
@@ -76,6 +78,7 @@
   ;; Per-column alignment.
   (is (equal '("a b")
              (format-table '(("a" "b")) :aligns '(:right :right))))
+  (signals-non-type-error (format-table :not-a-list))
   (signals-non-type-error (format-table '((:bad))))
   (signals-non-type-error (format-table '(("a")) :aligns :bad))
   (signals-non-type-error (format-table '(("a")) :aligns '(:bad)))
@@ -114,6 +117,16 @@
   (let ((sixel (format-sixel (make-array 12 :initial-element 100) 2 2)))
     (is (eql 0 (search (format nil "~CPq" #\Esc) sixel)))
     (is (search (format nil "~C\\" #\Esc) sixel)))
+  ;; A run longer than 3 columns of the same color compresses to "!"N char.
+  (is (search "!4" (format-sixel (make-array 12 :initial-element 100) 4 1)))
+  ;; A band boundary (height taller than one 6-row band) separates bands
+  ;; with "-".
+  (is (search "-" (format-sixel (make-array 21 :initial-element 50) 1 7)))
+  ;; Two colors within one band separate with "$"; a color whose columns are
+  ;; not contiguous emits a "?" filler for the gap.
+  (let ((two-color (format-sixel #(255 0 0 0 0 255) 2 1)))
+    (is (search "$" two-color))
+    (is (search "?" two-color)))
   ;; A buffer whose length does not match WIDTH*HEIGHT*3 signals.
   (signals (error c) (format-sixel #(1 2 3) 2 2) (is c))
   (signals-non-type-error (format-sixel '(1 2 3 4 5 6) 1 2))
@@ -131,6 +144,9 @@
   (signals (error c)
       (ansi-kitty-image #() (1+ cl-tty-kit::+max-terminal-image-pixels+) 1)
     (is c))
+  ;; A zero-area image is a single m=0 chunk with an empty payload.
+  (is (string= (format nil "~C_Ga=T,f=24,s=0,v=0,m=0;~C\\" #\Esc #\Esc)
+               (ansi-kitty-image #() 0 0)))
   ;; Structure: APC introducer, dimensions, ST terminator.
   (let ((image (ansi-kitty-image (make-array 12 :initial-element 100) 2 2)))
     (is (eql 0 (search (format nil "~C_Ga=T" #\Esc) image)))

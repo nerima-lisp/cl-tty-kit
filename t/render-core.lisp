@@ -95,6 +95,9 @@
              (style-merge (make-style :bold (style-fg 1))
                           (make-style (style-bg 2)))))
   (is (equal '(:bold) (style-merge nil '(:bold))))
+  ;; MAKE-CELL's STYLE accepts a bare, unwrapped modifier keyword too, not
+  ;; only a style list -- %CELL-STYLE-ITEMS wraps it in a list itself.
+  (is (equal '(:bold) (cell-style (make-cell :char #\x :style :bold))))
   ;; CELL-BLANK-P: a space with no rendered style is blank.
   (is (cell-blank-p (make-cell)))
   (is (not (cell-blank-p (make-cell :char #\x))))
@@ -136,6 +139,7 @@
                         ("58;5;9"     ((:underline-color 9)))  ; extended underline color
                         ("38;2;1;2;3" ((:fg 1 2 3)))           ; truecolor foreground
                         ("31;39"      nil)                     ; 39 clears the foreground
+                        ("1;31;39"    (:bold))                 ; a color reset spares other modifiers
                         ("41;49"      nil)                     ; 49 clears the background
                         ("58;5;9;59"  nil)                     ; 59 clears the underline color
                         ("38"         nil)                     ; truncated extended color

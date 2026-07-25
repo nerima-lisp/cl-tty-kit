@@ -53,15 +53,13 @@ integer)."
       (if fractional
           (let* ((eighths (round (* ratio width 8)))
                  (complete (floor eighths 8))
-                 (remainder (mod eighths 8)))
+                 (remainder (mod eighths 8))
+                 (partial-p (and (plusp remainder) (< complete width))))
             (dotimes (index complete)
               (write-char full out))
-            (when (and (plusp remainder) (< complete width))
+            (when partial-p
               (write-char (%fractional-block remainder) out))
-            (dotimes (index (- width complete (if (and (plusp remainder)
-                                                       (< complete width))
-                                                  1
-                                                  0)))
+            (dotimes (index (- width complete (if partial-p 1 0)))
               (write-char empty out)))
           (let ((filled (clamp (round (* ratio width)) 0 width)))
             (dotimes (index filled) (write-char full out))

@@ -60,6 +60,41 @@ The target is meaningful coverage, not vanity percentages.
   treat those reports as instrumentation artifacts only after the exported
   contract is already exercised elsewhere
 
+## Macro usage policy
+
+`defmacro` is for genuine compile-time shape: a family of near-identical
+top-level definitions (`define-ansi-function` in `src/ansi.lisp`,
+`define-tty-kit-condition`/`define-formatted-tty-kit-condition` in
+`src/conditions.lisp`, `%define-rect-split` in `src/rect.lisp`,
+`%define-osc-color-query` in `src/ansi-osc.lisp`), a binding/control form that
+must run its body in a specific dynamic extent (`with-terminal-session`,
+`with-raw-mode`), or hygiene around evaluation order a function cannot express.
+
+A macro is the wrong tool when a function would do: converting an ordinary
+`defun` to a `defmacro` "for consistency" is a regression, not an improvement.
+Unlike a function, a macro cannot be passed to `funcall`/`mapcar`/`apply`/
+`sort`/`reduce`, cannot be `flet`-shadowed for a test double, and its
+expansion is invisible to `paredit inspect calls`/`inspect similarity` and
+similar tooling. Prefer a plain function (optionally parameterized, as
+`%bounded-digit-run-p` in `src/mouse.lisp` and `%proper-list-p` in
+`src/clamp.lisp` are) for any duplication whose only variation is a runtime
+value; reach for a macro only when the duplication is in the *shape* of the
+code itself.
+
+## File organization policy
+
+Split a file by concern, not by line count. A large file whose forms serve one
+cohesive purpose (a single data table, a single parser, a single constraint
+solver) is not a splitting candidate merely for being long; forcing an
+unrelated split fragments code that is meant to be read together. A genuine
+splitting candidate has independently-loadable, independently-testable
+sub-concerns bundled under one name -- the kind `0c6c678` (`ansi`/`ansi-control`/
+`ansi-osc`, `screen`/`screen-regions`/`screen-text`, `pty`/`pty-fd`) and the
+`t/screen.lisp` test-body decomposition already acted on. Before splitting,
+check whether the file's own section-banner comments (`;;; ---`) already
+describe one purpose or several; a file with one banner describing one
+concern, however long, is usually already at its natural grain.
+
 ## Documentation gate
 
 Before merging or releasing:

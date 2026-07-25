@@ -1,9 +1,9 @@
 (in-package #:cl-tty-kit/test)
 
 (defparameter +expected-system-metadata+
-  '((:description . "A small, low-dependency Common Lisp terminal toolkit.")
-    (:author . "takeokunn")
-    (:maintainer . "takeokunn")
+  '((:description . "A small Common Lisp terminal toolkit.")
+    (:author . "nerima-lisp")
+    (:maintainer . "nerima-lisp")
     (:license . "MIT")
     (:homepage . "https://github.com/nerima-lisp/cl-tty-kit")
     (:bug-tracker . "https://github.com/nerima-lisp/cl-tty-kit/issues")

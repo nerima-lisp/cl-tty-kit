@@ -64,14 +64,27 @@
       (decode-mouse-sequence (format nil "~C[<0;1;1" #\Esc))
     (is (null event))
     (is (= 0 consumed)))
-  ;; A non-mouse CSI is declined.
+  ;; A non-mouse CSI is declined. This one is too short to reach the `<'
+  ;; check at all -- it fails the earlier length guard first.
   (multiple-value-bind (event consumed)
       (decode-mouse-sequence (format nil "~C[A" #\Esc))
+    (is (null event))
+    (is (= 0 consumed)))
+  ;; A non-mouse CSI long enough to reach the `<' check itself is declined
+  ;; there instead of by the earlier length guard.
+  (multiple-value-bind (event consumed)
+      (decode-mouse-sequence (format nil "~C[Axxxx" #\Esc))
     (is (null event))
     (is (= 0 consumed)))
   ;; A terminated report whose body lacks the two `;' separators is declined.
   (multiple-value-bind (event consumed)
       (decode-mouse-sequence (format nil "~C[<0;5M" #\Esc))
+    (is (null event))
+    (is (= 0 consumed)))
+  ;; A non-digit character embedded within a field (not just an empty or
+  ;; overlong field) is declined.
+  (multiple-value-bind (event consumed)
+      (decode-mouse-sequence (format nil "~C[<1x;1;1M" #\Esc))
     (is (null event))
     (is (= 0 consumed)))
   ;; Decoding can start partway through a buffer.
