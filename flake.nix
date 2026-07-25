@@ -1,7 +1,16 @@
 {
   description = "cl-tty-kit: a small Common Lisp terminal toolkit";
 
+  # nixos-unstable, not nixpkgs-unstable: it only advances after the NixOS
+  # release tests pass, so it is less likely to land a broken build.
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+  # Every sibling is pinned to a release tag. A bare
+  # `github:nerima-lisp/cl-weave` follows that repository's default branch,
+  # so an upstream push to main would break this repository's CI with no
+  # change here and no warning. `inputs.nixpkgs.follows` is mandatory for the
+  # same reason everywhere: without it each input drags in its own nixpkgs,
+  # inflating flake.lock and rebuilding identical derivations.
 
   # cl-tty-kit itself is dependency-free; cl-prolog and cl-weave are both
   # :cl-tty-kit/test-only dependencies (see cl-tty-kit.asd :depends-on and
@@ -9,33 +18,45 @@
   # this project keeps no vendored copy of either: these two flake inputs
   # are the only source of both, put on CL_SOURCE_REGISTRY by every
   # app/check/devShell below.
-  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog";
+  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.0.1";
   inputs.cl-prolog.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-prolog.inputs.cl-weave.follows = "cl-weave";
   inputs.cl-prolog.inputs.paredit-cli.follows = "paredit-cli";
 
-  inputs.cl-weave.url = "github:nerima-lisp/cl-weave";
+  inputs.cl-weave.url = "github:nerima-lisp/cl-weave/v1.0.0";
   inputs.cl-weave.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-weave.inputs.paredit-cli.follows = "paredit-cli";
 
   # paredit-cli provides structural S-expression tooling for this repo's
   # Lisp sources: a dev-shell binary for agent-driven refactors and a
   # structural-parse lint gate reused in `checks`.
-  inputs.paredit-cli.url = "github:nerima-lisp/paredit-cli";
+  inputs.paredit-cli.url = "github:nerima-lisp/paredit-cli/v1.0.0";
   inputs.paredit-cli.inputs.nixpkgs.follows = "nixpkgs";
 
   # contrib/cl-parser-kit-csi-grammar.lisp's dependency: an opt-in second,
   # independent declarative specification of the ECMA-48 CSI byte-class
   # grammar (see contrib/cl-prolog-csi-grammar.lisp for the first, built on
   # cl-prolog's DCG support instead). Never part of the core build/CI.
-  inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit";
+  inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit/v1.0.0";
   inputs.cl-parser-kit.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-parser-kit.inputs.cl-prolog.follows = "cl-prolog";
   inputs.cl-parser-kit.inputs.cl-weave.follows = "cl-weave";
   inputs.cl-parser-kit.inputs.paredit-cli.follows = "paredit-cli";
 
+  # Drives `nix fmt` and the checks.formatting gate.
+  inputs.treefmt-nix.url = "github:numtide/treefmt-nix";
+  inputs.treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+
   outputs =
-    { self, nixpkgs, cl-prolog, cl-weave, paredit-cli, cl-parser-kit }:
+    {
+      self,
+      nixpkgs,
+      cl-prolog,
+      cl-weave,
+      paredit-cli,
+      cl-parser-kit,
+      treefmt-nix,
+    }:
     let
       # x86_64-darwin is deliberately absent: nixpkgs 26.11 (which
       # nixos-unstable now tracks) dropped support for it outright, so every
@@ -47,8 +68,20 @@
         "aarch64-linux"
         "aarch64-darwin"
       ];
-      forEachSystem = nixpkgs.lib.genAttrs systems;
+      forAllSystems = nixpkgs.lib.genAttrs systems;
       pkgsFor = system: nixpkgs.legacyPackages.${system};
+
+      # treefmt drives `nix fmt` and the checks.formatting gate. Scope is Nix
+      # only: nixfmt is a low-diff, no-footgun formatter, whereas a YAML
+      # formatter mangles the GitHub Actions `on:` key and reformatting
+      # Markdown would churn all 24 docs pages for no gain.
+      treefmtEval = forAllSystems (
+        system:
+        treefmt-nix.lib.evalModule (pkgsFor system) {
+          projectRootFile = "flake.nix";
+          programs.nixfmt.enable = true;
+        }
+      );
 
       # Single source of truth for the project version: parse `:version`
       # straight out of cl-tty-kit.asd so the flake can never drift from the
@@ -89,16 +122,17 @@
       # `nix flake check` warns about when absent; these four apps are this
       # project's documented entry points (README, docs/src/installation.md,
       # RELEASING.md), so they carry one.
-      scriptApp =
-        pkgs: name: script: description:
-        {
-          type = "app";
-          program = "${pkgs.writeShellScript name ''
-            export CL_SOURCE_REGISTRY="${clSourceRegistryFor}''${CL_SOURCE_REGISTRY:-}"
-            exec ${pkgs.sbcl}/bin/sbcl --script scripts/${script} "$@"
-          ''}";
-          meta = { inherit description; };
-        };
+      # `script` is a path relative to the repository root, so the test entry
+      # point can live at the root (run-tests.lisp, per the org standard)
+      # while the other three stay under scripts/.
+      scriptApp = pkgs: name: script: description: {
+        type = "app";
+        program = "${pkgs.writeShellScript name ''
+          export CL_SOURCE_REGISTRY="${clSourceRegistryFor}''${CL_SOURCE_REGISTRY:-}"
+          exec ${pkgs.sbcl}/bin/sbcl --script ${script} "$@"
+        ''}";
+        meta = { inherit description; };
+      };
 
       # `nix build .#docs` -- a hermetic, offline MkDocs (Material) build so
       # publishing to GitHub Pages never depends on a bare `pip install`
@@ -135,9 +169,10 @@
         };
     in
     {
-      formatter = forEachSystem (system: (pkgsFor system).nixpkgs-fmt);
+      # `nix fmt` entry point.
+      formatter = forAllSystems (system: treefmtEval.${system}.config.build.wrapper);
 
-      packages = forEachSystem (
+      packages = forAllSystems (
         system:
         let
           pkgs = pkgsFor system;
@@ -157,7 +192,39 @@
           # `nix build .#coverage-report` -- a hermetic equivalent of
           # `sbcl --script scripts/coverage.lisp`, for CI to upload as an
           # artifact without a local SBCL/submodule checkout.
-          coverage-report = pkgs.runCommand "cl-tty-kit-coverage-report" { nativeBuildInputs = [ pkgs.sbcl ]; } ''
+          coverage-report =
+            pkgs.runCommand "cl-tty-kit-coverage-report" { nativeBuildInputs = [ pkgs.sbcl ]; }
+              ''
+                cp -R ${src} source
+                chmod -R u+w source
+                cd source
+                export HOME="$TMPDIR/home"
+                export XDG_CACHE_HOME="$TMPDIR/cache"
+                mkdir -p "$HOME" "$XDG_CACHE_HOME"
+                export CL_SOURCE_REGISTRY="${clSourceRegistryFor}$PWD//:"
+                timeout 300 sbcl --script scripts/coverage.lisp
+                mkdir -p "$out"
+                cp -R coverage/. "$out/"
+              '';
+
+          docs = mkDocs pkgs;
+        }
+      );
+
+      # Granularity lives here, NOT in extra GitHub Actions jobs: `nix flake
+      # check` evaluates each attribute as its own derivation, in parallel,
+      # with build caching. Add a check here rather than a job in ci.yml.
+      checks = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+          src = sourceFor pkgs;
+        in
+        {
+          # Hermetic equivalent of `sbcl --script run-tests.lisp`. The tree is
+          # copied and made writable because ASDF compiles into it; HOME and
+          # XDG_CACHE_HOME move the fasl cache somewhere writable too.
+          default = pkgs.runCommand "cl-tty-kit-test" { nativeBuildInputs = [ pkgs.sbcl ]; } ''
             cp -R ${src} source
             chmod -R u+w source
             cd source
@@ -165,22 +232,10 @@
             export XDG_CACHE_HOME="$TMPDIR/cache"
             mkdir -p "$HOME" "$XDG_CACHE_HOME"
             export CL_SOURCE_REGISTRY="${clSourceRegistryFor}$PWD//:"
-            timeout 300 sbcl --script scripts/coverage.lisp
-            mkdir -p "$out"
-            cp -R coverage/. "$out/"
+            timeout 600 sbcl --script run-tests.lisp
+            touch $out
           '';
 
-          docs = mkDocs pkgs;
-        }
-      );
-
-      checks = forEachSystem (
-        system:
-        let
-          pkgs = pkgsFor system;
-          src = sourceFor pkgs;
-        in
-        {
           # Structural parse gate over every tracked Lisp source: fails if
           # any .lisp/.asd file is not a balanced S-expression document.
           paredit-lint = paredit-cli.lib.${system}.mkLintCheck {
@@ -188,30 +243,20 @@
             name = "cl-tty-kit-paredit-lint";
           };
 
-          # Hermetic equivalent of `sbcl --script scripts/test.lisp`.
-          test = pkgs.runCommand "cl-tty-kit-test" { nativeBuildInputs = [ pkgs.sbcl ]; } ''
-            cp -R ${src} source
-            chmod -R u+w source
-            cd source
-            export HOME="$TMPDIR/home"
-            export XDG_CACHE_HOME="$TMPDIR/cache"
-            mkdir -p "$HOME" "$XDG_CACHE_HOME"
-            export CL_SOURCE_REGISTRY="${clSourceRegistryFor}$PWD//:"
-            timeout 600 sbcl --non-interactive \
-              --eval '(require :asdf)' \
-              --eval '(asdf:load-asd (truename "cl-tty-kit.asd"))' \
-              --eval '(asdf:test-system :cl-tty-kit)'
-            touch $out
-          '';
+          # Fails `nix flake check` when any tracked Nix file is unformatted,
+          # which is what turns `nix fmt` from a suggestion into a gate.
+          formatting = treefmtEval.${system}.config.build.check self;
 
-          formatting = pkgs.runCommand "cl-tty-kit-nix-formatting" { nativeBuildInputs = [ pkgs.nixpkgs-fmt ]; } ''
-            nixpkgs-fmt --check ${./flake.nix}
-            touch $out
-          '';
+          # packages.docs runs `mkdocs build --strict`, so a broken link or a
+          # page missing from the nav fails here. Without it in `checks` the
+          # docs are only built by docs.yml, which runs *after* the merge to
+          # main - so such a break surfaces as a failed deploy rather than as
+          # a failed pull request.
+          docs = self.packages.${system}.docs;
         }
       );
 
-      devShells = forEachSystem (
+      devShells = forAllSystems (
         system:
         let
           pkgs = pkgsFor system;
@@ -225,7 +270,7 @@
             packages = [
               pkgs.sbcl
               pkgs.git
-              pkgs.nixpkgs-fmt
+              treefmtEval.${system}.config.build.wrapper
               paredit-cli.packages.${system}.default
             ];
             # The only place cl-prolog/cl-weave come from: cl-tty-kit.asd's
@@ -237,18 +282,22 @@
         }
       );
 
-      apps = forEachSystem (
+      apps = forAllSystems (
         system:
         let
           pkgs = pkgsFor system;
         in
         {
-          # Mirrors .github/workflows/ci.yml's nix job, so
+          # Mirrors .github/workflows/ci.yml's check job, so
           # `nix run .#test` (etc.) matches what CI actually runs.
-          test = scriptApp pkgs "cl-tty-kit-test" "test.lisp" "Run the cl-tty-kit test suite";
-          verify = scriptApp pkgs "cl-tty-kit-verify" "verify.lisp" "Run the full release gate: tests, examples, and the source-registry smoke";
-          coverage = scriptApp pkgs "cl-tty-kit-coverage" "coverage.lisp" "Regenerate the sb-cover report under coverage/";
-          default = scriptApp pkgs "cl-tty-kit-test" "test.lisp" "Run the cl-tty-kit test suite";
+          test = scriptApp pkgs "cl-tty-kit-test" "run-tests.lisp" "Run the cl-tty-kit test suite";
+          verify =
+            scriptApp pkgs "cl-tty-kit-verify" "scripts/verify.lisp"
+              "Run the full release gate: tests, examples, and the source-registry smoke";
+          coverage =
+            scriptApp pkgs "cl-tty-kit-coverage" "scripts/coverage.lisp"
+              "Regenerate the sb-cover report under coverage/";
+          default = scriptApp pkgs "cl-tty-kit-test" "run-tests.lisp" "Run the cl-tty-kit test suite";
         }
       );
     };
