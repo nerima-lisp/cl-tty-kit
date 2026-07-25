@@ -4,7 +4,7 @@
   (:import-from #:cl-weave
                 #:expect #:it
                 #:run-mutations #:assert-mutation-score
-                #:run-all)
+                #:run-all #:with-soft-assertions)
   (:export #:run-tests))
 
 (in-package #:cl-tty-kit/weave-mutation-tests)
@@ -81,10 +81,11 @@ notice every one-operator change to the real implementation."
 
 (describe "src/clamp.lisp: CLAMP mutation coverage"
   (it "the case battery matches the live function on every case"
-    (dolist (case '(((5 0 10) 5) ((-5 0 10) 0) ((15 0 10) 10)
-                     ((5 10 0) 10) ((7 7 7) 7) ((0 -3 3) 0)))
-      (destructuring-bind ((value min max) expected) case
-        (expect (cl-tty-kit::clamp value min max) :to-equal expected))))
+    (with-soft-assertions
+      (dolist (case '(((5 0 10) 5) ((-5 0 10) 0) ((15 0 10) 10)
+                       ((5 10 0) 10) ((7 7 7) 7) ((0 -3 3) 0)))
+        (destructuring-bind ((value min max) expected) case
+          (expect (cl-tty-kit::clamp value min max) :to-equal expected)))))
   (it "every mutation of CLAMP's body is killed by the case battery"
     (%assert-full-mutation-kill
      "src/clamp.lisp" 'cl-tty-kit::clamp
@@ -104,6 +105,38 @@ notice every one-operator change to the real implementation."
      '((((cl-tty-kit:make-rect :y 3 :height 4)) 7)
        (((cl-tty-kit:make-rect :y 0 :height 0)) 0)
        (((cl-tty-kit:make-rect :y 10 :height 5)) 15)))))
+
+(describe "src/text-layout.lisp: %SPLIT-ON-CHAR mutation coverage"
+  (it "the case battery matches the live function on every case"
+    (with-soft-assertions
+      (dolist (case '((("a;b;c" #\;) ("a" "b" "c"))
+                       (("" #\;) (""))
+                       ((";a" #\;) ("" "a"))
+                       (("a;" #\;) ("a" ""))
+                       (("no-delim" #\;) ("no-delim"))))
+        (destructuring-bind (arguments expected) case
+          (expect (apply #'cl-tty-kit::%split-on-char arguments) :to-equal expected)))))
+  (it "every mutation of %SPLIT-ON-CHAR's body is killed by the case battery"
+    (%assert-full-mutation-kill
+     "src/text-layout.lisp" 'cl-tty-kit::%split-on-char
+     '((("a;b;c" #\;) ("a" "b" "c"))
+       (("" #\;) (""))
+       ((";a" #\;) ("" "a"))
+       (("a;" #\;) ("a" ""))
+       (("no-delim" #\;) ("no-delim"))))))
+
+(describe "src/clamp.lisp: %PROPER-LIST-P mutation coverage"
+  (it "the case battery matches the live function on every case"
+    (with-soft-assertions
+      (dolist (case '(((nil) t) (((1 2 3)) t) (((1 . 2)) nil)
+                       ((5) nil) (((1 2 . 3)) nil)))
+        (destructuring-bind (arguments expected) case
+          (expect (apply #'cl-tty-kit::%proper-list-p arguments) :to-equal expected)))))
+  (it "every mutation of %PROPER-LIST-P's body is killed by the case battery"
+    (%assert-full-mutation-kill
+     "src/clamp.lisp" 'cl-tty-kit::%proper-list-p
+     '(((nil) t) (((1 2 3)) t) (((1 . 2)) nil)
+       ((5) nil) (((1 2 . 3)) nil)))))
 
 (defun run-tests ()
   "Run every DESCRIBE/IT block registered above and return true iff all of
