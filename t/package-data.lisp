@@ -11,7 +11,9 @@
     (:version . "1.0.0")))
 
 (defparameter +expected-external-symbols+
-  '("TTY-KIT-ERROR"
+  '("CHAR-WIDTH"
+    "STRING-WIDTH"
+    "TTY-KIT-ERROR"
     "UNSUPPORTED-FEATURE"
     "UNSUPPORTED-FEATURE-FEATURE"
     "INVALID-UTF8-SEQUENCE"
@@ -259,8 +261,8 @@
     "FD-WRITE-OCTETS"
     "ANSI-REQUEST-DEVICE-ATTRIBUTES"))
 
-(defparameter +expected-readme-commands+
-  '("sbcl --script scripts/test.lisp"
+(defparameter +expected-development-commands+
+  '("sbcl --script run-tests.lisp"
     "sbcl --script scripts/examples.lisp"
     "sbcl --script scripts/source-registry-smoke.lisp"
     "sbcl --script scripts/coverage.lisp"
@@ -271,10 +273,14 @@
     "(screen-write-string screen 0 0 \"Hi\")"
     "(format t \"~A~%\" (render-screen screen))"))
 
-(defparameter +expected-streaming-readme-fragments+
-  '("(decode-input-chunk decoder (string #\\Esc))"
-    "(decode-input-chunk decoder \"[A\")"))
+;; Package-qualified, because DOCS_STANDARD requires the docs/src examples to
+;; qualify their symbols rather than assume a USE-PACKAGE the reader never saw.
+;; The leading paren is deliberately not part of the fragment: the paste example
+;; wraps its argument list across lines.
+(defparameter +expected-streaming-fragments+
+  '("cl-tty-kit:decode-input-chunk decoder (string #\\Esc)"
+    "cl-tty-kit:decode-input-chunk decoder \"[A\""))
 
-(defparameter +expected-paste-readme-fragments+
-  '("(make-input-decoder :collect-bracketed-paste t)"
-    "(decode-input-chunk decoder \"hello\")"))
+(defparameter +expected-paste-fragments+
+  '("cl-tty-kit:make-input-decoder :collect-bracketed-paste t"
+    "cl-tty-kit:decode-input-chunk decoder \"hello\""))

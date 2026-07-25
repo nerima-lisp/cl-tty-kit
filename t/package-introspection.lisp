@@ -107,9 +107,14 @@
   (do-test-case-bind (entry-case (%expected-system-metadata-cases) (key expected))
     (%assert-system-metadata-case system-metadata key expected)))
 
-(defun %test-package-exports (pkg external-symbols readme-api-symbols)
+(defun %test-package-exports (pkg external-symbols)
   (%assert-external-symbols pkg +expected-external-symbols+)
-  (assert (equal external-symbols readme-api-symbols) ()
-          "README.md API Overview should match package exports exactly.~%Exports: ~S~%README: ~S"
-          external-symbols
-          readme-api-symbols))
+  ;; Equality, not just containment. The export set used to be pinned by
+  ;; README.md's API Overview, which the README could no longer carry once it
+  ;; was capped at 150 lines. +expected-external-symbols+ takes over that role,
+  ;; so adding or removing an export still has to be a deliberate edit to test
+  ;; data rather than something that happens silently.
+  (assert (equal external-symbols (sort (copy-list +expected-external-symbols+) #'string<)) ()
+          "Package exports should match +expected-external-symbols+ exactly.~%Only in package: ~S~%Only in expected: ~S"
+          (set-difference external-symbols +expected-external-symbols+ :test #'string=)
+          (set-difference +expected-external-symbols+ external-symbols :test #'string=)))
