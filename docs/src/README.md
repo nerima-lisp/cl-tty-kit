@@ -106,7 +106,10 @@ without turning into a UI framework or a shell.
 - test-backed public API, with runnable examples in `examples/`
 - PTY support is limited to SBCL
 - maintainer-grade local quality gates are documented in [Quality Gates](quality-gates.md)
-- project governance lives in [Contributing](contributing.md), `CODE_OF_CONDUCT.md`, and `SECURITY.md`
+- build, test and coverage commands live in [Development](development.md); the
+  internal split is described in [Architecture](architecture.md)
+- contribution, conduct and security policy are org-wide and live in
+  [nerima-lisp/.github](https://github.com/nerima-lisp/.github)
 
 ### API stability
 

@@ -2,7 +2,7 @@
 
 `cl-tty-kit` is intentionally scoped to terminal primitives. This page
 records what is intentionally deferred so the project stays honest about its
-boundaries — it mirrors `ROADMAP.md` in the repository.
+boundaries.
 
 ## Deferred on purpose
 

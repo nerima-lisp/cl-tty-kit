@@ -25,7 +25,7 @@ Two layers sit side by side:
     caller who forwards attacker-influenced strings into `PROGRAM`, `ARGS`, or
     `ENVIRONMENT` is choosing to let that data drive process execution.
     `make-pty` does **not** sanitize them — validate or constrain any untrusted
-    input yourself before passing it in. See the repository's `SECURITY.md` if
+    input yourself before passing it in. See the org security policy if
     building a service around this.
 
 ## The pty struct

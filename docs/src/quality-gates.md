@@ -1,9 +1,8 @@
 # Quality Gates
 
 `cl-tty-kit` ships a small API surface, but the bar for changes stays high.
-This page defines the repository-local gates a patch must satisfy before it
-is treated as release-ready. It mirrors `docs/QUALITY-GATES.md` in the
-repository, which remains the canonical copy checked by CI.
+This page is the canonical definition of the repository-local gates a patch
+must satisfy before it is treated as release-ready.
 
 ## Functional requirements
 
@@ -22,7 +21,7 @@ repository, which remains the canonical copy checked by CI.
   explicit timeout
 - tests and examples must run from a clean source-registry discoverability
   check plus the repository bootstrap, not only from an already-loaded image
-- public contracts must be human-readable in `README.md`, not hidden only in
+- public contracts must be human-readable on this site, not hidden only in
   tests or source comments
 - behavior changes in rendering, input event shape, or exported symbols must
   be treated as contract changes and documented in the same patch
@@ -34,7 +33,7 @@ develop`; see [Installation](installation.md#nix)) so `cl-prolog`/`cl-weave`
 are on `CL_SOURCE_REGISTRY`:
 
 ```bash
-sbcl --script scripts/test.lisp
+sbcl --script run-tests.lisp
 sbcl --script scripts/examples.lisp
 sbcl --script scripts/source-registry-smoke.lisp
 sbcl --script scripts/verify.lisp
@@ -72,7 +71,7 @@ local green run on macOS for anything touching the filesystem or a
 subprocess, reproduce CI's environment:
 
 ```bash
-nix build --option sandbox true .#checks.aarch64-darwin.test
+nix build --option sandbox true .#checks.aarch64-darwin.default
 ```
 
 ## Macro usage and file organization
@@ -114,17 +113,43 @@ is omitted (already true for `make-cell`'s default, per the test above),
 not by chasing the source form itself to a covered state -- it cannot
 reach one.
 
+## Documentation gate
+
+Before merging or releasing:
+
+- the [API Reference](api-reference.md) matches the exported symbols, which
+  `t/package-readme.lisp` checks mechanically
+- [Examples](examples.md) lists every runnable file under `examples/`
+- `CHANGELOG.md` records externally visible changes under `[Unreleased]`
+- [Development](development.md) and [Release Process](release-process.md)
+  still describe the current workflow
+
+## Change rejection criteria
+
+Reject or rework a patch when it does any of the following:
+
+- adds backward-compatibility shims instead of clarifying the contract
+- mixes data transformation with terminal side effects in pure modules
+- introduces unbounded waits, hidden global state, or implementation-dependent
+  behavior without an explicit contract
+- expands the public API without tests, examples, and documentation in the
+  same patch
+
 ## What CI actually runs
 
 The gate above is what `.github/workflows/ci.yml` enforces on every push and
-pull request, across an `x86_64-linux` / `aarch64-darwin` matrix for the
-`nix` job (`nix flake check --all-systems`: the hermetic test suite,
-`paredit-lint`, and `nixpkgs-fmt` formatting, evaluated for every platform in
-`flake.nix`'s `systems` list rather than only the runner's own), plus a
-separate `coverage` job. A third `contrib`
-job exercises the opt-in integrations under `contrib/` (see
-[Contrib](contrib.md)) on a best-effort, `continue-on-error` basis —
-Quicklisp network flakiness there never blocks a core merge.
+pull request. The `check` job runs `nix flake check --all-systems` across an
+`x86_64-linux` / `aarch64-darwin` matrix, which evaluates every platform in
+`flake.nix`'s `systems` list rather than only the runner's own, and covers
+four checks: `default` (the hermetic test suite), `paredit-lint` (the
+structural-parse gate), `formatting` (treefmt/nixfmt), and `docs`
+(`mkdocs build --strict`).
+
+Two jobs sit alongside it, each for work the Nix sandbox cannot do. The
+`coverage` job uploads the report as a build artifact. The `contrib` job
+exercises the opt-in integrations under `contrib/` (see [Contrib](contrib.md))
+and needs network access for Quicklisp; it is `continue-on-error` so that
+Quicklisp flakiness never blocks a core merge.
 
 See [Release Process](release-process.md) for how this gate fits into
 cutting a tagged release.

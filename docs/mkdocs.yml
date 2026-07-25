@@ -20,6 +20,12 @@ docs_dir: src
 site_dir: ../site
 use_directory_urls: true
 
+# Also passed as --strict by flake.nix's `packages.docs`. Declaring it here too
+# means `mkdocs serve` applies the same rule, so there is no invocation path
+# that silently tolerates a broken link. Use `mkdocs serve --no-strict` while
+# drafting if you want warnings not to stop the build.
+strict: true
+
 copyright: Copyright &copy; cl-tty-kit contributors — MIT License
 
 theme:
@@ -119,12 +125,17 @@ markdown_extensions:
       permalink: true
       title: On this page
 
+# Six fixed sections, in this order, per the org DOCS_STANDARD. The order
+# tracks the reader's state: Getting Started is for someone who has not run it
+# yet, Guide for someone who has but does not know the design, Reference for
+# someone writing code and looking up one answer, Internals for someone
+# changing the library, Project for someone contributing to it. Readers drop
+# off along that path, so reference and internals sit at the back.
 nav:
   - Home: README.md
   - Getting Started:
       - Installation: installation.md
       - Quick Start: quick-start.md
-      - Compatibility: compatibility.md
   - Guide:
       - Screen and Rendering: screen-and-rendering.md
       - Layout and Rects: layout.md
@@ -137,15 +148,23 @@ nav:
       - Terminal Session and Raw Mode: terminal-session.md
       - PTY: pty.md
       - Logic Engine (Prolog): logic-engine.md
+      - Examples: examples.md
+      - Optional Integrations: contrib.md
   - Reference:
       - API Reference: api-reference.md
       - Conditions: conditions.md
-      - Examples: examples.md
+      - Compatibility: compatibility.md
+  - Internals:
+      - Architecture: architecture.md
       - Feature Audit: feature-audit.md
-  - Contrib:
-      - Optional Integrations: contrib.md
-  - Contributing:
-      - Contributing Guide: contributing.md
+  - Project:
+      - Development: development.md
       - Quality Gates: quality-gates.md
       - Release Process: release-process.md
       - Roadmap: roadmap.md
+
+# docs/notes/ is for measurements worth keeping but not worth publishing.
+# --strict fails on any page missing from the nav, so without this declaration
+# adding such a file would break the build.
+not_in_nav: |
+  notes/

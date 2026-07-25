@@ -6,7 +6,7 @@ reader functions) so callers can inspect *what* failed programmatically, not jus
 read a formatted message.
 
 !!! note "Design principle: signal, don't silently degrade"
-    A repository quality gate (`docs/QUALITY-GATES.md`) requires that
+    A repository quality gate (see [Quality Gates](quality-gates.md)) requires that
     *unsupported implementation paths must signal `unsupported-feature` instead
     of silently degrading*. When a runtime feature cannot be provided, the
     library raises a specific condition rather than returning a plausible-looking

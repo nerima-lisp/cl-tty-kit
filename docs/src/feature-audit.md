@@ -4,8 +4,8 @@ This page is the **enumeration ("洗い出し") phase**: a systematic sweep of t
 capability space of a terminal toolkit, cross-referenced against the
 established libraries in the field (notcurses, crossterm, tcell/termbox,
 blessed, Python `rich`/`prompt_toolkit`, ncurses), with each capability
-marked against `cl-tty-kit`'s actual public API. It mirrors
-`docs/FEATURE-AUDIT.md` in the repository, which remains the canonical copy.
+marked against `cl-tty-kit`'s actual public API. This page is the
+canonical copy; the former `docs/FEATURE-AUDIT.md` duplicate is gone.
 
 Status legend:
 

@@ -16,7 +16,7 @@
 ## Nix
 
 ```sh
-nix develop              # SBCL, Git, paredit-cli, nixpkgs-fmt on PATH; CL_SOURCE_REGISTRY pre-wired
+nix develop              # SBCL, Git, paredit-cli, treefmt on PATH; CL_SOURCE_REGISTRY pre-wired
 nix run .#test           # same scripts CI's `nix` job runs: test / verify / coverage
 nix run .#verify
 nix run .#coverage
@@ -123,7 +123,7 @@ From a Nix shell (`nix develop`), the repository-local scripts double as an
 installation smoke test:
 
 ```sh
-sbcl --script scripts/test.lisp               # run the test suite
+sbcl --script run-tests.lisp                  # run the test suite
 sbcl --script scripts/examples.lisp            # run every example as a smoke test
 sbcl --script scripts/source-registry-smoke.lisp  # fresh source-registry discoverability
 sbcl --script scripts/verify.lisp              # all of the above in one pass

@@ -15,12 +15,20 @@ and navigation; each group links to the guide page that carries the depth.
 Error hierarchy rooted at `tty-kit-error`. See [Conditions](conditions.md) for
 slots and signaling sites.
 
-`tty-kit-error`, `unsupported-feature` (`-feature`), `invalid-utf8-sequence`
-(`-position`, `-octet`, `-reason`), `raw-mode-operation-failed` (`-operation`,
-`-fd`, `-reason`), `pty-operation-failed` (`-operation`, `-pty`, `-reason`),
-`screen-index-out-of-bounds` (`-screen`, `-x`, `-y`, `-width`, `-height`),
-`screen-dimensions-invalid` (`-width`, `-height`), `cursor-parameter-invalid`
-(`-parameter`, `-value`, `-expected`), `unsupported-code-point` (`-code-point`).
+Accessors are written out in full rather than abbreviated to a `-suffix`,
+because the full name is what you type and what you search for.
+
+| Condition | Reader accessors |
+| --- | --- |
+| `tty-kit-error` | — (the root type) |
+| `unsupported-feature` | `unsupported-feature-feature` |
+| `invalid-utf8-sequence` | `invalid-utf8-sequence-position`, `invalid-utf8-sequence-octet`, `invalid-utf8-sequence-reason` |
+| `raw-mode-operation-failed` | `raw-mode-operation-failed-operation`, `raw-mode-operation-failed-fd`, `raw-mode-operation-failed-reason` |
+| `pty-operation-failed` | `pty-operation-failed-operation`, `pty-operation-failed-pty`, `pty-operation-failed-reason` |
+| `screen-index-out-of-bounds` | `screen-index-out-of-bounds-screen`, `screen-index-out-of-bounds-x`, `screen-index-out-of-bounds-y`, `screen-index-out-of-bounds-width`, `screen-index-out-of-bounds-height` |
+| `screen-dimensions-invalid` | `screen-dimensions-invalid-width`, `screen-dimensions-invalid-height` |
+| `cursor-parameter-invalid` | `cursor-parameter-invalid-parameter`, `cursor-parameter-invalid-value`, `cursor-parameter-invalid-expected` |
+| `unsupported-code-point` | `unsupported-code-point-code-point` |
 
 ## Raw mode
 

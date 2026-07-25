@@ -62,13 +62,17 @@ Before tagging a release:
    git diff --check
    ```
 
-4. Review `CHANGELOG.md`: promote the `Unreleased` section to a dated version
-   heading (for example `## 0.5.0 - 2026-07-24`) and leave a fresh empty
-   `## Unreleased` section on top for the next cycle.
+4. Review `CHANGELOG.md`: promote the `[Unreleased]` section to a dated
+   version heading in the Keep a Changelog form `## [0.5.0] - 2026-07-24`,
+   and leave a fresh empty `## [Unreleased]` section on top for the next
+   cycle. The bracketed form is not cosmetic — `release.yml` extracts the
+   section matching the pushed tag as the GitHub Release body, and fails the
+   release outright if no section matches.
 5. Bump `:version` in `cl-tty-kit.asd` to match the release being cut.
-6. Confirm that `README.md` still matches the public API and current
-   examples — `t/package-readme.lisp` checks this mechanically, but review it
-   by hand too.
+6. Confirm that the [API Reference](api-reference.md) still matches the
+   exported symbols and that [Examples](examples.md) still lists every file
+   under `examples/` — `t/package-readme.lisp` checks both mechanically, but
+   review them by hand too.
 7. Smoke-test the examples on a clean SBCL environment if possible.
 8. If `flake.lock` moved (the `cl-prolog`/`cl-weave`/`paredit-cli`/`nixpkgs`
    inputs), confirm `nix flake check --all-systems` still passes against the
@@ -86,8 +90,12 @@ git tag -a v0.5.0 -m "cl-tty-kit 0.5.0"
 git push origin v0.5.0
 ```
 
-Then create the corresponding GitHub release from that tag, using the
-matching `CHANGELOG.md` section as the release notes.
+Pushing the tag is the whole release. `.github/workflows/release.yml` takes
+over from there: it refuses to proceed if the tag disagrees with
+`cl-tty-kit.asd`'s `:version`, re-runs `nix flake check --all-systems`
+against the tagged tree, extracts the matching `CHANGELOG.md` section, and
+publishes the GitHub Release with that section as the body. Creating the
+release by hand is no longer part of the process.
 
 ## Release notes
 
@@ -100,8 +108,9 @@ Release notes should call out:
 
 ## Contract updates
 
-When a public contract changes, update `README.md`, `CHANGELOG.md`, and the
-test suite in the same patch so the new surface is explicit and executable.
+When a public contract changes, update the [API Reference](api-reference.md),
+`CHANGELOG.md`, and the test suite in the same patch so the new surface is
+explicit and executable.
 
 ## Publishing documentation
 
