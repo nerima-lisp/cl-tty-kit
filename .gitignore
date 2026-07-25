@@ -18,6 +18,9 @@ system-index.txt
 # SBCL sb-cover HTML output (regenerate with scripts/coverage.lisp)
 /coverage/
 
+# MkDocs build output (regenerate with `mkdocs build --config-file docs/mkdocs.yml`)
+/site/
+
 # Saved cores and executables
 *.core
 cl-tty-kit
