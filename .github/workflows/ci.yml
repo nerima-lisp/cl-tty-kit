@@ -4,18 +4,33 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   workflow_dispatch:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
+# Supersede in-flight runs for the same PR; never cancel a push to the default
+# branch.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  nix:
+  # One job on purpose. Granularity belongs in the flake's `checks.*`
+  # attributes, which `nix flake check` evaluates in parallel with build
+  # caching. Splitting these into separate GitHub jobs would duplicate that
+  # scheduling and lose cache sharing between them.
+  #
+  # Add a second job ONLY for work the Nix sandbox cannot do: network access,
+  # a real PTY/TTY, artifact upload, or a different runner OS. `coverage` and
+  # `contrib` below are this repository's two such cases.
+  #
+  # The matrix is the "different runner OS" case, not extra granularity:
+  # flake.nix declares aarch64-darwin, and --all-systems only *evaluates* a
+  # foreign system, it never builds it. Without a macOS runner nothing in CI
+  # ever compiles the SBCL raw-mode/PTY layer on Darwin, which is precisely
+  # where this toolkit's platform-specific code lives.
+  check:
     name: nix flake check (${{ matrix.system }})
     strategy:
       fail-fast: false
@@ -28,41 +43,49 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      # persist-credentials: false — this job runs untrusted PR code via
+      # `nix flake check`, and never needs the token, so don't leave it in
+      # .git/config for that code to read.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Set up Nix with Cachix
-        uses: ./.github/actions/setup-nix
+      - uses: ./.github/actions/nix-setup
         with:
           cachix-cache: ${{ vars.CACHIX_CACHE }}
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Runs the hermetic test/paredit-lint/formatting checks from flake.nix
-      # (cl-prolog and cl-weave come from flake inputs, not a vendored copy).
-      # --all-systems evaluates every entry in flake.nix's `systems` list, not
-      # just the runner's own: without it a platform this flake advertises but
-      # can no longer evaluate (as x86_64-darwin became once nixpkgs 26.11
-      # dropped it) stays invisible to CI on both matrix runners. Foreign
-      # systems are evaluated, not built, so this stays cheap.
-      - name: Run flake checks
+      # Runs the SBCL test suite (checks.default), the treefmt formatting gate
+      # (checks.formatting), the structural paredit lint (checks.paredit-lint)
+      # and the mkdocs --strict build (checks.docs).
+      #
+      # --all-systems because flake.nix declares more than one system: without
+      # it a platform this flake advertises but can no longer evaluate (as
+      # x86_64-darwin became once nixpkgs 26.11 dropped it) stays invisible to
+      # CI. Foreign systems are evaluated, not built, so this stays cheap.
+      - name: Check flake
         run: nix flake check --all-systems --print-build-logs
 
+      # Catches stray conflict markers and whitespace errors that compile fine.
       - name: Check diff hygiene
         run: git diff --check
 
+  # Separate job because the Nix sandbox cannot publish artifacts. The report
+  # itself is built hermetically by `nix build .#coverage-report`; only the
+  # upload has to happen outside.
   coverage:
     name: coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Set up Nix with Cachix
-        uses: ./.github/actions/setup-nix
+      - uses: ./.github/actions/nix-setup
         with:
           cachix-cache: ${{ vars.CACHIX_CACHE }}
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate coverage report
         run: |
@@ -71,31 +94,34 @@ jobs:
           cp -rL result coverage-report
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: coverage-report
           path: coverage-report/
           if-no-files-found: error
 
-  # Best-effort: exercises contrib/, which pulls Quicklisp (for clweb) on top
-  # of cl-prolog/cl-weave from this flake's Nix inputs. Kept separate from
-  # `nix` and allowed to fail so that Quicklisp/network flakiness never
-  # blocks a core merge, per contrib/README.md's policy that contrib is
-  # opt-in and isolated from the core build and CI.
+  # Separate job because it needs the network *inside* the build: contrib/
+  # pulls Quicklisp (for clweb) on top of cl-prolog/cl-weave from this flake's
+  # inputs, and the Nix sandbox has none.
+  #
+  # continue-on-error because contrib is opt-in and isolated from the core
+  # build (see contrib/README.md), so Quicklisp/network flakiness must never
+  # block a core merge. This is the only job here allowed to be best-effort;
+  # do not use it to silence a test that is supposed to fail.
   contrib:
     name: contrib (opt-in, best-effort)
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Set up Nix with Cachix
-        uses: ./.github/actions/setup-nix
+      - uses: ./.github/actions/nix-setup
         with:
           cachix-cache: ${{ vars.CACHIX_CACHE }}
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Quicklisp
         run: |
