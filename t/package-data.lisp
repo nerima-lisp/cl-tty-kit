@@ -2,12 +2,12 @@
 
 (defparameter +expected-system-metadata+
   '((:description . "A small Common Lisp terminal toolkit.")
-    (:author . "nerima-lisp")
-    (:maintainer . "nerima-lisp")
+    (:author . "takeokunn <bararararatty@gmail.com>")
+    (:maintainer . "takeokunn <bararararatty@gmail.com>")
     (:license . "MIT")
     (:homepage . "https://github.com/nerima-lisp/cl-tty-kit")
     (:bug-tracker . "https://github.com/nerima-lisp/cl-tty-kit/issues")
-    (:source-control . "git https://github.com/nerima-lisp/cl-tty-kit.git")
+    (:source-control . (:git "https://github.com/nerima-lisp/cl-tty-kit.git"))
     (:version . "1.0.0")))
 
 (defparameter +expected-external-symbols+

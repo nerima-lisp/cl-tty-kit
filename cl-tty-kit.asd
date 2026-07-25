@@ -16,14 +16,17 @@
      (:tree ,(uiop:pathname-directory-pathname *load-truename*))
      :inherit-configuration)))
 
-(asdf:defsystem #:cl-tty-kit
+;;; System names are written as STRINGS, not #:symbols or :keywords: a string
+;;; does not depend on the reader's package state at the moment this file is
+;;; read, and it keeps `grep '"cl-tty-kit/test"'` reliable across the org.
+(asdf:defsystem "cl-tty-kit"
   :description "A small Common Lisp terminal toolkit."
-  :author "nerima-lisp"
-  :maintainer "nerima-lisp"
+  :author "takeokunn <bararararatty@gmail.com>"
+  :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
-  :source-control "git https://github.com/nerima-lisp/cl-tty-kit.git"
+  :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
   :version "1.0.0"
   ;; SB-POSIX is only used by the SBCL-specific raw-mode layer (which requires
   ;; it itself under #+sbcl). Gating the dependency on the feature keeps ASDF
@@ -80,10 +83,15 @@
              (asdf:load-system :cl-tty-kit/test)
              (uiop:symbol-call :cl-tty-kit/test :run-tests)))
 
-(asdf:defsystem #:cl-tty-kit/test
+(asdf:defsystem "cl-tty-kit/test"
   :description "Tests for cl-tty-kit."
-  :author "nerima-lisp"
+  :author "takeokunn <bararararatty@gmail.com>"
+  :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
+  :version "1.0.0"
+  :homepage "https://github.com/nerima-lisp/cl-tty-kit"
+  :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
+  :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
   :serial t
   :depends-on (#:cl-tty-kit #:cl-prolog #:cl-weave)
   :components ((:file "t/package")

@@ -7,8 +7,13 @@
           until (eq form :eof)
           when (and (consp form)
                     (string= "DEFSYSTEM" (symbol-name (first form)))
-                    (string= (string system-name)
-                             (string (second form))))
+                    ;; STRING-EQUAL, not STRING=: system names in the .asd are
+                    ;; now strings ("cl-tty-kit"), while callers pass keywords
+                    ;; (:cl-tty-kit) whose STRING is upcased by the reader.
+                    ;; Comparing case-sensitively would silently match nothing
+                    ;; and fall through to the error below.
+                    (string-equal (string system-name)
+                                  (string (second form))))
             do (return form)
           finally (error "System definition ~S not found." system-name))))
 
@@ -38,7 +43,10 @@
           +expected-system-metadata+))
 
 (defun %assert-system-metadata-case (system-metadata key expected)
-  (assert (string= (getf system-metadata key) expected) ()
+  ;; EQUALP rather than STRING=: :source-control is the structured
+  ;; (:git "https://...") form the org standard requires, so not every
+  ;; metadata value is a string any more.
+  (assert (equalp (getf system-metadata key) expected) ()
           "ASDF metadata ~S should be ~S but was ~S"
           key
           expected
