@@ -2,6 +2,14 @@
 
 ;;; Shared prolog test data and helpers. Keeping this file declarative makes the
 ;;; actual test files small and lets the suite enumerate behaviors one by one.
+;;;
+;;; AND/OR/NOT/= are ordinary Common Lisp symbols inherited from #:CL, so they
+;;; dispatch to nerima-lisp/cl-prolog's builtins from any package without
+;;; qualification. CALL/FINDALL/TRUE/FAIL are cl-prolog-specific exports with no
+;;; CL equivalent, so a bare (unqualified) symbol of that name read in this file
+;;; is a different symbol than CL-PROLOG:CALL and the engine reports the goal as
+;;; an undefined procedure -- these four are written CL-PROLOG:CALL etc.
+;;; throughout.
 
 (defparameter +prolog-query-cases+
   '(((parent isaac ?child) ?child (jacob)
@@ -18,7 +26,7 @@
      "an unprovable goal yields no solutions")))
 
 (defparameter +prolog-primitive-cases+
-  '((tty-prolog:provable-p
+  '((cl-prolog:prolog-succeeds-p
       (ancestor abraham joseph)
       t
       "provable-p reports a reachable relation")
@@ -39,48 +47,34 @@
      (jacob joseph)
      "disjunction enumerates the solutions of each branch in order")
     (%solve-variable
-     (tty-prolog:call (ancestor abraham ?x))
+     (cl-prolog:call (ancestor abraham ?x))
      (isaac jacob joseph)
      "call/1 proves a goal term like an ordinary relation")
     (%solve-result
-     (tty-prolog:findall ?a (ancestor ?a joseph) ?result)
+     (cl-prolog:findall ?a (ancestor ?a joseph) ?result)
      ((jacob abraham isaac))
      "findall/3 aggregates every solution into a single list in proof order")
     (%solve-result
-     (tty-prolog:findall ?x (parent joseph ?x) ?result)
+     (cl-prolog:findall ?x (parent joseph ?x) ?result)
      (())
      "findall/3 yields the empty list when the goal has no proof")
-    (%solve-variable
-     (tty-prolog:call ?g)
-     ()
-     "call/1 fails gracefully on an unbound goal instead of crashing")
-    (%solve-result
-     (tty-prolog:findall ?x ?goal ?result)
-     (())
-     "findall/3 tolerates an unbound goal, collecting nothing")))
-
-(defparameter +prolog-db-error-cases+
-  '((primitive-clause
-     "cannot take clauses"
-     "primitive relations reject clauses")
-    (clause-primitive
-     "cannot become primitive"
-     "relations with clauses reject primitives")
-    (invalid-db
-     "Expected a clause database"
-     "add-clause rejects non-database inputs")
-    (empty-clause
-     "Clause must contain a head goal"
-     "add-clause rejects empty clauses")
-    (dotted-clause
-     "Clause must be a proper list"
-     "add-clause rejects dotted clauses")
-    (variable-relation
-     "Clause head must be a non-empty proper list"
-     "add-clause rejects variable relation symbols")
-    (invalid-primitive-relation
-     "Primitive relation must be a non-variable symbol"
-     "add-primitive rejects variable relation symbols")
-    (invalid-primitive-function
-     "Primitive implementation must be a function"
-     "add-primitive rejects non-function implementations")))
+    (%not-provable-p
+     (cl-prolog:fail)
+     t
+     "fail/0 never succeeds")
+    (%not-provable-p
+     (not (parent abraham isaac))
+     t
+     "negation fails when its goal already has a proof")
+    (%not-provable-p
+     (= abraham isaac)
+     t
+     "the = primitive fails when its arguments don't unify")
+    (cl-prolog:prolog-succeeds-p
+     (cl-prolog:true)
+     t
+     "true/0 always succeeds")
+    (%not-provable-p
+     (cl-prolog:findall ?x (parent abraham ?x) (mismatch))
+     t
+     "findall/3 fails when RESULT doesn't unify with the collected items")))

@@ -11,7 +11,7 @@
 
 (asdf:defsystem #:cl-tty-kit-weave-tests
   :description "Property-based fuzz tests for cl-tty-kit, built on nerima-lisp/cl-weave."
-  :author "takeokunn"
+  :author "nerima-lisp"
   :license "MIT"
   :depends-on (#:cl-tty-kit #:cl-weave #:cl-tty-kit-cl-prolog-csi-grammar)
   :components ((:file "weave-property-tests"))

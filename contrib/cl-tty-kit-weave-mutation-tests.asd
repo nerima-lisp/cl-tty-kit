@@ -14,7 +14,7 @@
 
 (asdf:defsystem #:cl-tty-kit-weave-mutation-tests
   :description "Mutation tests for cl-tty-kit, built on nerima-lisp/cl-weave."
-  :author "takeokunn"
+  :author "nerima-lisp"
   :license "MIT"
   :depends-on (#:cl-tty-kit #:cl-weave)
   :components ((:file "weave-mutation-tests"))

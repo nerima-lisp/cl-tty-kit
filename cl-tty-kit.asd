@@ -1,7 +1,21 @@
+;; The embedded logic engine (see docs/src/logic-engine.md) is
+;; nerima-lisp/cl-prolog itself, vendored as a git submodule at
+;; vendor/cl-prolog rather than distributed by Quicklisp. ASDF
+;; has no reason to know that path exists unless something tells it, so this
+;; system registers its own directory tree before its :DEPENDS-ON is resolved,
+;; the same way scripts/bootstrap.lisp does for every project script -- this
+;; makes plain (asdf:load-system :cl-tty-kit) work standalone, independent of
+;; whichever script or REPL loads this file first.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (asdf:initialize-source-registry
+   `(:source-registry
+     (:tree ,(uiop:pathname-directory-pathname *load-truename*))
+     :inherit-configuration)))
+
 (asdf:defsystem #:cl-tty-kit
-  :description "A small, low-dependency Common Lisp terminal toolkit."
-  :author "takeokunn"
-  :maintainer "takeokunn"
+  :description "A small Common Lisp terminal toolkit."
+  :author "nerima-lisp"
+  :maintainer "nerima-lisp"
   :license "MIT"
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
@@ -11,15 +25,14 @@
   ;; it itself under #+sbcl). Gating the dependency on the feature keeps ASDF
   ;; from failing dependency resolution with a confusing "system sb-posix not
   ;; found" on non-SBCL hosts; instead src/package.lisp reports a clear
-  ;; SBCL-required error. See the README "Compatibility" section.
-  :depends-on (#+sbcl #:sb-posix)
+  ;; SBCL-required error. See the README "Compatibility" section. CL-PROLOG
+  ;; (vendored at vendor/cl-prolog; see the source-registry note above) is
+  ;; itself dependency-free, so this remains the toolkit's complete dependency
+  ;; set.
+  :depends-on (#+sbcl #:sb-posix
+               #:cl-prolog)
   :serial t
   :components ((:file "src/package")
-               (:file "src/prolog-package")
-               (:file "src/prolog-bindings")
-               (:file "src/prolog-db")
-               (:file "src/prolog-engine")
-               (:file "src/prolog-primitives")
                (:file "src/conditions")
                (:file "src/clamp")
                (:file "src/string-empty")
@@ -67,7 +80,7 @@
 
 (asdf:defsystem #:cl-tty-kit/test
   :description "Tests for cl-tty-kit."
-  :author "takeokunn"
+  :author "nerima-lisp"
   :license "MIT"
   :serial t
   :depends-on (#:cl-tty-kit #:cl-weave)

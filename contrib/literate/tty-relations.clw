@@ -7,17 +7,18 @@
 %
 % Tangling extracts the program below; weaving typesets this same source.
 
-@*Relations across two engines. cl-tty-kit ships a compact embedded logic
-engine whose clauses are plain lists of the shape |(head . body)|, with logic
-variables written as |?|-prefixed symbols. The maintained |cl-prolog2| library
-drives a full external ISO Prolog and, happily, uses the very same convention
-for variables. This module captures --- literately --- the one structural
-rewrite that lets a clause cross from the in-image engine to ISO Prolog.
+@*Clauses to an external ISO Prolog. A clause written as a plain Lisp list of
+the shape |(head . body)|, with logic variables as |?|-prefixed symbols, is
+cl-prolog's own clause DSL shape (see the Rule DSL docs) and happens to match
+the convention the maintained |cl-prolog2| library uses to drive a full
+external ISO Prolog. This module captures --- literately --- the one
+structural rewrite that lets such a clause cross from the Lisp-list shape to
+an ISO Prolog rule term.
 
 @l
 (defpackage "CL-TTY-KIT/LITERATE"
   (:use "COMMON-LISP")
-  (:documentation "A clweb-tangled companion to cl-tty-kit-prolog-bridge.")
+  (:documentation "Rewrites Lisp-shaped (HEAD . BODY) clauses into cl-prolog2 ISO rule sexps.")
   (:export "CLAUSE->PROLOG2-RULE" "CLAUSES->PROLOG2-RULES"))
 (in-package "CL-TTY-KIT/LITERATE")
 
@@ -26,7 +27,7 @@ becomes an ISO rule, written |(:- head goal...)|. That is the whole of it.
 
 @l
 (defun clause->prolog2-rule (clause)
-  "Rewrite a cl-tty-kit clause (HEAD . BODY) as a cl-prolog2 rule sexp."
+  "Rewrite a Lisp-shaped clause (HEAD . BODY) as a cl-prolog2 rule sexp."
   (let ((head (first clause))
         (body (rest clause)))
     (if body
@@ -42,5 +43,5 @@ lets the weave point at it.
 
 @l
 (defun clauses->prolog2-rules (clauses)
-  "Rewrite a list of cl-tty-kit clauses into cl-prolog2 rule sexps."
+  "Rewrite a list of Lisp-shaped clauses into cl-prolog2 rule sexps."
   (mapcar #'clause->prolog2-rule clauses))

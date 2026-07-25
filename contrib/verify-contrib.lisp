@@ -1,14 +1,12 @@
-;;;; Verify the optional contrib integrations without requiring an external
-;;;; Prolog binary. Run from the project root:
+;;;; Verify the optional contrib integrations. Run from the project root:
 ;;;;
 ;;;;   git submodule update --init vendor/cl-prolog vendor/cl-weave
 ;;;;   sbcl --script contrib/verify-contrib.lisp
 ;;;;
-;;;; It exercises cl-prolog2 (via the bridge translation layer) and clweb (via
-;;;; tangling the literate module) from Quicklisp, plus the vendored
-;;;; nerima-lisp/cl-prolog DCG grammar and nerima-lisp/cl-weave property tests
-;;;; from vendor/ (both pinned at their latest upstream HEAD; see
-;;;; .gitmodules). The vendored checks are skipped, not failed, when the
+;;;; It exercises clweb (via tangling the literate module) from Quicklisp,
+;;;; plus the vendored nerima-lisp/cl-prolog DCG grammar and nerima-lisp/cl-weave
+;;;; property tests from vendor/ (both pinned at their latest upstream HEAD;
+;;;; see .gitmodules). The vendored checks are skipped, not failed, when the
 ;;;; submodules have not been checked out.
 
 (require :asdf)
@@ -22,24 +20,6 @@
 
 (asdf:initialize-source-registry
  `(:source-registry (:tree ,(namestring *root*)) :inherit-configuration))
-
-;;; --- cl-prolog2 bridge (Quicklisp, latest release) -------------------------
-(handler-bind ((warning #'muffle-warning))
-  (funcall (read-from-string "ql:quickload") :cl-tty-kit-prolog-bridge :silent t))
-(let* ((db (funcall (read-from-string "tty-prolog:install-standard-primitives")
-                    (funcall (read-from-string "tty-prolog:make-clause-db")))))
-  (funcall (read-from-string "tty-prolog:add-clause") db '((parent abraham isaac)))
-  (funcall (read-from-string "tty-prolog:add-clause") db '((parent isaac jacob)))
-  (funcall (read-from-string "tty-prolog:add-clause")
-           db '((ancestor ?a ?b) (parent ?a ?b)))
-  (funcall (read-from-string "tty-prolog:add-clause")
-           db '((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b)))
-  (let ((rules (funcall (read-from-string "tty-prolog-bridge:clause-db-rules") db)))
-    (check "cl-prolog2 bridge loads and translates clauses"
-           (and (member '(parent abraham isaac) rules :test #'equal)
-                (member '(:- (ancestor ?a ?b) (parent ?a ?b)) rules :test #'equal)
-                (member '(:- (ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b))
-                        rules :test #'equal)))))
 
 ;;; --- clweb literate module (Quicklisp, latest release) ---------------------
 (handler-bind ((warning #'muffle-warning))

@@ -9,7 +9,7 @@
 
 (asdf:defsystem #:cl-tty-kit-cl-prolog-csi-grammar
   :description "DCG recognizer for the ECMA-48 CSI grammar, built on nerima-lisp/cl-prolog."
-  :author "takeokunn"
+  :author "nerima-lisp"
   :license "MIT"
   :depends-on (#:cl-prolog)
   :components ((:file "cl-prolog-csi-grammar")))
