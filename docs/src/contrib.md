@@ -2,34 +2,36 @@
 
 `contrib/` holds optional, opt-in integrations that layer external libraries
 on top of the core toolkit. **Nothing here is part of the core `cl-tty-kit`
-build or CI** — the core system's own dependencies are the conditional
-`sb-posix` and `cl-prolog` (see [Compatibility](compatibility.md)). These
-modules pull additional libraries from Quicklisp, or from vendored git
-submodules under `vendor/`, and must be loaded explicitly.
+build or CI** — `:cl-tty-kit`'s own dependency is the conditional `sb-posix`
+(see [Compatibility](compatibility.md)). These modules pull additional
+libraries from Quicklisp, or from `nerima-lisp/cl-prolog`,
+`nerima-lisp/cl-weave`, and `nerima-lisp/cl-parser-kit` via this repository's
+`flake.nix` (`nix develop` puts all three on `CL_SOURCE_REGISTRY`, the same
+as `:cl-tty-kit/test`), and must be loaded explicitly.
 
 !!! note "Why isolate these from core CI"
 
     `.github/workflows/ci.yml` runs `contrib/verify-contrib.lisp` in its own
-    `contrib` job with `continue-on-error: true`. Submodule checkouts and
-    Quicklisp installs introduce network dependencies that a core language
-    toolkit's build should never require — a flaky network never blocks a
-    core merge, and a contrib regression never blocks a core release.
+    `contrib` job with `continue-on-error: true`. Quicklisp installs
+    introduce a network dependency that a core language toolkit's build
+    should never require — a flaky network never blocks a core merge, and a
+    contrib regression never blocks a core release.
 
 ## `cl-tty-kit-cl-prolog-csi-grammar` — DCG grammar via `nerima-lisp/cl-prolog`
 
 A declarative recognizer for the ECMA-48 CSI (Control Sequence Introducer)
 byte-class grammar, built on
 [`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
-(vendored at `vendor/cl-prolog`, pinned to its latest upstream HEAD — it is
-not distributed by Quicklisp). [Input Decoding](input-decoding.md) already
-decodes CSI sequences imperatively on the render loop's hot path; this module
-instead expresses that same sequence shape — zero or more parameter bytes,
-then zero or more intermediate bytes, then exactly one final byte — as a
-`def-dcg-rule` grammar run through `phrase`, demonstrating cl-prolog's DCG
-support independently of the hand-written decoder.
+(pulled from this repository's `flake.nix` inputs — it is not distributed by
+Quicklisp). [Input Decoding](input-decoding.md) already decodes CSI sequences
+imperatively on the render loop's hot path; this module instead expresses
+that same sequence shape — zero or more parameter bytes, then zero or more
+intermediate bytes, then exactly one final byte — as a `def-dcg-rule`
+grammar run through `phrase`, demonstrating cl-prolog's DCG support
+independently of the hand-written decoder.
 
 ```lisp
-(git submodule update --init vendor/cl-prolog) ; once, from the shell
+;; nix develop  -- puts cl-prolog on CL_SOURCE_REGISTRY, once per shell
 (asdf:load-system :cl-tty-kit-cl-prolog-csi-grammar)
 
 (tty-csi-grammar:csi-sequence-valid-p "1;1H")      ; => T   (cursor position)
@@ -37,12 +39,33 @@ support independently of the hand-written decoder.
 (tty-csi-grammar:csi-sequence-valid-p "1;1")        ; => NIL (no final byte)
 ```
 
+## `cl-tty-kit-cl-parser-kit-csi-grammar` — combinator grammar via `nerima-lisp/cl-parser-kit`
+
+A second, independent declarative recognizer for the same ECMA-48 CSI grammar
+as the DCG version above, built on
+[`nerima-lisp/cl-parser-kit`](https://github.com/nerima-lisp/cl-parser-kit)'s
+`seq`/`many`/`type-token` parser combinators instead of cl-prolog's DCG rules
+(pulled from this repository's `flake.nix` inputs — it is not distributed by
+Quicklisp). `contrib/verify-contrib.lisp` cross-checks the two grammars agree
+on every case, the same differential-testing shape
+[the SGR oracle](logic-engine.md#a-real-example-the-sgr-oracle) uses against
+the hand-written decoder.
+
+```lisp
+;; nix develop  -- puts cl-parser-kit on CL_SOURCE_REGISTRY, once per shell
+(asdf:load-system :cl-tty-kit-cl-parser-kit-csi-grammar)
+
+(tty-csi-parser-kit-grammar:csi-sequence-valid-p "1;1H")      ; => T   (cursor position)
+(tty-csi-parser-kit-grammar:csi-sequence-valid-p "38;5;196m") ; => T   (SGR, 256-color fg)
+(tty-csi-parser-kit-grammar:csi-sequence-valid-p "1;1")       ; => NIL (no final byte)
+```
+
 ## `cl-tty-kit-weave-tests` — property-based fuzz tests via `nerima-lisp/cl-weave`
 
 Property-based tests built on
-[`nerima-lisp/cl-weave`](https://github.com/nerima-lisp/cl-weave) (vendored
-at `vendor/cl-weave`, pinned to its latest upstream HEAD — it is not
-distributed by Quicklisp). `cl-weave`'s `it-property` generators
+[`nerima-lisp/cl-weave`](https://github.com/nerima-lisp/cl-weave) (pulled
+from this repository's `flake.nix` inputs — it is not distributed by
+Quicklisp). `cl-weave`'s `it-property` generators
 (`gen-vector`, `gen-string`, `gen-character`, ...) fuzz the UTF-8 octet
 decoder and the public `cl-tty-kit:decode-input` entry point
 (see [Input Decoding](input-decoding.md)) with thousands of arbitrary byte
@@ -53,7 +76,7 @@ that read attacker-controlled PTY bytes. It also regression-tests the DCG CSI
 grammar above.
 
 ```lisp
-(git submodule update --init vendor/cl-weave)  ; once, from the shell
+;; nix develop  -- puts cl-prolog and cl-weave on CL_SOURCE_REGISTRY, once per shell
 (asdf:load-system :cl-tty-kit-weave-tests)
 (cl-tty-kit/weave-property-tests:run-tests)    ; => T on success
 
@@ -80,10 +103,10 @@ full external ISO Prolog (swipl/gprolog/yap) — and tangles to loadable Lisp.
 ## Verifying the contrib
 
 `contrib/verify-contrib.lisp` exercises the Quicklisp-backed clweb tangle
-integration, and additionally exercises the two vendored integrations above
-when their submodules are checked out (skipped, not failed, otherwise):
+integration, and additionally exercises the cl-prolog/cl-parser-kit/cl-weave
+integrations above when ASDF can find the relevant system (skipped, not
+failed, otherwise):
 
 ```bash
-git submodule update --init vendor/cl-prolog vendor/cl-weave  # optional
-sbcl --script contrib/verify-contrib.lisp
+nix develop --command sbcl --script contrib/verify-contrib.lisp
 ```

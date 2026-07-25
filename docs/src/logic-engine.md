@@ -1,12 +1,13 @@
 # Logic Engine (Prolog)
 
 `cl-tty-kit`'s embedded logic engine is
-[`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog) itself —
-vendored as a git submodule at `vendor/cl-prolog` and depended on directly by
-the core system, not reimplemented. The toolkit uses it to express pure
-decision logic as *relations* over ordinary Lisp data tables, keeping the data
-(width ranges, key tables, SGR codes) apart from the classification logic that
-reasons about it.
+[`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog) itself,
+not reimplemented. It is a `:cl-tty-kit/test` dependency, not a `:cl-tty-kit`
+one (see [Installation](installation.md)): the core toolkit ships hand-written
+imperative decoders on its hot paths, and the test suite states part of that
+same classification logic as *relations* over ordinary Lisp data, using the
+engine to cross-check the two independently rather than to decide anything at
+runtime.
 
 !!! note "Why a logic engine in a terminal toolkit?"
     Terminal work is full of small classification problems — which SGR

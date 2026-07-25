@@ -2,6 +2,283 @@
 
 ## Unreleased
 
+## 1.0.0 - 2026-07-26
+
+First stable release. The public API -- the symbols exported from the
+`cl-tty-kit` package, enumerated in `README.md`'s "API Overview" and asserted
+against the live package by `t/package-introspection.lisp` -- is now covered by
+semantic versioning. See the new "API stability" section in `README.md` for
+exactly what the 1.x guarantee does and does not cover. No behavior changed
+between 0.6.0 and this release beyond the entries below; 1.0.0 is a statement
+about the stability of a surface that had already settled, not a rewrite.
+
+- **fix:** `flake.nix` advertised `x86_64-darwin` in its `systems` list, but
+  nixpkgs 26.11 (which the `nixos-unstable` input now tracks) dropped support
+  for that platform outright -- so every flake output for it failed to
+  *evaluate*, not merely to build. CI never saw this because plain `nix flake
+  check` only evaluates outputs for the runner's own system, and neither
+  matrix runner is `x86_64-darwin`. Removed the platform from `systems`, and
+  changed `.github/workflows/ci.yml` to run `nix flake check --all-systems` so
+  the gate now covers every platform the flake claims rather than only the two
+  it happens to run on. Foreign systems are evaluated, not built, so the check
+  stays cheap. Supported platforms are now `x86_64-linux`, `aarch64-linux`,
+  and `aarch64-darwin`
+- **fix:** `t/screen.lisp` ended with a trailing blank line, which
+  `git diff --check` -- step 3 of `RELEASING.md`'s own checklist and a CI step
+  in `ci.yml` -- reports as a defect. It was introduced by the `t/screen.lisp`
+  split below and would have failed the release gate
+- `flake.nix`: give `apps.{default,test,verify,coverage}` a `meta.description`.
+  These are the entry points `README.md`, `docs/src/installation.md`, and
+  `RELEASING.md` all point users at, and they are what `nix flake show`
+  renders; `nix flake check` warned about all four on every system
+- **fix:** `t/pty.lisp` assumed every PTY child could resolve a binary on
+  `PATH`, which is false: `make-pty` forwards `:environment` straight to
+  `sb-ext:run-program`, where `nil` means an *empty* environment rather than
+  an inherited one, so a child spawned with the default has no `PATH` at all
+  and `/bin/sh` falls back to a compiled-in default. That default contains
+  `sleep` on macOS and does not inside the Nix build sandbox, so two cases
+  passed locally and failed only in CI -- and they failed *differently* on
+  consecutive runs, which is what made the shape of the bug visible:
+    - the SIGTERM case spawned `/bin/sleep`, an absolute path the sandbox does
+      not provide at all (only `/bin/sh` and the Nix store exist), and failed
+      with a `:SPAWN` `pty-operation-failed`. It now spawns
+      `/bin/sh -c 'exec sleep 5'` with the inherited environment, so `PATH`
+      resolves coreutils' `sleep`; `exec` matters, since it replaces the shell
+      so nothing is left reading stdin, which is the whole point of the case.
+    - the read case used `printf hello; sleep 0.05`, where the `sleep` existed
+      only to hold the child alive while the parent drained the master side.
+      With `sleep` unavailable the shell exited immediately, and the test
+      became a race the parent could lose -- a dead child makes the next
+      master-side read fail with `EIO` instead of returning `hello`. This was
+      a **pre-existing latent flake**, not a new regression; the `/bin/sleep`
+      failure had simply been masking it by aborting the suite first. Now
+      `printf hello; read ignored`, both shell builtins and so needing no
+      `PATH`, with the child blocking on stdin until `close-pty` closes the
+      master and it sees EOF. The race is gone rather than widened.
+  A new `inherited-environment` helper carries the explanation, and both
+  copies of the quality-gate doc gain a section on the macOS sandbox gap plus
+  the `nix build --option sandbox true .#checks.aarch64-darwin.test` command
+  that reproduces CI locally.
+- docs: `CHANGELOG.md` carried the `nerima-lisp` org adoption survey entry
+  twice, verbatim. Removed the duplicate
+- docs: state the stability contract explicitly, since a 1.0 is a promise and
+  a promise has to be written down. `README.md` and the documentation site's
+  landing page each gain an "API stability" section; `RELEASING.md` and
+  `docs/src/release-process.md` gain "What the version guarantees" / "What
+  requires a 2.0". All four name the same stable surface -- the symbols
+  exported from the `cl-tty-kit` package, plus decoded-event shape and the
+  `tty-kit-error` hierarchy -- and the same exclusions: `%`-prefixed
+  internals, `contrib/`, the build/CI plumbing, and `render-diff`'s exact
+  byte sequence (bounded by `t/properties.lisp`'s visible-result property,
+  not by a fixed transcript)
+
+- extract `examples/event-loop.lisp`'s continuation-passing-style chunk
+  driver (`%chunk-source`/`%decode-chunks-cps`) into `examples/bootstrap.lisp`,
+  shared by every example that decodes a fixed chunk list, and switch
+  `examples/streaming-paste.lisp` to it too -- it had the exact same
+  batch-`dolist` shape `event-loop.lisp` had before this driver existed. A
+  second, independent application of the same CPS restructuring, not a
+  one-off
+- add `contrib/cl-tty-kit-cl-parser-kit-csi-grammar`, adopting
+  [`nerima-lisp/cl-parser-kit`](https://github.com/nerima-lisp/cl-parser-kit)
+  as a new `flake.nix` input: a second, independent declarative recognizer
+  for the ECMA-48 CSI byte-class grammar, built on cl-parser-kit's
+  `seq`/`many`/`type-token` parser combinators rather than
+  `cl-tty-kit-cl-prolog-csi-grammar`'s cl-prolog DCG rules. Wired into
+  `contrib/verify-contrib.lisp`, which now cross-checks both grammars agree
+  on every case in `t/sgr-prolog-oracle.lisp`'s existing scenario set -- the
+  same differential-testing shape that oracle already uses against the
+  hand-written decoder, now applied a second time between two independent
+  declarative specifications. The 22 other `nerima-lisp` repositories
+  surveyed earlier this cycle had no fit against this project's actual
+  needs (a live PTY session, no free-text grammar on cl-tty-kit's own hot
+  path); this one does, as a `contrib/`-only opt-in addition, not a core
+  dependency
+- close the last two real branch-coverage gaps in `src/`: `t/pty.lisp` adds a
+  `/bin/sleep` case for `close-pty`, since a `/bin/sh` child reads stdin and
+  therefore always dies from the stream close alone (SIGPIPE/EOF) before
+  `%close-pty-process` ever needs to send a real signal -- every existing
+  real-process test silently skipped `%terminate-pty-process`'s SIGTERM path
+  entirely; and a case rigging a real stream's `SB-SYS:FD-STREAM-FD` to `-1`
+  (restored before closing, so the real descriptor is never leaked) for
+  `pty-fd`'s "negative fd is not a valid descriptor" guard, which no natural
+  stream state reaches. A systematic re-scan of every `src/` coverage report
+  -- filtered to only lines inside a `defun`/`defmacro` body, so the
+  extensive `&key`/`defstruct`/type-declaration artifact noise documented in
+  `docs/QUALITY-GATES.md` doesn't hide a real one -- now finds zero
+  remaining branch gaps in any function body across all of `src/`; every
+  reported line left uncovered is one of those documented instrumentation
+  artifacts. `src/` moves to 95.36% expr / 96.0% branch
+- `t/mouse.lisp`: collapse `%test-mouse-basic`/`%test-mouse-wheel-and-motion`/
+  `%test-mouse-modifiers` (14 near-identical `%mouse-is` call sites across
+  three functions) into one `+mouse-decode-cases+` data table plus a single
+  `do-test-case-bind`-driven `%test-mouse-decode-cases`, reusing this
+  project's existing table-driven test macro (`t/suite.lisp`) rather than
+  inventing a new one. Also strengthens the assertion: every case now checks
+  `consumed` against the actual report length instead of only the first case
+  hardcoding it
+- close four more real coverage gaps found by a full audit of every
+  remaining `src/` branch/line miss: `format-sparkline`'s and
+  `format-table`'s "argument is not a sequence/list of rows" validation
+  (`src/format.lisp`), `decode-color-report`'s "second `/` channel
+  separator missing" fallback (`src/keys-decode.lisp`), and
+  `%sb-posix-symbol`'s SB-POSIX-symbol-renamed-or-removed portability guard
+  (`src/raw-mode-sbcl.lisp`) were all real, previously-untested error/decline
+  paths -- `src/` moves from 94.8%/94.8% to 95.35%/95.72% (expr/branch).
+  Document, in both copies of the quality-gate doc, a second confirmed
+  `sb-cover` instrumentation artifact beyond top-level data definitions:
+  `&key`/`&optional` default-value init-forms in an ordinary `defun` report
+  as permanently uncovered even when the function is called without that
+  argument (verified against `src/cell.lisp`'s `make-cell`, whose `char`
+  default `%blank-cell` calls on every blank screen cell in this codebase)
+- **fix a regression this session itself introduced**: an earlier
+  `git checkout` used to recover from a botched mechanical edit (see the
+  `%esc` helper entry below) silently reverted `t/keys.lisp` and
+  `t/input.lisp` past two test cases that predated this session and were
+  never committed -- the four-C0-control-key decode cases and both
+  `:normalize-paste-line-endings` cases. Both source features were already
+  correct and already documented in this file and `docs/src/input-decoding.md`;
+  only their tests were lost, silently dropping
+  `src/input-decode-internals.lisp`'s branch coverage from ~98% to ~80%
+  without any test failure to signal it. Restored both, verified against the
+  original diff seen at the start of this session
+- survey all 23 repositories in the `nerima-lisp` GitHub org for adoption
+  candidates beyond the three already in use (`cl-prolog`, `cl-weave`,
+  `paredit-cli`). `cl-process-kit` ("process execution toolkit with timeout
+  and signal escalation") looked closest to `src/pty.lisp`'s
+  `%run-program-with-pty-retry`/`%terminate-pty-process` on paper, but its
+  API (`run`/`spawn`/`communicate`, modeled on `subprocess.run`) is for
+  running a command to completion and capturing output, with no PTY
+  allocation -- it solves a different problem than a live, indefinitely-held
+  interactive PTY session, so adopting it would need a bolted-on adapter
+  rather than a direct fit. `cl-boundary-kit` (swappable protocol/test-double
+  boundaries) could model PTY/raw-mode as a boundary, but `t/pty.lisp`
+  already tests against real pipes and a real `/bin/sh` process, which
+  exercises actual OS behavior more rigorously than a fake would; adopting it
+  would mean a speculative architecture change for no clear gain over the
+  existing file-based pure/OS-facing split the README already documents. The
+  rest of the org (compiler backends, a JSON reader, a shell, a logging
+  toolkit, ...) has no surface overlapping this project's public API. No new
+  dependency added
+- docs: add a `packages.docs` output to `flake.nix` (`nix build .#docs`), a
+  hermetic, fully offline MkDocs (Material) build in `--strict` mode --
+  mirroring `nerima-lisp/cl-weave`'s own `mkDocs` derivation. Rewrite
+  `.github/workflows/docs.yml` around it: the `build` job now uses
+  `./.github/actions/setup-nix` and `nix build .#docs` instead of a bare
+  `pip install mkdocs-material` + `mkdocs build`, and the
+  `configure-pages`/`upload-pages-artifact`/`deploy-pages`/`checkout` actions
+  are SHA-pinned. `docs/src/contributing.md` and `docs/src/release-process.md`
+  are updated to match; there is no more `pip`/`mkdocs serve` local-preview
+  path -- `nix build .#docs` plus opening `result/index.html` is now the only
+  documented way to build and review the site
+- docs: the root README's "Input decoding" section was missing the
+  `:normalize-paste-line-endings` option documented below and already covered
+  in `docs/src/input-decoding.md`; add the matching example and cross-link.
+  Also, `README.md`'s "Testing" section and both copies of the contributing
+  guide (`CONTRIBUTING.md`, `docs/src/contributing.md`) presented
+  `sbcl --script scripts/*.lisp` as runnable from any shell -- true while the
+  submodules provided `cl-prolog`/`cl-weave` on `CL_SOURCE_REGISTRY`, no
+  longer true now that only `nix develop` (or an equivalent `nix run
+  .#test`/`.#verify`/`.#coverage`) does; each now says so
+- input decoding: recognize the four C0 controls above the letter range that a
+  US keyboard reaches via Ctrl plus punctuation -- `Ctrl-\` (28), `Ctrl-]`
+  (29), `Ctrl-^` (30), and `Ctrl-_` (31) -- as named `:special` events
+  (`:control-backslash`, `:control-right-bracket`, `:control-caret`,
+  `:control-underscore`) instead of falling through to an unprintable
+  `:character` event. `Ctrl-_` in particular is a common readline "undo"
+  binding
+- input decoding: add a `:normalize-paste-line-endings` option to
+  `make-input-decoder`. When combined with `:collect-bracketed-paste`, a
+  collected `:paste` event's payload has CRLF and lone CR line endings
+  converted to LF, matching what a terminal that sends CR-terminated paste
+  lines needs to feed cleanly into an LF-delimited buffer. Off by default, so
+  existing callers see no behavior change
+- **breaking (project infrastructure, not the public Lisp API):** move
+  `cl-prolog` off `:cl-tty-kit`'s `:depends-on` onto `:cl-tty-kit/test`'s.
+  `src/*.lisp` never referenced `cl-prolog` -- it is exercised only by
+  `t/sgr-prolog-oracle.lisp` and `t/prolog-*.lisp` as a differential-testing
+  oracle that cross-checks the hand-written SGR/CSI decoders against an
+  independent declarative specification, a pattern `docs/src/logic-engine.md`
+  already documented correctly even though the dependency itself, and
+  several other docs (the root README, `docs/src/installation.md`,
+  `docs/src/api-reference.md`, `docs/src/feature-audit.md`,
+  `docs/src/contrib.md`, `contrib/README.md`), described `cl-prolog` as a
+  core runtime dependency. `:cl-tty-kit` is now dependency-free except for
+  the conditional `#+sbcl sb-posix`; `flake.nix`'s `packages.cl-tty-kit`
+  build no longer needs `lispLibs` for this reason
+- `examples/event-loop.lisp`: restructure the demo loop into explicit
+  continuation-passing style. `%event-loop-drive` takes a `chunk-source`
+  thunk plus `on-event`/`on-done` continuations and drives the decoder one
+  chunk at a time, instead of decoding every demo chunk into a list up front
+  and iterating it -- the shape a real event loop reading a live PTY or
+  socket must take, since there is no "rest of the input" to inspect until
+  the source thunk decides to produce it. `event-loop-example-events` and
+  `event-loop-example-render` now both drive through it; output is unchanged
+  (`t/input.lisp`'s documented event trace and `t/render-examples.lisp`'s
+  independently-computed frame sequence still match exactly)
+- split `t/screen.lisp` (710 lines, the largest test file): the read-oriented
+  `SCREEN` API tests (fill, copy, row-string, scroll, blit, crop, ...) stay
+  there; the mutation/copy-on-write/error-path tests -- everything sharing
+  the "does this operation leave the right cell state, and does it copy a
+  caller-owned style list rather than alias it" theme -- move to the new
+  `t/screen-mutation.lisp`. src/'s largest/most-cited files (`color.lisp`,
+  `pty.lisp`, `text-layout.lisp`, `sixel.lisp`, `keys-decode-internals.lisp`,
+  all under 275 lines) were each read in full and found to already be one
+  cohesive concern with no natural seam, so none of them were split
+- simplify `%decoder-decode-chunk-string` (`src/input-decode.lisp`): remove a
+  dead `when`-guarded buffer-size check that could never run, since
+  re-decoding an already-buffered incomplete UTF-8 tail against zero new
+  octets always yields an empty prefix by `%utf8-decode-prefix`'s own
+  contract (it always decodes everything decodable, leaving only the genuine
+  incomplete suffix behind). Closed with `paredit edit replace`; behavior is
+  unchanged, `src/input-decode.lisp` branch coverage moves from 87.5% to
+  100%
+- add regression coverage for two decoder edge cases that were previously
+  unexercised: feeding a string chunk to `decode-input-chunk` while UTF-8
+  octets are still buffered from a prior octet chunk (both the normal and
+  the final-chunk/truncated-sequence-error cases), and `fd-write-octets`'s
+  internal EINTR retry (mocked via the existing `with-function-overrides`
+  test helper, since the real syscall essentially never returns EINTR in
+  CI) -- `src/pty-fd.lisp` branch coverage moves from 87.5% to 90.6%
+- `t/properties.lisp`: add an allocation-budget regression guard for
+  `render-diff` on a worst-case 80x24 full repaint, using cl-weave's
+  `:to-allocate-under` matcher (a `describe`/`it` block, not one of the
+  existing `it-property` law checks) -- a first use of cl-weave's
+  performance-assertion matchers in this project, catching an accidental
+  O(n^2) blowup or a diff that stops discarding unchanged cells without the
+  flakiness a wall-clock `:to-run-under-ms` budget would have on shared CI
+  runners
+- `t/keys.lisp`/`t/input.lisp`/`t/input-data.lisp`: replace 58 repetitions of
+  `(concatenate 'string (string #\Esc) "...")` with a shared `%esc` helper
+  (`(%esc "...")`), and rebuild the existing `%csi` helper on top of it.
+  Purely a boilerplate reduction; the generated test data is unchanged
+- **breaking (project infrastructure, not the public Lisp API):** remove the
+  `vendor/cl-prolog` and `vendor/cl-weave` git submodules and `.gitmodules`
+  entirely. `nerima-lisp/cl-prolog` and `nerima-lisp/cl-weave` (upgraded to
+  v0.8.0 and v1.0.0 -- its first stable SemVer release -- respectively) are
+  now sourced exclusively through `flake.nix` inputs, which put both on
+  `CL_SOURCE_REGISTRY` for every app/check/devShell. [Nix](https://nixos.org)
+  is now the supported way to build, test, and develop `cl-tty-kit`; without
+  it, `cl-prolog`/`cl-weave` must be made discoverable to ASDF some other way
+  (for example, their own Quicklisp `local-projects` checkouts) since neither
+  ships with this repository anymore -- see the README and
+  `docs/src/installation.md` "Nix"/"Without Nix" sections
+- add `flake.nix` inputs for `nerima-lisp/paredit-cli` alongside the two
+  above. `nix build` now produces a hermetic `cl-tty-kit` package (via
+  `sbcl.buildASDFSystem`) and a `coverage-report` package (a hermetic
+  `scripts/coverage.lisp`); `nix flake check` runs a hermetic test suite, a
+  `paredit-lint` structural-parse gate, and an `nixpkgs-fmt` formatting
+  check; `devShells.default` gains the `paredit-cli` binary and
+  `nixpkgs-fmt`
+- rewrite `.github/workflows/ci.yml` around Nix: the `verify` job (matrix
+  `apt-get`/`brew`-installed SBCL, submodule checkout) is replaced by a `nix`
+  job (`x86_64-linux` / `aarch64-darwin` matrix) running `nix flake check`;
+  `coverage` now builds the `coverage-report` Nix package; `contrib` installs
+  Quicklisp and runs inside `nix develop` instead of a bare `apt-get`-provisioned
+  SBCL. All three jobs, plus `docs.yml`'s jobs, now carry `timeout-minutes`
+- add `.github/actions/setup-nix`, a reusable composite action (Nix install +
+  optional Cachix) shared by `ci.yml`, mirroring `nerima-lisp/cl-prolog`'s own
+
 ## 0.6.0 - 2026-07-25
 
 - add an explicit timeout to `scripts/source-registry-smoke.lisp`, the one

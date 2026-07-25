@@ -204,4 +204,10 @@
                 (setf failed t)))))
       (close-pty pty)
       (is failed)))
+  ;; %SB-POSIX-SYMBOL is a portability guard against an SB-POSIX symbol
+  ;; renamed or removed out from under this code; a name that has never
+  ;; existed there exercises the same path deterministically.
+  (signals (error condition)
+      (cl-tty-kit::%sb-posix-symbol "DEFINITELY-NOT-A-REAL-SB-POSIX-SYMBOL")
+    (is (search "SB-POSIX symbol" (format nil "~A" condition))))
   t)

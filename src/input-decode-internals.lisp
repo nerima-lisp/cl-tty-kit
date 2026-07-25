@@ -42,6 +42,27 @@
 (defun %copy-paste-buffer-string (pending-paste)
   (copy-seq pending-paste))
 
+(defun %normalize-paste-line-endings (string)
+  "Convert CRLF and lone CR line endings in STRING to LF.
+A terminal that sends CR-terminated (or CRLF-terminated) lines inside a
+bracketed paste would otherwise leave a raw CR in a collected :PASTE event's
+payload, which most callers treating it as ordinary LF-delimited buffer text
+do not want."
+  (with-output-to-string (out)
+    (loop with limit = (length string)
+          with index = 0
+          while (< index limit)
+          for ch = (char string index)
+          do (cond
+               ((char= ch #\Return)
+                (write-char #\Newline out)
+                (incf index)
+                (when (and (< index limit) (char= (char string index) #\Newline))
+                  (incf index)))
+               (t
+                (write-char ch out)
+                (incf index))))))
+
 (defun %assert-decoder-buffer-size (decoder size)
   "Signal when SIZE would exceed DECODER's retained-state bound."
   (when (> size (input-decoder-max-pending decoder))
@@ -181,10 +202,12 @@ reverse-order accumulator that %COLLECT-PASTE-EVENTS threads through the loop."
     (:emit
      (cons (second action) events))
     (:finish-paste
-     (push (%make-paste-event
-            (%copy-paste-buffer-string
-             (input-decoder-pending-paste decoder)))
-           events)
+     (let ((text (%copy-paste-buffer-string (input-decoder-pending-paste decoder))))
+       (push (%make-paste-event
+              (if (input-decoder-normalize-paste-line-endings-p decoder)
+                  (%normalize-paste-line-endings text)
+                  text))
+             events))
      (setf (input-decoder-pending-paste decoder) nil)
      events)
     (:flush-paste

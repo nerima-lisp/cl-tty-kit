@@ -8,16 +8,18 @@
 (defvar *cl-tty-kit-run-example-on-load* t)
 
 (defun streaming-paste-example ()
-  (let ((decoder (cl-tty-kit:make-input-decoder :collect-bracketed-paste t))
-        (events '()))
-    (dolist (chunk (list (concatenate 'string (string #\Esc) "[200~he")
-                         "llo"
-                         (concatenate 'string (string #\Esc) "[201~")))
-      (setf events
-            (nconc events
-                   (copy-list (cl-tty-kit:decode-input-chunk decoder chunk)))))
-    (nconc events
-           (copy-list (cl-tty-kit:flush-input-decoder decoder)))))
+  "Decode a bracketed paste split across chunks, in continuation-passing
+style via %DECODE-CHUNKS-CPS (bootstrap.lisp): each chunk is fed to the
+decoder as if it just arrived from a live PTY or socket read, rather than
+concatenated and decoded as one batch up front."
+  (let ((events '()))
+    (%decode-chunks-cps
+     (%chunk-source (list (concatenate 'string (string #\Esc) "[200~he")
+                          "llo"
+                          (concatenate 'string (string #\Esc) "[201~")))
+     (lambda (event) (push event events))
+     (lambda ()))
+    (nreverse events)))
 
 (defun run-streaming-paste-example ()
   (dolist (event (streaming-paste-example))

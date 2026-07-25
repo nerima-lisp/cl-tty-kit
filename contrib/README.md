@@ -1,26 +1,28 @@
 # cl-tty-kit contrib
 
 Optional, opt-in integrations that layer external libraries on top of the core
-toolkit. **Nothing here is part of the core `cl-tty-kit` build or CI** — the core
-system's own dependencies are `sb-posix` and `cl-prolog` (see the root
-README's "Compatibility" section). These modules pull additional libraries
-from Quicklisp, or from the vendored git submodules under `vendor/`, and are
-loaded explicitly.
+toolkit. **Nothing here is part of the core `cl-tty-kit` build or CI** —
+`:cl-tty-kit`'s own dependency is `sb-posix` (see the root README's
+"Compatibility" section). These modules pull additional libraries from
+Quicklisp, or from `nerima-lisp/cl-prolog`, `nerima-lisp/cl-weave`, and
+`nerima-lisp/cl-parser-kit` via this repository's `flake.nix` (`nix develop`
+puts all three on `CL_SOURCE_REGISTRY`, the same as `:cl-tty-kit/test`), and
+are loaded explicitly.
 
 ## `cl-tty-kit-cl-prolog-csi-grammar` — DCG grammar via nerima-lisp/cl-prolog
 
 A declarative recognizer for the ECMA-48 CSI (Control Sequence Introducer)
 byte-class grammar, built on [`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
-(vendored at `vendor/cl-prolog`, pinned to its latest upstream HEAD — it is
-not distributed by Quicklisp). `src/input-decode.lisp` already decodes CSI
-sequences imperatively on the render loop's hot path; this module instead
-expresses that same sequence shape — zero or more parameter bytes, then zero
-or more intermediate bytes, then exactly one final byte — as a `def-dcg-rule`
+(pulled from this repository's `flake.nix` inputs — it is not distributed by
+Quicklisp). `src/input-decode.lisp` already decodes CSI sequences
+imperatively on the render loop's hot path; this module instead expresses
+that same sequence shape — zero or more parameter bytes, then zero or more
+intermediate bytes, then exactly one final byte — as a `def-dcg-rule`
 grammar run through `phrase`, demonstrating cl-prolog's DCG support
 independently of the hand-written decoder.
 
 ```lisp
-(git submodule update --init vendor/cl-prolog) ; once, from the shell
+;; nix develop  -- puts cl-prolog on CL_SOURCE_REGISTRY, once per shell
 (asdf:load-system :cl-tty-kit-cl-prolog-csi-grammar)
 
 (tty-csi-grammar:csi-sequence-valid-p "1;1H")     ; => T   (cursor position)
@@ -28,11 +30,31 @@ independently of the hand-written decoder.
 (tty-csi-grammar:csi-sequence-valid-p "1;1")       ; => NIL (no final byte)
 ```
 
+## `cl-tty-kit-cl-parser-kit-csi-grammar` — combinator grammar via nerima-lisp/cl-parser-kit
+
+A second, independent declarative recognizer for the same ECMA-48 CSI grammar
+as the DCG version above, built on
+[`nerima-lisp/cl-parser-kit`](https://github.com/nerima-lisp/cl-parser-kit)'s
+`seq`/`many`/`type-token` parser combinators instead of cl-prolog's DCG rules
+(pulled from this repository's `flake.nix` inputs — it is not distributed by
+Quicklisp). `contrib/verify-contrib.lisp` cross-checks the two grammars agree
+on every case, the same differential-testing shape `t/sgr-prolog-oracle.lisp`
+uses against the hand-written decoder.
+
+```lisp
+;; nix develop  -- puts cl-parser-kit on CL_SOURCE_REGISTRY, once per shell
+(asdf:load-system :cl-tty-kit-cl-parser-kit-csi-grammar)
+
+(tty-csi-parser-kit-grammar:csi-sequence-valid-p "1;1H")      ; => T   (cursor position)
+(tty-csi-parser-kit-grammar:csi-sequence-valid-p "38;5;196m") ; => T   (SGR, 256-color fg)
+(tty-csi-parser-kit-grammar:csi-sequence-valid-p "1;1")       ; => NIL (no final byte)
+```
+
 ## `cl-tty-kit-weave-tests` — property-based fuzz tests via nerima-lisp/cl-weave
 
 Property-based tests built on [`nerima-lisp/cl-weave`](https://github.com/nerima-lisp/cl-weave)
-(vendored at `vendor/cl-weave`, pinned to its latest upstream HEAD — it is
-not distributed by Quicklisp). `cl-weave`'s `it-property` generators
+(pulled from this repository's `flake.nix` inputs — it is not distributed by
+Quicklisp). `cl-weave`'s `it-property` generators
 (`gen-vector`, `gen-string`, `gen-character`, ...) fuzz `src/utf8.lisp`'s
 octet decoder and the public `cl-tty-kit:decode-input` entry point with
 thousands of arbitrary byte sequences, asserting the documented contract:
@@ -42,7 +64,7 @@ that read attacker-controlled PTY bytes. It also regression-tests the DCG CSI
 grammar above.
 
 ```lisp
-(git submodule update --init vendor/cl-weave)  ; once, from the shell
+;; nix develop  -- puts cl-prolog and cl-weave on CL_SOURCE_REGISTRY, once per shell
 (asdf:load-system :cl-tty-kit-weave-tests)
 (cl-tty-kit/weave-property-tests:run-tests)    ; => T on success
 
@@ -66,10 +88,10 @@ loadable Lisp.
 ## Verifying the contrib
 
 `contrib/verify-contrib.lisp` exercises the Quicklisp-backed clweb tangle
-integration, and additionally exercises the two vendored integrations above
-when their submodules are checked out (skipped, not failed, otherwise):
+integration, and additionally exercises the cl-prolog/cl-parser-kit/cl-weave
+integrations above when ASDF can find the relevant system (skipped, not
+failed, otherwise):
 
 ```bash
-git submodule update --init vendor/cl-prolog vendor/cl-weave  # optional
-sbcl --script contrib/verify-contrib.lisp
+nix develop --command sbcl --script contrib/verify-contrib.lisp
 ```

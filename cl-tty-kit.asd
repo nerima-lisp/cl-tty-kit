@@ -1,10 +1,14 @@
-;; The embedded logic engine (see docs/src/logic-engine.md) is
-;; nerima-lisp/cl-prolog itself, vendored as a git submodule at
-;; vendor/cl-prolog rather than distributed by Quicklisp. ASDF
-;; has no reason to know that path exists unless something tells it, so this
-;; system registers its own directory tree before its :DEPENDS-ON is resolved,
-;; the same way scripts/bootstrap.lisp does for every project script -- this
-;; makes plain (asdf:load-system :cl-tty-kit) work standalone, independent of
+;; nerima-lisp/cl-prolog and nerima-lisp/cl-weave (see docs/src/logic-engine.md
+;; and t/sgr-prolog-oracle.lisp) are both used only by :CL-TTY-KIT/TEST below --
+;; cl-prolog as a differential-testing oracle cross-checking the hand-written
+;; SGR/CSI decoders, cl-weave as the test framework -- never by :CL-TTY-KIT
+;; itself, which stays dependency-free (see its :DEPENDS-ON). Neither is
+;; distributed by Quicklisp; `nix develop`/`nix build`/`nix flake check`
+;; resolve both from this project's flake inputs onto CL_SOURCE_REGISTRY (see
+;; flake.nix), which :INHERIT-CONFIGURATION below picks up. This system
+;; registers its own directory tree before its :DEPENDS-ON is resolved, the
+;; same way scripts/bootstrap.lisp does for every project script -- this makes
+;; plain (asdf:load-system :cl-tty-kit) work standalone, independent of
 ;; whichever script or REPL loads this file first.
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (asdf:initialize-source-registry
@@ -20,17 +24,15 @@
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control "git https://github.com/nerima-lisp/cl-tty-kit.git"
-  :version "0.6.0"
+  :version "1.0.0"
   ;; SB-POSIX is only used by the SBCL-specific raw-mode layer (which requires
   ;; it itself under #+sbcl). Gating the dependency on the feature keeps ASDF
   ;; from failing dependency resolution with a confusing "system sb-posix not
   ;; found" on non-SBCL hosts; instead src/package.lisp reports a clear
-  ;; SBCL-required error. See the README "Compatibility" section. CL-PROLOG
-  ;; (vendored at vendor/cl-prolog; see the source-registry note above) is
-  ;; itself dependency-free, so this remains the toolkit's complete dependency
-  ;; set.
-  :depends-on (#+sbcl #:sb-posix
-               #:cl-prolog)
+  ;; SBCL-required error. See the README "Compatibility" section. This is the
+  ;; toolkit's complete dependency set -- see the source-registry note above
+  ;; for why CL-PROLOG belongs to :CL-TTY-KIT/TEST instead.
+  :depends-on (#+sbcl #:sb-posix)
   :serial t
   :components ((:file "src/package")
                (:file "src/conditions")
@@ -83,7 +85,7 @@
   :author "nerima-lisp"
   :license "MIT"
   :serial t
-  :depends-on (#:cl-tty-kit #:cl-weave)
+  :depends-on (#:cl-tty-kit #:cl-prolog #:cl-weave)
   :components ((:file "t/package")
                (:file "t/package-data")
                (:file "t/suite")
@@ -110,6 +112,7 @@
                (:file "t/session")
                (:file "t/pty")
                (:file "t/screen")
+               (:file "t/screen-mutation")
                (:file "t/box")
                (:file "t/render-examples")
                (:file "t/render-core")

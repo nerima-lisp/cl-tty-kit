@@ -11,6 +11,11 @@ the core API focused, testable, and easy to embed in terminal applications.
 
 ## Verification
 
+The scripts below assume `cl-prolog`/`cl-weave` are already on
+`CL_SOURCE_REGISTRY`; run them inside `nix develop`, or use the equivalent
+`nix run .#test` / `.#verify` / `.#coverage` shortcuts (see the root
+`README.md` "Installation" section).
+
 Run the repository-local test entrypoint from the project root:
 
 ```bash

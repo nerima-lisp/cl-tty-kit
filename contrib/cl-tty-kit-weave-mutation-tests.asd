@@ -1,14 +1,15 @@
 ;;;; Optional contrib system. NOT part of the core cl-tty-kit build or CI.
 ;;;;
-;;;; Mutation tests built on the vendored nerima-lisp/cl-weave
-;;;; (vendor/cl-weave, latest HEAD): mutate a pure function's body (read live
-;;;; from its SRC/ source file) and confirm the same case battery a unit test
-;;;; would use kills every mutation. This measures whether the tests actually
-;;;; notice a wrong implementation, which SB-COVER line/branch coverage alone
-;;;; cannot show. Load and run it explicitly once the submodules are checked
-;;;; out:
+;;;; Mutation tests built on nerima-lisp/cl-weave: mutate a pure function's
+;;;; body (read live from its SRC/ source file) and confirm the same case
+;;;; battery a unit test would use kills every mutation. This measures
+;;;; whether the tests actually notice a wrong implementation, which
+;;;; SB-COVER line/branch coverage alone cannot show. Load and run it
+;;;; explicitly from inside a Nix dev shell, which puts cl-prolog and
+;;;; cl-weave on CL_SOURCE_REGISTRY (see flake.nix
+;;;; devShells.default.shellHook):
 ;;;;
-;;;;   git submodule update --init vendor/cl-prolog vendor/cl-weave
+;;;;   nix develop
 ;;;;   (asdf:load-system :cl-tty-kit-weave-mutation-tests)
 ;;;;   (cl-tty-kit/weave-mutation-tests:run-tests)
 

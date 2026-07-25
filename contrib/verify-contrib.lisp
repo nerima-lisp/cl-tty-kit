@@ -1,13 +1,16 @@
-;;;; Verify the optional contrib integrations. Run from the project root:
+;;;; Verify the optional contrib integrations. Run from the project root
+;;;; inside a Nix dev shell, which puts nerima-lisp/cl-prolog and
+;;;; nerima-lisp/cl-weave on CL_SOURCE_REGISTRY (see flake.nix
+;;;; devShells.default.shellHook):
 ;;;;
-;;;;   git submodule update --init vendor/cl-prolog vendor/cl-weave
-;;;;   sbcl --script contrib/verify-contrib.lisp
+;;;;   nix develop --command sbcl --script contrib/verify-contrib.lisp
 ;;;;
 ;;;; It exercises clweb (via tangling the literate module) from Quicklisp,
-;;;; plus the vendored nerima-lisp/cl-prolog DCG grammar and nerima-lisp/cl-weave
-;;;; property tests from vendor/ (both pinned at their latest upstream HEAD;
-;;;; see .gitmodules). The vendored checks are skipped, not failed, when the
-;;;; submodules have not been checked out.
+;;;; plus the nerima-lisp/cl-prolog DCG grammar, the nerima-lisp/cl-parser-kit
+;;;; combinator grammar, and nerima-lisp/cl-weave property tests. The
+;;;; cl-prolog/cl-parser-kit/cl-weave checks are skipped, not failed, when
+;;;; ASDF cannot find the relevant system (i.e. outside a Nix dev shell with
+;;;; CL_SOURCE_REGISTRY pointed at none of them).
 
 (require :asdf)
 (load (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname)))
@@ -35,26 +38,48 @@
                 (equal '(:- (ancestor ?a ?b) (parent ?a ?b))
                        (funcall fn '((ancestor ?a ?b) (parent ?a ?b))))))))
 
-;;; --- vendored nerima-lisp/cl-prolog DCG grammar (vendor/, latest HEAD) -------
-(if (probe-file (merge-pathnames "vendor/cl-prolog/cl-prolog.asd" *root*))
+;;; --- nerima-lisp/cl-prolog DCG grammar --------------------------------------
+(if (asdf:find-system :cl-prolog nil)
     (progn
       (handler-bind ((warning #'muffle-warning))
         (asdf:load-system :cl-tty-kit-cl-prolog-csi-grammar))
-      (check "vendor/cl-prolog DCG grammar accepts a well-formed CSI body"
+      (check "cl-prolog DCG grammar accepts a well-formed CSI body"
              (funcall (read-from-string "tty-csi-grammar:csi-sequence-valid-p")
                       "38;5;196m"))
-      (check "vendor/cl-prolog DCG grammar rejects an unterminated CSI body"
+      (check "cl-prolog DCG grammar rejects an unterminated CSI body"
              (not (funcall (read-from-string "tty-csi-grammar:csi-sequence-valid-p")
                            "1;1"))))
-    (format t "~&[SKIP] vendor/cl-prolog not checked out (git submodule update --init)~%"))
+    (format t "~&[SKIP] cl-prolog not on CL_SOURCE_REGISTRY (run inside `nix develop`)~%"))
 
-;;; --- vendored nerima-lisp/cl-weave property tests (vendor/, latest HEAD) -----
-(if (probe-file (merge-pathnames "vendor/cl-weave/cl-weave.asd" *root*))
+;;; --- nerima-lisp/cl-parser-kit combinator grammar ---------------------------
+(if (asdf:find-system :cl-parser-kit nil)
+    (progn
+      (handler-bind ((warning #'muffle-warning))
+        (asdf:load-system :cl-tty-kit-cl-parser-kit-csi-grammar))
+      (check "cl-parser-kit combinator grammar accepts a well-formed CSI body"
+             (funcall (read-from-string "tty-csi-parser-kit-grammar:csi-sequence-valid-p")
+                      "38;5;196m"))
+      (check "cl-parser-kit combinator grammar rejects an unterminated CSI body"
+             (not (funcall (read-from-string "tty-csi-parser-kit-grammar:csi-sequence-valid-p")
+                           "1;1")))
+      ;; The two independent grammars -- Prolog DCG and parser combinators --
+      ;; must agree whenever both are loaded, the same differential-testing
+      ;; contract SGR-PROLOG-ORACLE holds against the hand-written decoder.
+      (when (asdf:find-system :cl-prolog nil)
+        (dolist (case '("1;1H" "38;5;196m" "?25h" "" "1;1" "1H2" "A" "9x;1"
+                        ">0;276;0c" "1;1;104;200u"))
+          (check (format nil "grammars agree on ~S" case)
+                 (eq (and (funcall (read-from-string "tty-csi-grammar:csi-sequence-valid-p") case) t)
+                     (and (funcall (read-from-string "tty-csi-parser-kit-grammar:csi-sequence-valid-p") case) t))))))
+    (format t "~&[SKIP] cl-parser-kit not on CL_SOURCE_REGISTRY (run inside `nix develop`)~%"))
+
+;;; --- nerima-lisp/cl-weave property tests ------------------------------------
+(if (asdf:find-system :cl-weave nil)
     (progn
       (handler-bind ((warning #'muffle-warning))
         (asdf:load-system :cl-tty-kit-weave-tests))
-      (check "vendor/cl-weave property-based decoder fuzz suite passes"
+      (check "cl-weave property-based decoder fuzz suite passes"
              (funcall (read-from-string "cl-tty-kit/weave-property-tests:run-tests"))))
-    (format t "~&[SKIP] vendor/cl-weave not checked out (git submodule update --init)~%"))
+    (format t "~&[SKIP] cl-weave not on CL_SOURCE_REGISTRY (run inside `nix develop`)~%"))
 
 (format t "~&==CONTRIB-OK==~%")

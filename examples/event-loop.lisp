@@ -23,14 +23,11 @@
   previous-cursor)
 
 (defun event-loop-example-events ()
-  (let ((decoder (cl-tty-kit:make-input-decoder :collect-bracketed-paste t))
-        (events '()))
-    (dolist (chunk +event-loop-demo-chunks+)
-      (setf events
-            (nconc events
-                   (copy-list (cl-tty-kit:decode-input-chunk decoder chunk)))))
-    (nconc events
-           (copy-list (cl-tty-kit:flush-input-decoder decoder)))))
+  (let ((events '()))
+    (%decode-chunks-cps (%chunk-source +event-loop-demo-chunks+)
+                        (lambda (event) (push event events))
+                        (lambda ()))
+    (nreverse events)))
 
 (defun %event-loop-event-label (event)
   (case (cl-tty-kit:key-event-type event)
@@ -112,9 +109,11 @@
                                                       :bracketed-paste t
                                                       :keyboard-enhancements 1)
       (%event-loop-render-frame state stream)
-      (dolist (event (event-loop-example-events))
-        (%event-loop-advance state event)
-        (%event-loop-render-frame state stream)))))
+      (%decode-chunks-cps (%chunk-source +event-loop-demo-chunks+)
+                          (lambda (event)
+                            (%event-loop-advance state event)
+                            (%event-loop-render-frame state stream))
+                          (lambda ())))))
 
 (defun run-event-loop-example ()
   (format t "~A~%" (event-loop-example-render)))

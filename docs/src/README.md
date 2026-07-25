@@ -101,11 +101,29 @@ without turning into a UI framework or a shell.
 
 ## Status
 
+- **stable**: the public API is covered by the semantic-versioning guarantee below
 - requires SBCL (see [Compatibility](compatibility.md)) and is intentionally small
 - test-backed public API, with runnable examples in `examples/`
 - PTY support is limited to SBCL
 - maintainer-grade local quality gates are documented in [Quality Gates](quality-gates.md)
 - project governance lives in [Contributing](contributing.md), `CODE_OF_CONDUCT.md`, and `SECURITY.md`
+
+### API stability
+
+From 1.0.0 onward `cl-tty-kit` follows [semantic versioning](https://semver.org).
+The stable surface is precisely the symbols exported from the `cl-tty-kit`
+package — every one is listed in the [API Reference](api-reference.md) and
+asserted against the live package by `t/package-introspection.lisp`, so that
+list cannot silently drift from the code.
+
+Within the 1.x series exported symbols will not be removed or renamed and
+existing arguments will not change meaning; new functionality arrives as added
+symbols or added `&key` arguments. The shape of decoded input events and the
+condition hierarchy rooted at `tty-kit-error` (see [Conditions](conditions.md))
+are part of that contract. Not covered: `%`-prefixed internals, the opt-in
+integrations under [Contrib](contrib.md), and the repository's own build and CI
+plumbing. See [Release Process](release-process.md) for what would require a
+2.0.
 
 ## Non-goals
 

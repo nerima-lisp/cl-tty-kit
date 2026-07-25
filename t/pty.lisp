@@ -15,6 +15,18 @@
                                (apply #'concatenate 'string (nreverse chunks)))))))
 
 #+sbcl
+(defun inherited-environment ()
+  "The current process environment, for a child that must resolve a binary on PATH.
+MAKE-PTY forwards :ENVIRONMENT straight to SB-EXT:RUN-PROGRAM, where NIL means an
+*empty* environment rather than an inherited one -- so a PTY child spawned with
+the default has no PATH, and any `sh -c' body calling a non-builtin exits 127.
+That stays invisible on a developer machine because sh then falls back to a
+compiled-in default PATH that happens to contain the binary; inside the Nix build
+sandbox, and therefore in CI, it does not. Prefer shell builtins where possible
+and this environment where a real binary is genuinely required."
+  (sb-ext:posix-environ))
+
+#+sbcl
 (defmacro with-function-overrides ((&rest bindings) &body body)
   (let ((saved-bindings
           (loop for (name replacement) in bindings
@@ -184,6 +196,27 @@
     (is (eq pty (close-pty pty)))
     (is (null (pty-process pty)))
     (is (null (pty-stream pty))))
+  ;; /bin/sh reads stdin, so closing its PTY stream alone (SIGPIPE/EOF) ends
+  ;; it before %CLOSE-PTY-PROCESS ever needs to send a real signal -- the two
+  ;; cases above never exercise %TERMINATE-PTY-PROCESS's actual SIGTERM path.
+  ;; sleep(1) ignores stdin entirely, so it survives the stream close and
+  ;; forces %CLOSE-PTY-PROCESS through %WAIT-FOR-PROCESS-EXIT returning NIL
+  ;; once, then %TERMINATE-PTY-PROCESS's real SIGTERM successfully ending it.
+  ;;
+  ;; `exec sleep' through /bin/sh, rather than spawning "/bin/sleep" directly:
+  ;; /bin/sh is the only absolute path the Nix build sandbox provides, and
+  ;; sleep(1) lives in coreutils on PATH there, not at /bin/sleep. The `exec'
+  ;; matters too: it replaces the shell, so nothing is left reading stdin,
+  ;; which is the entire point of this case. INHERITED-ENVIRONMENT is what
+  ;; actually puts coreutils on PATH -- see its docstring; without it the
+  ;; shell cannot find sleep and exits 127 instead of blocking.
+  (let* ((pty (make-pty :program "/bin/sh"
+                        :args '("-c" "exec sleep 5")
+                        :environment (inherited-environment)))
+         (process (pty-process pty)))
+    (is (sb-ext:process-alive-p process))
+    (is (eq pty (close-pty pty)))
+    (is (not (sb-ext:process-alive-p process))))
   (let* ((stream (make-string-input-stream "abc"))
          (pty (cl-tty-kit::%make-pty :process nil :stream stream)))
     (is (eq pty (close-pty pty)))
@@ -233,8 +266,16 @@
           (pty-write closed-pty "x")))
       (close-pty vector-pty))
     (close-pty write-pty))
+  ;; `printf' and `read' are both shell builtins, so this needs no PATH (see
+  ;; INHERITED-ENVIRONMENT). The trailing `read' is what keeps the child alive
+  ;; while the parent drains the master side: an earlier `sleep 0.05' here was
+  ;; a timing bet that the child outlives the read loop, and it lost that bet
+  ;; whenever sleep(1) was unavailable and the shell exited immediately --
+  ;; a dead child makes the next master-side read fail with EIO rather than
+  ;; return "hello". Blocking on stdin instead removes the race entirely: the
+  ;; child now lives until CLOSE-PTY closes the master and it sees EOF.
   (let ((pty (make-pty :program "/bin/sh"
-                       :args '("-c" "printf hello; sleep 0.05"))))
+                       :args '("-c" "printf hello; read ignored"))))
     (is (pty-process pty))
     (is (streamp (pty-stream pty)))
     (let ((output (read-pty-until pty
@@ -314,6 +355,22 @@
                                        :stream (make-string-output-stream))))
     (signals-pty-operation-failed (:fd fdless "PTY operation FD failed")
       (pty-fd fdless)))
+  ;; A stream backed by a negative fd (SB-SYS:FD-STREAM-FD is -1 once its
+  ;; underlying descriptor has itself been closed out from under a still-live
+  ;; stream object) is declined the same way a non-integer fd is above, not
+  ;; treated as a valid descriptor.
+  (let* ((rigged (open "/dev/null" :direction :output :if-exists :append))
+         (pty (cl-tty-kit::%make-pty :process nil :stream rigged))
+         (real-fd (sb-sys:fd-stream-fd rigged)))
+    (unwind-protect
+         (progn
+           (setf (sb-sys:fd-stream-fd rigged) -1)
+           (signals-pty-operation-failed (:fd pty "PTY operation FD failed")
+             (pty-fd pty)))
+      ;; Restore the real descriptor before closing, or CLOSE would try to
+      ;; close fd -1 and leak the one /dev/null actually opened.
+      (setf (sb-sys:fd-stream-fd rigged) real-fd)
+      (close rigged)))
   ;; FR-002: byte-transparent octet round-trip over a real pipe. The payload
   ;; carries a UTF-8 high-byte sequence (#xE2 #x9C #x93) plus NUL and ESC control
   ;; bytes, all of which must survive verbatim with no character decoding.
@@ -424,6 +481,20 @@
     (fd-write-octets 987654
                      (make-array 1 :element-type '(unsigned-byte 8)
                                    :initial-element 1)))
+  ;; FR-002: fd-write-octets retries silently when unix-write is interrupted by
+  ;; a signal (EINTR), the retry path a real syscall almost never exercises.
+  (let ((call-count 0))
+    (with-function-overrides
+        ((sb-unix:unix-write
+           (lambda (fd octets offset len)
+             (declare (ignore fd octets offset))
+             (incf call-count)
+             (if (= call-count 1)
+                 (values nil sb-unix:eintr)
+                 (values len nil)))))
+      (is (= 3 (fd-write-octets 0 (make-array 3 :element-type '(unsigned-byte 8)
+                                                :initial-element 1))))
+      (is (= 2 call-count))))
   t)
 
 #-sbcl

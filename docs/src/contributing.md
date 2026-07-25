@@ -13,6 +13,11 @@ see [Roadmap](roadmap.md) for what stays explicitly out of scope.
 
 ## Verification
 
+The scripts below assume `cl-prolog`/`cl-weave` are already on
+`CL_SOURCE_REGISTRY`; run them inside `nix develop`, or use the equivalent
+`nix run .#test` / `.#verify` / `.#coverage` shortcuts (see
+[Installation](installation.md#nix)).
+
 Run the repository-local test entrypoint from the project root:
 
 ```bash
@@ -77,14 +82,13 @@ When filing a bug, include:
 
 This site is built from `docs/src/*.md` with [MkDocs](https://www.mkdocs.org/)
 and the [Material](https://squidfunk.github.io/mkdocs-material/) theme.
-Preview changes locally before opening a pull request:
+`nix build .#docs` is what CI runs to publish to GitHub Pages (see
+[Release Process](release-process.md)) — it builds fully offline in
+`--strict` mode, so a broken internal link or an unlisted nav page fails the
+build rather than publishing a silent gap. Build and review it locally
+before opening a documentation pull request:
 
 ```bash
-pip install mkdocs-material
-mkdocs serve --config-file docs/mkdocs.yml
+nix build .#docs
+open result/index.html   # or: xdg-open result/index.html on Linux
 ```
-
-`mkdocs build --strict --config-file docs/mkdocs.yml` is what CI runs to
-publish to GitHub Pages (see [Release Process](release-process.md)) — a
-broken internal link or an unlisted page fails that build, so run it before
-submitting a documentation patch.

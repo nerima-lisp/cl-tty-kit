@@ -15,31 +15,37 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: verify (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  nix:
+    name: nix flake check (${{ matrix.system }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Nix with Cachix
+        uses: ./.github/actions/setup-nix
         with:
-          submodules: recursive
+          cachix-cache: ${{ vars.CACHIX_CACHE }}
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install SBCL (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y sbcl
-
-      - name: Install SBCL (macOS)
-        if: runner.os == 'macOS'
-        run: brew install sbcl
-
-      - name: Report SBCL version
-        run: sbcl --version
-
-      - name: Run full verification gate
-        run: sbcl --script scripts/verify.lisp
+      # Runs the hermetic test/paredit-lint/formatting checks from flake.nix
+      # (cl-prolog and cl-weave come from flake inputs, not a vendored copy).
+      # --all-systems evaluates every entry in flake.nix's `systems` list, not
+      # just the runner's own: without it a platform this flake advertises but
+      # can no longer evaluate (as x86_64-darwin became once nixpkgs 26.11
+      # dropped it) stays invisible to CI on both matrix runners. Foreign
+      # systems are evaluated, not built, so this stays cheap.
+      - name: Run flake checks
+        run: nix flake check --all-systems --print-build-logs
 
       - name: Check diff hygiene
         run: git diff --check
@@ -47,47 +53,61 @@ jobs:
   coverage:
     name: coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Install SBCL
-        run: sudo apt-get update && sudo apt-get install -y sbcl
+      - name: Set up Nix with Cachix
+        uses: ./.github/actions/setup-nix
+        with:
+          cachix-cache: ${{ vars.CACHIX_CACHE }}
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate coverage report
-        run: sbcl --script scripts/coverage.lisp
+        run: |
+          set -euo pipefail
+          nix build .#coverage-report --print-build-logs
+          cp -rL result coverage-report
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage/
+          path: coverage-report/
           if-no-files-found: error
 
-  # Best-effort: exercises contrib/, which pulls Quicklisp plus the
-  # vendor/ git submodules (nerima-lisp/cl-prolog, nerima-lisp/cl-weave). Kept
-  # separate from `verify` and allowed to fail so that submodule/network
-  # flakiness never blocks a core merge, per contrib/README.md's policy
-  # that contrib is opt-in and isolated from the core build and CI.
+  # Best-effort: exercises contrib/, which pulls Quicklisp (for clweb) on top
+  # of cl-prolog/cl-weave from this flake's Nix inputs. Kept separate from
+  # `nix` and allowed to fail so that Quicklisp/network flakiness never
+  # blocks a core merge, per contrib/README.md's policy that contrib is
+  # opt-in and isolated from the core build and CI.
   contrib:
     name: contrib (opt-in, best-effort)
     runs-on: ubuntu-latest
     continue-on-error: true
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Install SBCL
-        run: sudo apt-get update && sudo apt-get install -y sbcl
+      - name: Set up Nix with Cachix
+        uses: ./.github/actions/setup-nix
+        with:
+          cachix-cache: ${{ vars.CACHIX_CACHE }}
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Quicklisp
         run: |
-          curl -fsSL -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
-          sbcl --non-interactive \
-            --load /tmp/quicklisp.lisp \
-            --eval '(quicklisp-quickstart:install)'
+          set -euo pipefail
+          nix develop --command bash -c '
+            curl -fsSL -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp
+            sbcl --non-interactive \
+              --load /tmp/quicklisp.lisp \
+              --eval "(quicklisp-quickstart:install)"
+          '
 
+      # `nix develop` puts cl-prolog/cl-weave from this flake's inputs on
+      # CL_SOURCE_REGISTRY (see flake.nix devShells.default.shellHook).
       - name: Run contrib verification
-        run: sbcl --script contrib/verify-contrib.lisp
+        run: nix develop --command sbcl --script contrib/verify-contrib.lisp

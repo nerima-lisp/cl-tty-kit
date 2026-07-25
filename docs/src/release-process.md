@@ -12,10 +12,33 @@ The project uses semantic versioning:
 - minor releases for additive API changes
 - major releases for breaking API, event-shape, or output changes
 
-If a change improves the core design but changes rendered terminal output,
-input decoding, or public symbol availability, treat it as a deliberate
-major-release event and update the public contract aggressively instead of
-carrying a compatibility layer.
+### What the version guarantees
+
+From 1.0.0 onward, the *stable surface* is exactly the set of symbols exported
+from the `cl-tty-kit` package. That set is listed in the
+[API Reference](api-reference.md) and asserted against the live package by
+`t/package-introspection.lisp`, so the documented list and the code cannot
+drift apart silently. Alongside the symbol names themselves, the contract
+covers the shape of decoded input events (a `key-event`'s type, code, and
+modifiers — see [Input Decoding](input-decoding.md)) and the condition
+hierarchy rooted at `tty-kit-error` (see [Conditions](conditions.md)).
+
+Outside the stable surface, and freely changeable in a minor or patch release:
+`%`-prefixed internals, the opt-in integrations under [Contrib](contrib.md),
+this repository's build and CI plumbing (including `flake.nix`'s inputs and
+outputs), and the exact byte sequence `render-diff` emits — that one is bounded
+only by the property `t/properties.lisp` asserts, namely that its visible
+result matches `render-screen` and it is never longer than a full repaint.
+
+### What requires a 2.0
+
+Removing or renaming an exported symbol, changing what an existing argument
+means, changing the shape of a decoded input event, or changing an escape
+sequence in a way that alters correct rendered output. If a change improves the
+core design but does any of these, treat it as a deliberate major-release event
+and update the public contract aggressively instead of carrying a compatibility
+layer — [Quality Gates](quality-gates.md) rejects compatibility shims by
+policy.
 
 ## Release checklist
 
@@ -27,7 +50,7 @@ Before tagging a release:
 2. Run the full verification script from the project root:
 
    ```bash
-   sbcl --script scripts/verify.lisp
+   nix run .#verify
    ```
 
    This includes the repository-local tests, example smoke checks, and the
@@ -47,9 +70,12 @@ Before tagging a release:
    examples — `t/package-readme.lisp` checks this mechanically, but review it
    by hand too.
 7. Smoke-test the examples on a clean SBCL environment if possible.
-8. If `contrib/`/`vendor/` submodules changed, confirm they are pinned to the
-   intended upstream commits (`git submodule status`) before tagging — see
-   [Contrib](contrib.md).
+8. If `flake.lock` moved (the `cl-prolog`/`cl-weave`/`paredit-cli`/`nixpkgs`
+   inputs), confirm `nix flake check --all-systems` still passes against the
+   new pins before tagging — see [Contrib](contrib.md). `--all-systems` is not
+   optional here: without it Nix only evaluates outputs for the machine you are
+   on, so a `nixpkgs` bump that drops a platform `flake.nix` still advertises
+   passes silently.
 
 ## Cutting the tag
 
@@ -80,9 +106,10 @@ test suite in the same patch so the new surface is explicit and executable.
 ## Publishing documentation
 
 This documentation site is rebuilt and deployed to GitHub Pages by
-`.github/workflows/docs.yml` whenever `docs/**` changes on `main` (or on
-manual dispatch). The workflow installs `mkdocs-material` with `pip`, runs
-`mkdocs build --strict --config-file docs/mkdocs.yml`, and publishes the
-result through `actions/deploy-pages`. A documentation change does not
-require a version bump or a tag — it publishes independently of the release
-checklist above.
+`.github/workflows/docs.yml` whenever `docs/**`, `flake.nix`, or `flake.lock`
+changes on `main` (or on manual dispatch). The workflow builds the hermetic
+`nix build .#docs` package (`--strict`, so a broken internal link or an
+unlisted nav page fails the build instead of publishing a silent gap) and
+publishes the result through `actions/deploy-pages`. A documentation change
+does not require a version bump or a tag — it publishes independently of the
+release checklist above.

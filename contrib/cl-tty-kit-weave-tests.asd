@@ -1,11 +1,12 @@
 ;;;; Optional contrib system. NOT part of the core cl-tty-kit build or CI.
 ;;;;
-;;;; Property-based fuzz tests built on the vendored nerima-lisp/cl-weave
-;;;; (vendor/cl-weave, latest HEAD), exercising the UTF-8 and input decoders
-;;;; against arbitrary octets plus the DCG-based CSI grammar. Load and run it
-;;;; explicitly once the submodules are checked out:
+;;;; Property-based fuzz tests built on nerima-lisp/cl-weave, exercising the
+;;;; UTF-8 and input decoders against arbitrary octets plus the DCG-based CSI
+;;;; grammar. Load and run it explicitly from inside a Nix dev shell, which
+;;;; puts cl-prolog and cl-weave on CL_SOURCE_REGISTRY (see flake.nix
+;;;; devShells.default.shellHook):
 ;;;;
-;;;;   git submodule update --init vendor/cl-prolog vendor/cl-weave
+;;;;   nix develop
 ;;;;   (asdf:load-system :cl-tty-kit-weave-tests)
 ;;;;   (cl-tty-kit/weave-property-tests:run-tests)
 

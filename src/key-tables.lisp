@@ -175,4 +175,12 @@
     (23 . :control-w)
     (24 . :control-x)
     (25 . :control-y)
-    (26 . :control-z)))
+    (26 . :control-z)
+    ;; The four C0 controls above the letter range that a US keyboard still
+    ;; reaches via Ctrl plus a punctuation key: FS/GS/RS/US. Ctrl-_ (31) is a
+    ;; common readline "undo" binding, so it is the most consequential of the
+    ;; four to recognize as a named event rather than an unprintable :CHARACTER.
+    (28 . :control-backslash)
+    (29 . :control-right-bracket)
+    (30 . :control-caret)
+    (31 . :control-underscore)))

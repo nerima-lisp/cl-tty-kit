@@ -10,6 +10,7 @@ without turning the library into a UI framework or shell.
 
 ## Status
 
+- **stable**: the public API is covered by the semantic-versioning guarantee below
 - full documentation site: <https://nerima-lisp.github.io/cl-tty-kit/>
 - requires SBCL (see [Compatibility](#compatibility)) and intentionally small
 - test-backed public API
@@ -18,6 +19,31 @@ without turning the library into a UI framework or shell.
 - maintainer-grade local quality gates are documented in `docs/QUALITY-GATES.md`
 - project governance docs are available in `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`
 
+### API stability
+
+From 1.0.0 onward `cl-tty-kit` follows [semantic versioning](https://semver.org).
+The stable surface is precisely the set of symbols exported from the `cl-tty-kit`
+package -- every one of them is enumerated in [API Overview](#api-overview) and
+asserted against the live package by `t/package-introspection.lisp`, so this list
+cannot silently drift from the code.
+
+Within the 1.x series:
+
+- exported symbols will not be removed or renamed, and existing arguments will
+  not change meaning; new functionality arrives as added symbols or added
+  `&key` arguments
+- the shape of decoded input events (`key-event` type/code/modifiers) and the
+  condition hierarchy rooted at `tty-kit-error` are part of that contract
+- rendered escape-sequence output may change only when it fixes an incorrect
+  sequence; `render-diff` remains free to choose any sequence of commands whose
+  visible result matches `render-screen`, which is what `t/properties.lisp`
+  asserts rather than a byte-for-byte transcript
+
+Explicitly *not* covered: anything named with a leading `%` (internal by
+convention and unexported), `contrib/` (opt-in, isolated from the core build --
+see `contrib/README.md`), and the repository's own build/CI plumbing. Changes
+requiring a 2.0 are described in `RELEASING.md`.
+
 ## Compatibility
 
 `cl-tty-kit` currently **requires SBCL**. It relies on SBCL-only facilities:
@@ -25,11 +51,13 @@ without turning the library into a UI framework or shell.
 classification, and `sb-ext` for UTF-8 transcoding and process/PTY handling.
 Loading the system on another Common Lisp implementation fails fast with a
 clear "requires SBCL" error rather than a confusing missing-dependency report.
-Its other dependency, [`cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
-(the embedded logic engine; see "Design: relations and continuations" below),
-is itself dependency-free and portable, and is vendored as a git submodule at
-`vendor/cl-prolog` rather than distributed by Quicklisp -- `git submodule
-update --init vendor/cl-prolog` once per checkout is all it needs.
+The core system is otherwise dependency-free; its test system additionally
+depends on [`cl-prolog`](https://github.com/nerima-lisp/cl-prolog) (the test
+suite's embedded logic engine; see "Design: relations and continuations"
+below) and `cl-weave` (the test framework), neither of which is distributed
+by Quicklisp -- `nix develop`/`nix build`/`nix run` (see
+[Installation](#installation)) put both on `CL_SOURCE_REGISTRY` via this
+repository's `flake.nix`.
 
 Internally the code is still organized by portability of *concern*, which keeps
 the OS-facing surface small and isolated and makes the pure logic easy to test:
@@ -461,22 +489,38 @@ and `close-pty` are available on every build that loads.
 
 ## Installation
 
-Put the repository in a place ASDF can see, for example:
+`cl-tty-kit.asd`'s test system, `:cl-tty-kit/test`, depends on
+[`cl-prolog`](https://github.com/nerima-lisp/cl-prolog) and
+[`cl-weave`](https://github.com/nerima-lisp/cl-weave) (the core `:cl-tty-kit`
+system itself is dependency-free), neither of which is on Quicklisp --
+something has to put both on ASDF's `CL_SOURCE_REGISTRY`. [Nix](https://nixos.org)
+is the supported way to do that, via `flake.nix`'s `cl-prolog`/`cl-weave`
+inputs:
+
+```sh
+nix develop              # SBCL, Git, paredit-cli, nixpkgs-fmt on PATH; CL_SOURCE_REGISTRY pre-wired
+nix run .#test           # same scripts CI's `nix` job runs: test / verify / coverage
+nix run .#verify
+nix run .#coverage
+nix build                # hermetic `cl-tty-kit` package (sbcl.buildASDFSystem)
+nix build .#docs         # hermetic MkDocs (Material) site build, --strict
+nix flake check          # hermetic test suite + a paredit-lint structural-parse gate
+```
+
+Without Nix, put the repository somewhere ASDF can see it, for example:
 
 ```text
 ~/quicklisp/local-projects/cl-tty-kit/
 ```
 
-Then load the repository-local bootstrap and core sources:
+and make `cl-prolog` and `cl-weave` discoverable the same way (Quicklisp
+`local-projects`, or your own `CL_SOURCE_REGISTRY` entry) before loading the
+repository-local bootstrap and core sources:
 
 ```lisp
 (load "scripts/bootstrap.lisp")
 (cl-tty-kit/bootstrap:load-core-system)
 ```
-
-With [Nix](https://nixos.org) installed, `nix develop` drops into a shell
-with SBCL and Git (for `git submodule update --init`) on `PATH`, and
-`nix run .#test` / `.#verify` / `.#coverage` run the same scripts CI does.
 
 ## Quick Start
 
@@ -601,6 +645,15 @@ transition as an incremental frame.
 ;; => (#S(KEY-EVENT :TYPE :PASTE :CODE "hello" :MODIFIERS NIL))
 ```
 
+Some terminals send CR-terminated (or CRLF-terminated) lines inside a
+bracketed paste rather than bare LF. Adding `:normalize-paste-line-endings t`
+converts a collected `:paste` event's payload to LF-only before it is
+emitted, so callers that insert paste text into an LF-delimited buffer do not
+need to re-implement that scan. This has no effect unless
+`:collect-bracketed-paste` is also true. See
+[Input Decoding](https://nerima-lisp.github.io/cl-tty-kit/input-decoding/)
+for the full option reference.
+
 ### Character width
 
 A terminal cell is a column, not a character. `char-width` returns how many
@@ -617,16 +670,19 @@ callers can align text that mixes ASCII, CJK, and emoji.
 
 ### Design: relations and continuations
 
-The toolkit's embedded logic engine is
+The test suite's embedded logic engine is
 [`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog) itself —
-vendored as a git submodule at `vendor/cl-prolog` and depended on directly
-(see "Compatibility" above), not reimplemented. It provides ISO-flavored
-unification and proof search — ISO built-ins (cut, arithmetic, `findall/3`,
-`assert`/`retract`, DCG grammars, and more), a continuation-passing resolver,
-and an explicit, immutable-by-default rulebase. Rules are kept separate from
-the plain data tables they reason about (width ranges, key decoding tables,
-style codes), so the classification logic can be expressed as relations while
-the data stays ordinary Lisp.
+a `:cl-tty-kit/test` dependency via `flake.nix` (see "Compatibility" above),
+not reimplemented, and not a runtime dependency of the core toolkit. It
+provides ISO-flavored unification and proof search — ISO built-ins (cut,
+arithmetic, `findall/3`, `assert`/`retract`, DCG grammars, and more), a
+continuation-passing resolver, and an explicit, immutable-by-default
+rulebase. The test suite states part of the toolkit's classification logic
+(width ranges, key decoding tables, SGR codes) as relations over the same
+plain Lisp data the hand-written imperative decoders classify, then
+cross-checks the two as an independent specification -- see
+[Logic Engine](https://nerima-lisp.github.io/cl-tty-kit/logic-engine/) for
+the full oracle pattern.
 
 ```lisp
 (cl-prolog:define-rulebase *family*
@@ -691,6 +747,11 @@ popping them during cleanup. If `:raw-mode t` is supplied, it wraps the
 session with `with-raw-mode` using the provided `:fd`.
 
 ## Testing
+
+The scripts below assume `cl-prolog`/`cl-weave` are already on
+`CL_SOURCE_REGISTRY` (see [Installation](#installation)) — the simplest way
+is running them inside `nix develop`, or via the equivalent `nix run .#test`
+/ `.#verify` / `.#coverage` shortcuts.
 
 Run the test suite from a fresh checkout with:
 

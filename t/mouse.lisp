@@ -11,52 +11,47 @@
      (is (= ,y (mouse-event-y ,event)))
      (is (equal ,modifiers (mouse-event-modifiers ,event)))))
 
-(defun %test-mouse-basic ()
-  ;; Left press at terminal (1,1) reports 0-based (0,0) and consumes the report.
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (%sgr-mouse 0 1 1 #\M))
-    (%mouse-is (event) :button :left :action :press :x 0 :y 0 :modifiers nil)
-    (is (= 9 consumed)))
-  ;; Release (trailing `m').
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (%sgr-mouse 0 5 3 #\m))
-    (declare (ignore consumed))
-    (%mouse-is (event) :button :left :action :release :x 4 :y 2 :modifiers nil))
-  ;; Right and middle buttons.
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 2 10 20 #\M)))
-             :button :right :action :press :x 9 :y 19 :modifiers nil)
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 1 2 2 #\M)))
-             :button :middle :action :press :x 1 :y 1 :modifiers nil)
-  ;; Low button bits of 3 are not a real button: reported as :NONE, still a press.
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 3 5 5 #\M)))
-             :button :none :action :press :x 4 :y 4 :modifiers nil))
+(defparameter +mouse-decode-cases+
+  '((0 1 1 #\M :left :press 0 0 nil
+     "Left press at terminal (1,1) reports 0-based (0,0)")
+    (0 5 3 #\m :left :release 4 2 nil
+     "Release (trailing `m')")
+    (2 10 20 #\M :right :press 9 19 nil
+     "Right button")
+    (1 2 2 #\M :middle :press 1 1 nil
+     "Middle button")
+    (3 5 5 #\M :none :press 4 4 nil
+     "Low button bits of 3 are not a real button: reported as :NONE, still a press")
+    (64 5 5 #\M :wheel-up :scroll 4 4 nil
+     "Wheel up")
+    (65 5 5 #\M :wheel-down :scroll 4 4 nil
+     "Wheel down")
+    (66 5 5 #\M :wheel-left :scroll 4 4 nil
+     "Horizontal wheel left (button 66)")
+    (67 5 5 #\M :wheel-right :scroll 4 4 nil
+     "Horizontal wheel right (button 67)")
+    (32 3 3 #\M :left :drag 2 2 nil
+     "Motion with the left button held is a drag")
+    (35 3 3 #\M :none :move 2 2 nil
+     "Motion without a button held is a move")
+    (4 1 1 #\M :left :press 0 0 (:shift)
+     "Shift modifier")
+    (8 1 1 #\M :left :press 0 0 (:alt)
+     "Alt (button bit 8)")
+    (20 1 1 #\M :left :press 0 0 (:control :shift)
+     "Shift (4) + Control (16), normalized and sorted"))
+  "Each case is (CB CX CY FINAL BUTTON ACTION X Y MODIFIERS MESSAGE): the SGR
+mouse report parameters %SGR-MOUSE builds, and the MOUSE-EVENT DECODE-MOUSE-
+SEQUENCE must decode it into.")
 
-(defun %test-mouse-wheel-and-motion ()
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 64 5 5 #\M)))
-             :button :wheel-up :action :scroll :x 4 :y 4 :modifiers nil)
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 65 5 5 #\M)))
-             :button :wheel-down :action :scroll :x 4 :y 4 :modifiers nil)
-  ;; Horizontal wheel (buttons 66/67).
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 66 5 5 #\M)))
-             :button :wheel-left :action :scroll :x 4 :y 4 :modifiers nil)
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 67 5 5 #\M)))
-             :button :wheel-right :action :scroll :x 4 :y 4 :modifiers nil)
-  ;; Motion with the left button held is a drag; without a button it is a move.
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 32 3 3 #\M)))
-             :button :left :action :drag :x 2 :y 2 :modifiers nil)
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 35 3 3 #\M)))
-             :button :none :action :move :x 2 :y 2 :modifiers nil))
-
-(defun %test-mouse-modifiers ()
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 4 1 1 #\M)))
-             :button :left :action :press :x 0 :y 0 :modifiers '(:shift))
-  ;; Alt (button bit 8) on a left press.
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 8 1 1 #\M)))
-             :button :left :action :press :x 0 :y 0 :modifiers '(:alt))
-  ;; Shift (4) + Control (16) on a left press, normalized and sorted.
-  (%mouse-is ((decode-mouse-sequence (%sgr-mouse 20 1 1 #\M)))
-             :button :left :action :press :x 0 :y 0
-             :modifiers '(:control :shift)))
+(defun %test-mouse-decode-cases ()
+  (do-test-case-bind (case +mouse-decode-cases+
+                            (cb cx cy final button action x y modifiers message))
+    (let ((report (%sgr-mouse cb cx cy final)))
+      (multiple-value-bind (event consumed) (decode-mouse-sequence report)
+        (%mouse-is (event) :button button :action action :x x :y y
+                   :modifiers modifiers)
+        (is (= (length report) consumed) message)))))
 
 (defun %test-mouse-partial-and-offset ()
   ;; A report missing its terminator does not decode.
@@ -139,9 +134,7 @@
                  :x 0 :y 0 :modifiers nil))))
 
 (defun test-mouse ()
-  (%test-mouse-basic)
-  (%test-mouse-wheel-and-motion)
-  (%test-mouse-modifiers)
+  (%test-mouse-decode-cases)
   (%test-mouse-partial-and-offset)
   (%test-mouse-input-integration)
   t)

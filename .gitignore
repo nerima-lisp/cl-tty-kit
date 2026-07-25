@@ -26,6 +26,10 @@ system-index.txt
 cl-tty-kit
 !cl-tty-kit.asd
 
+# Nix build result symlinks (`nix build`, `nix build .#<output>`)
+/result
+/result-*
+
 # Editor and OS noise
 *~
 \#*\#

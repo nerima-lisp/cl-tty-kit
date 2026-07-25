@@ -67,7 +67,8 @@
   ;; Accepts a vector too.
   (is (string= (%spark 0 7) (format-sparkline #(0 1))))
   (signals-non-type-error (format-sparkline '(:bad)))
-  (signals-non-type-error (format-sparkline '(1 2) :min :low)))
+  (signals-non-type-error (format-sparkline '(1 2) :min :low))
+  (signals-non-type-error (format-sparkline :not-a-sequence)))
 
 (defun %test-format-table ()
   (is (equal '("a   bb" "ccc d ")
@@ -79,6 +80,9 @@
   (is (equal '("a b")
              (format-table '(("a" "b")) :aligns '(:right :right))))
   (signals-non-type-error (format-table :not-a-list))
+  ;; A ROWS list whose element is not itself a list, as opposed to a row
+  ;; containing a non-string field (the next case below).
+  (signals-non-type-error (format-table '("not-a-row")))
   (signals-non-type-error (format-table '((:bad))))
   (signals-non-type-error (format-table '(("a")) :aligns :bad))
   (signals-non-type-error (format-table '(("a")) :aligns '(:bad)))

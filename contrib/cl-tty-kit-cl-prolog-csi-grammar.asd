@@ -1,10 +1,11 @@
 ;;;; Optional contrib system. NOT part of the core cl-tty-kit build or CI.
 ;;;;
 ;;;; A DCG-based recognizer for the ECMA-48 CSI byte-class grammar, built on
-;;;; the vendored nerima-lisp/cl-prolog (vendor/cl-prolog, latest HEAD). Load it
-;;;; explicitly once the submodule is checked out:
+;;;; nerima-lisp/cl-prolog. Load it explicitly from inside a Nix dev shell,
+;;;; which puts cl-prolog on CL_SOURCE_REGISTRY (see flake.nix
+;;;; devShells.default.shellHook):
 ;;;;
-;;;;   git submodule update --init vendor/cl-prolog
+;;;;   nix develop
 ;;;;   (asdf:load-system :cl-tty-kit-cl-prolog-csi-grammar)
 
 (asdf:defsystem #:cl-tty-kit-cl-prolog-csi-grammar

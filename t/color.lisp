@@ -107,6 +107,9 @@
   (is (equal '(255 136 0) (multiple-value-list (parse-color "#ff8800"))))
   (is (equal '(1 2 3) (multiple-value-list (parse-color "rgb(1, 2, 3)"))))
   (is (equal '(1 2 3) (multiple-value-list (parse-color "rgb(1 2 3)"))))
+  ;; Trailing whitespace after the closing paren is tolerated, unlike other
+  ;; trailing content (see "rgb(1, 2, 3)junk" below).
+  (is (equal '(1 2 3) (multiple-value-list (parse-color "rgb(1, 2, 3)  "))))
   (signals (error c) (parse-color "rgb(1, 2, x)") (is c))
   (signals (error c) (parse-color "rgb(256, 0, 0)") (is c))
   (signals (error c) (parse-color "rgb(1234, 0, 0)") (is c))

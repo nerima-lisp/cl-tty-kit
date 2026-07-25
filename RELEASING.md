@@ -12,10 +12,31 @@ The project uses semantic versioning:
 - minor releases for additive API changes
 - major releases for breaking API, event-shape, or output changes
 
-If a change improves the core design but changes rendered terminal output, input
-decoding, or public symbol availability, treat it as a deliberate major-release
-event and update the public contract aggressively instead of carrying a
-compatibility layer.
+### What the version guarantees
+
+From 1.0.0 onward, the *stable surface* is exactly the set of symbols exported
+from the `cl-tty-kit` package. That set is enumerated in `README.md`'s "API
+Overview" and asserted against the live package by
+`t/package-introspection.lisp`, so the documented list and the code cannot
+drift apart silently. Alongside the symbol names themselves, the contract
+covers the shape of decoded input events (a `key-event`'s type, code, and
+modifiers) and the condition hierarchy rooted at `tty-kit-error`.
+
+Outside the stable surface, and freely changeable in a minor or patch release:
+`%`-prefixed internals, the opt-in integrations under `contrib/`, this
+repository's build and CI plumbing (including `flake.nix`'s inputs and outputs),
+and the exact byte sequence `render-diff` emits — that one is bounded only by
+the property `t/properties.lisp` asserts, namely that its visible result matches
+`render-screen` and it is never longer than a full repaint.
+
+### What requires a 2.0
+
+Removing or renaming an exported symbol, changing what an existing argument
+means, changing the shape of a decoded input event, or changing an escape
+sequence in a way that alters correct rendered output. If a change improves the
+core design but does any of these, treat it as a deliberate major-release event
+and update the public contract aggressively instead of carrying a compatibility
+layer — `docs/QUALITY-GATES.md` rejects compatibility shims by policy.
 
 ## Release checklist
 
@@ -27,7 +48,7 @@ Before tagging a release:
 2. Run the full verification script from the project root:
 
    ```bash
-   sbcl --script scripts/verify.lisp
+   nix run .#verify
    ```
 
    This includes the repository-local tests, example smoke checks, and the
@@ -45,8 +66,11 @@ Before tagging a release:
 5. Bump `:version` in `cl-tty-kit.asd` to match the release being cut.
 6. Confirm that `README.md` still matches the public API and current examples.
 7. Smoke-test the examples on a clean SBCL environment if possible.
-8. If contrib/vendor submodules changed, confirm they are pinned to the intended
-   upstream commits (`git submodule status`) before tagging.
+8. If `flake.lock` moved (the `cl-prolog`/`cl-weave`/`paredit-cli`/`nixpkgs`
+   inputs), confirm `nix flake check --all-systems` still passes against the
+   new pins before tagging. `--all-systems` is not optional here: without it
+   Nix only evaluates outputs for the machine you are on, so a `nixpkgs` bump
+   that drops a platform `flake.nix` still advertises passes silently.
 
 ## Cutting the tag
 

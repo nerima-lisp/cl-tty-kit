@@ -141,7 +141,7 @@
   (signals (error c) (make-input-decoder :max-pending -1) (is c))
   (signals (error c) (make-input-decoder :max-pending 1.5) (is c))
   (let ((decoder (make-input-decoder :collect-bracketed-paste t :max-pending 8)))
-    (decode-input-chunk decoder (concatenate 'string (string #\Esc) "[200~"))
+    (decode-input-chunk decoder (%esc "[200~"))
     (signals (cl-tty-kit::input-buffer-exceeded condition)
         (decode-input-chunk decoder "0123456789")
       (is (= 8 (cl-tty-kit::input-buffer-exceeded-limit condition)))
@@ -155,30 +155,67 @@
       (is (= 2 (cl-tty-kit::input-buffer-exceeded-limit condition)))
       (is (= 3 (cl-tty-kit::input-buffer-exceeded-size condition)))))
   (let ((decoder (make-input-decoder :max-pending 4)))
-    (is (null (decode-input-chunk decoder (concatenate 'string
-                                                       (string #\Esc)
-                                                       "["))))
+    (is (null (decode-input-chunk decoder (%esc "["))))
     (signals (cl-tty-kit::input-buffer-exceeded condition)
         (decode-input-chunk decoder "123")
       (is (= 4 (cl-tty-kit::input-buffer-exceeded-limit condition)))
       (is (= 5 (cl-tty-kit::input-buffer-exceeded-size condition)))))
   (let ((decoder (make-input-decoder :collect-bracketed-paste t))
         (payload (make-string 128 :initial-element #\x)))
-    (decode-input-chunk decoder (concatenate 'string (string #\Esc) "[200~"))
+    (decode-input-chunk decoder (%esc "[200~"))
     (loop repeat 32 do (decode-input-chunk decoder "xxxx"))
     (%assert-event-signatures=
      (decode-input-chunk decoder
-                          (concatenate 'string (string #\Esc) "[201~")
+                          (%esc "[201~")
                           :eof t)
      `((:paste ,payload nil))
      "Split bracketed paste payloads should emit the accumulated text once."))
+  (let ((decoder (make-input-decoder :collect-bracketed-paste t
+                                     :normalize-paste-line-endings t)))
+    (%assert-event-signatures=
+     (decode-input-chunk
+      decoder
+      (%esc "[200~"
+            "line1" (string #\Return) (string #\Newline)
+            "line2" (string #\Return)
+            "line3"
+            (string #\Esc) "[201~")
+      :eof t)
+     `((:paste ,(format nil "line1~%line2~%line3") nil))
+     "NORMALIZE-PASTE-LINE-ENDINGS should convert CRLF and lone CR to LF."))
+  (let ((decoder (make-input-decoder :collect-bracketed-paste t)))
+    (%assert-event-signatures=
+     (decode-input-chunk
+      decoder
+      (%esc "[200~"
+            "a" (string #\Return) (string #\Newline) "b"
+            (string #\Esc) "[201~")
+      :eof t)
+     `((:paste ,(concatenate 'string "a" (string #\Return) (string #\Newline) "b")
+               nil))
+     "Without NORMALIZE-PASTE-LINE-ENDINGS, CR is preserved verbatim."))
   (let* ((decoder (make-input-decoder :max-pending 2048))
-         (input (concatenate 'string
-                             (string #\Esc)
-                             "["
+         (input (%esc "["
                              (make-string 1025 :initial-element #\1))))
     (is (decode-input-chunk decoder input))
-    (is (null (flush-input-decoder decoder)))))
+    (is (null (flush-input-decoder decoder))))
+  (let ((decoder (make-input-decoder)))
+    (is (null (decode-input-chunk decoder #(227 129))))
+    (%assert-event-signatures=
+     (decode-input-chunk decoder "x")
+     '((:character #\x nil))
+     "A string chunk fed while UTF-8 octets are still pending should decode normally, leaving the incomplete octets buffered.")
+    (%assert-event-signatures=
+     (decode-input-chunk decoder #(130) :eof t)
+     `((:character ,(code-char #x3042) nil))
+     "Completing the pending octets afterward should recover the buffered character."))
+  (let ((decoder (make-input-decoder)))
+    (is (null (decode-input-chunk decoder #(227 129))))
+    (%assert-invalid-utf8-case
+     (lambda () (decode-input-chunk decoder "x" :eof t))
+     0
+     :truncated-sequence
+     "A final string chunk should force any pending octets through the truncated-sequence fallback.")))
 
 (defun %test-streaming-input-cases ()
   (do-test-case-bind (case +streaming-input-cases+
@@ -195,15 +232,11 @@
    '((:special :escape nil))
    "Flushing a pending escape should emit an escape event.")
   (let ((decoder (make-input-decoder)))
-    (is (null (decode-input-chunk decoder (concatenate 'string
-                                                       (string #\Esc)
-                                                       "["))))
+    (is (null (decode-input-chunk decoder (%esc "["))))
     (let ((events (decode-input-chunk decoder "x" :eof t)))
       (is (equal (%event-signatures-of events)
                  (%event-signatures-of
-                  (decode-input (concatenate 'string
-                                             (string #\Esc)
-                                             "[x")))))))
+                  (decode-input (%esc "[x")))))))
   (let ((decoder (make-input-decoder)))
     (is (null (decode-input-chunk decoder #(227 129))))
     (%assert-invalid-utf8-case
@@ -223,16 +256,14 @@
   (let ((decoder (make-input-decoder)))
     (signals (error c) (decode-input-chunk decoder 42) (is c)))
   (%assert-flush-case
-   (list (concatenate 'string (string #\Esc) "[200~ab"))
+   (list (%esc "[200~ab"))
    `((:special :paste-start nil)
      (:character ,#\a nil)
      (:character ,#\b nil))
    "Flushing an unterminated paste should fall back to ordinary decoding."
    :collect-bracketed-paste t)
   (%assert-chunk-case
-   (list (concatenate 'string
-                      (string #\Esc)
-                      "[200~abc"
+   (list (%esc "[200~abc"
                       (string #\Esc)
                       "[2")
          "0"
@@ -242,9 +273,7 @@
      (:character ,#\z nil))
    "Incremental paste terminator detection should preserve following input."
    :collect-bracketed-paste t)
-  (let* ((input (concatenate 'string
-                             (string #\Esc)
-                             "[200~abc"
+  (let* ((input (%esc "[200~abc"
                              (string #\Esc)
                              "[2"))
          (decoder (make-input-decoder :collect-bracketed-paste t)))
@@ -257,9 +286,7 @@
   (do-test-case-bind (case +streaming-equivalence-cases+ (input options))
     (apply #'%assert-all-two-way-streaming-splits input options))
   (%assert-streaming-decode-equivalent
-   (concatenate 'string
-                (string #\Esc)
-                "[200~hello"
+   (%esc "[200~hello"
                 (string #\Esc)
                 "[201~x")
    '(1 1 2 3 4 2 2 1 1 1)

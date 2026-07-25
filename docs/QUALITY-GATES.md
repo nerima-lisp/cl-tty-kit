@@ -27,7 +27,9 @@ before it is treated as release-ready.
 
 ## Verification gate
 
-Run these commands from the project root:
+Run these commands from the project root, inside a Nix dev shell (`nix
+develop`; see `docs/src/installation.md#nix`) so `cl-prolog`/`cl-weave` are on
+`CL_SOURCE_REGISTRY`:
 
 ```bash
 sbcl --script scripts/test.lisp
@@ -49,6 +51,26 @@ Expected outcomes:
 - coverage output is regenerated and inspected for meaningful gaps
 - the working tree contains no whitespace or merge-marker defects
 
+### The local gate is weaker than CI on macOS
+
+Nix ships with `sandbox = false` on macOS (`nix config show sandbox`), so
+`nix flake check` run locally on a Mac builds `checks.*.test` with the host
+filesystem visible. CI's `x86_64-linux` runner sandboxes it, where the only
+absolute paths that exist are `/bin/sh` and the Nix store. A test that reaches
+for any other absolute path -- `/bin/sleep`, `/usr/bin/env`, a system config
+file -- therefore passes locally on a Mac and fails only in CI. This is not
+hypothetical: `t/pty.lisp`'s SIGTERM case spawned `/bin/sleep` and did exactly
+that.
+
+Spawn external programs through `/bin/sh` and let `PATH` resolve the rest
+(`:program "/bin/sh" :args '("-c" "exec sleep 5")`), and before trusting a
+local green run on macOS for anything touching the filesystem or a
+subprocess, reproduce CI's environment:
+
+```bash
+nix build --option sandbox true .#checks.aarch64-darwin.test
+```
+
 ## Coverage policy
 
 The target is meaningful coverage, not vanity percentages.
@@ -59,6 +81,11 @@ The target is meaningful coverage, not vanity percentages.
 - files dominated by top-level definitions may under-report under `sb-cover`;
   treat those reports as instrumentation artifacts only after the exported
   contract is already exercised elsewhere
+- the same artifact applies to `&key`/`&optional` default-value init-forms
+  inside ordinary `defun`s (verified: `src/cell.lisp`'s `make-cell` default
+  for `char` reports uncovered even though `%blank-cell` calls `(make-cell)`
+  on every blank screen cell) -- verify by testing the returned value when
+  the argument is omitted, not by chasing the source form to a covered state
 
 ## Macro usage policy
 

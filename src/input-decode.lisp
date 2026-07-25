@@ -16,10 +16,16 @@ Bracketed paste markers stay visible as :PASTE-START and :PASTE-END events.
 Malformed UTF-8 signals INVALID-UTF8-SEQUENCE."
   (values (%collect-plain-events (%input->string input) t)))
 
-(defun make-input-decoder (&key collect-bracketed-paste (max-pending 4194304))
+(defun make-input-decoder (&key collect-bracketed-paste normalize-paste-line-endings
+                                (max-pending 4194304))
   "Create an incremental INPUT-DECODER.
 When COLLECT-BRACKETED-PASTE is true, completed paste blocks are emitted as a
 single :PASTE event instead of surfacing the surrounding marker events.
+When NORMALIZE-PASTE-LINE-ENDINGS is also true, that :PASTE event's text has
+CRLF and lone CR line endings converted to LF -- some terminals send CR-
+terminated lines inside a bracketed paste, and callers that insert paste text
+into an LF-delimited buffer usually want it pre-normalized rather than
+re-implementing that scan themselves.
 MAX-PENDING bounds the still-undecoded tail (partial UTF-8, a held escape, or an
 open paste payload) the decoder will buffer across chunks, which keeps an
 unterminated sequence from an untrusted source from exhausting memory; exceeding
@@ -27,6 +33,7 @@ it signals a TTY-KIT-ERROR."
   (unless (and (integerp max-pending) (not (minusp max-pending)))
     (error "MAX-PENDING must be a non-negative integer: ~S." max-pending))
   (%make-input-decoder :collect-bracketed-paste-p collect-bracketed-paste
+                       :normalize-paste-line-endings-p normalize-paste-line-endings
                        :max-pending max-pending))
 
 (defun %check-decoder-buffer (decoder)
@@ -71,12 +78,9 @@ its decode signals INVALID-UTF8-SEQUENCE instead."
   (cond
     ((stringp input)
      (if (plusp (length (input-decoder-pending-octets decoder)))
-         (let ((prefix (%decoder-decode-octets decoder #() eof)))
-           (when (plusp (length prefix))
-             (%assert-decoder-buffer-size
-              decoder
-              (+ (length prefix) (length input))))
-           (concatenate 'string prefix input))
+         (concatenate 'string
+                      (%decoder-decode-octets decoder #() eof)
+                      input)
          input))
     ((%octet-input-p input)
      (%decoder-decode-octets decoder input eof))

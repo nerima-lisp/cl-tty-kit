@@ -177,7 +177,7 @@ See [PTY](pty.md) for the full API.
 
 | Capability | Status | Notes |
 |---|---|---|
-| Unification + CPS resolution + clause DB | DONE | `nerima-lisp/cl-prolog`, depended on directly |
+| Unification + CPS resolution + clause DB | DONE | `nerima-lisp/cl-prolog`, a test-suite dependency (differential-testing oracle) |
 
 See [Logic Engine](logic-engine.md) for the full API.
 

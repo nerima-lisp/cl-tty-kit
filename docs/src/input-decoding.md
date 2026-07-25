@@ -99,6 +99,7 @@ named special keys or `:control-<letter>` events:
 | `Rubout` / `Backspace` (127 or 8) | `:special :backspace` |
 | `NUL` (0) | `:special :null` |
 | Ctrl-A .. Ctrl-Z | `:special :control-a` .. `:control-z` |
+| Ctrl-\\, Ctrl-], Ctrl-^, Ctrl-_ | `:special :control-backslash`, `:control-right-bracket`, `:control-caret`, `:control-underscore` |
 
 ### UTF-8
 
@@ -276,6 +277,29 @@ to a single `:paste "hello"` event.
 
 If EOF arrives before the closing `ESC [ 201 ~`, flushing falls back to the raw
 marker-plus-characters stream, so no input is discarded or invented.
+
+Some terminals send CR-terminated (or CRLF-terminated) lines inside a bracketed
+paste rather than bare LF. Building the decoder with
+`:normalize-paste-line-endings t` converts a collected `:paste` event's payload
+to LF-only before it is emitted, so callers that insert paste text into an
+LF-delimited buffer do not need to re-implement that scan:
+
+```lisp
+(let ((decoder (cl-tty-kit:make-input-decoder :collect-bracketed-paste t
+                                              :normalize-paste-line-endings t)))
+  (cl-tty-kit:decode-input-chunk
+   decoder
+   (concatenate 'string
+                (string #\Esc) "[200~"
+                "one" (string #\Return) (string #\Newline) "two"
+                (string #\Esc) "[201~")
+   :eof t))
+;; => (#S(KEY-EVENT :TYPE :PASTE :CODE "one
+;; two" :MODIFIERS NIL ...))
+```
+
+This has no effect unless `:collect-bracketed-paste` is also true, since only
+that mode produces a `:paste` event with an associated string to normalize.
 
 ## A full event loop
 

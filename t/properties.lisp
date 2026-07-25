@@ -2,7 +2,7 @@
   (:use #:cl #:cl-tty-kit)
   (:shadowing-import-from #:cl-weave #:describe)
   (:import-from #:cl-weave
-                #:expect #:it-property #:run-all)
+                #:expect #:it #:it-property #:run-all)
   (:export #:run-tests))
 
 (in-package #:cl-tty-kit/property-tests)
@@ -126,6 +126,21 @@
           while current
           do (expect (<= (length (render-diff current previous))
                           (length (render-screen current)))))))
+
+(describe "render-diff stays within an allocation budget"
+  ;; A regression guard, not a correctness check: a worst-case 80x24 full
+  ;; repaint conses well under 400KB on this project's supported SBCL
+  ;; versions, so 2MB (5x headroom) tolerates version-to-version SBCL
+  ;; allocator drift while still failing loudly on an accidental O(n^2)
+  ;; blowup or a diff that stops discarding unchanged cells.
+  (it "an 80x24 full repaint allocates under 2MB"
+    (let* ((previous (make-screen 80 24))
+           (current (screen-copy previous)))
+      (dotimes (y 24)
+        (dotimes (x 80)
+          (screen-put-cell current x y (code-char (+ 33 (mod (+ x y) 90))))))
+      (expect (lambda () (render-diff current previous))
+              :to-allocate-under (* 2 1024 1024)))))
 
 (defun run-tests ()
   "Run every property block registered above and return true iff all passed."
