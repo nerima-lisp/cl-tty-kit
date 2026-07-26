@@ -260,7 +260,8 @@ FROM and TO are (R G B) lists; the first result is FROM and, when STEPS > 1, the
 last is TO, with the rest evenly spaced (via BLEND-COLORS). STEPS must be a
 positive integer. Handy for heatmaps and status ramps feeding STYLE-FG/STYLE-BG
 through RGB-TO-256."
-  (%assert (and (integerp steps) (plusp steps)) "Gradient STEPS ~S must be a positive integer." steps)
+  (%assert (and (integerp steps) (plusp steps))
+           "Gradient STEPS ~S must be a positive integer." steps)
   (if (= steps 1)
       (list (blend-colors from to 0))
       (loop for index from 0 below steps

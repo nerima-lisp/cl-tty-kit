@@ -21,7 +21,8 @@
   (%assert (characterp value) "~A ~S must be a character." name value))
 
 (defun %assert-layout-align (align)
-  (%assert (member align '(:left :right :center) :test #'eq) "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align))
+  (%assert (member align '(:left :right :center) :test #'eq)
+           "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align))
 
 (defun %width-prefix-end (string budget &key (start 0) (end (length string)))
   "Return the largest index E in [START, END] whose column span from START is
@@ -189,7 +190,8 @@ its own becomes a lone over-width chunk rather than causing an endless loop."
 The column is tracked by display width and reset by a newline, so the stops line
 up the way a terminal renders them. TAB-WIDTH must be a positive integer."
   (%assert-layout-string "STRING" string)
-  (%assert (and (integerp tab-width) (plusp tab-width)) "TAB-WIDTH ~S must be a positive integer." tab-width)
+  (%assert (and (integerp tab-width) (plusp tab-width))
+           "TAB-WIDTH ~S must be a positive integer." tab-width)
   (with-output-to-string (out)
     (let ((column 0))
       (loop for char across string

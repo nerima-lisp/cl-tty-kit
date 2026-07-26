@@ -23,7 +23,8 @@
   (%assert (characterp value) "~A ~S must be a character." name value))
 
 (defun %assert-column-align (name value)
-  (%assert (member value '(:left :right :center) :test #'eq) "~A ~S must be :LEFT, :RIGHT, or :CENTER." name value))
+  (%assert (member value '(:left :right :center) :test #'eq)
+           "~A ~S must be :LEFT, :RIGHT, or :CENTER." name value))
 
 (defun %assert-aligns (aligns)
   (unless (or (null aligns) (listp aligns))

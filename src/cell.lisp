@@ -145,8 +145,9 @@ more clearly than the bare integer. An unknown NAME signals an error."
   "Return a normalized style list from modifier keywords and color entries."
   (copy-list (%normalize-cell-style items)))
 
-(setf (documentation 'make-style 'function)
-      "Return a normalized style list with deduplicated modifiers and the last valid fg/bg entries.")
+(setf
+ (documentation 'make-style 'function)
+ "Return a normalized style list with deduplicated modifiers and the last valid fg/bg entries.")
 
 (defun style-merge (base override)
   "Return a normalized style combining BASE with OVERRIDE, OVERRIDE winning.

@@ -15,7 +15,8 @@ centralizing it here removes dozens of duplicated UNLESS/ERROR bodies."
      (:documentation ,documentation)
      ,@options))
 
-(defmacro define-formatted-tty-kit-condition (name superclasses slots documentation &rest report-spec)
+(defmacro define-formatted-tty-kit-condition
+    (name superclasses slots documentation &rest report-spec)
   (if (and report-spec (keywordp (first report-spec)) (eql (first report-spec) :report))
       `(define-tty-kit-condition ,name ,superclasses
          ,slots

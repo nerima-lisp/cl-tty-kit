@@ -34,7 +34,8 @@ horizontal, vertical, top-left, top-right, bottom-left, bottom-right.")
   (%assert (or (null title) (stringp title)) "Box TITLE ~S must be NIL or a string." title))
 
 (defun %assert-box-title-align (align)
-  (%assert (member align '(:left :center :right)) "Box TITLE-ALIGN ~S must be one of :LEFT, :CENTER, or :RIGHT." align))
+  (%assert (member align '(:left :center :right))
+           "Box TITLE-ALIGN ~S must be one of :LEFT, :CENTER, or :RIGHT." align))
 
 (defun %box-put (screen x y char style style-supplied-p)
   (if style-supplied-p

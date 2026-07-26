@@ -103,7 +103,8 @@
                (integerp end)
                (<= 0 start)
                (<= start end)
-               (<= end (length string))) "Invalid string bounds START=~S END=~S for string of length ~D."
+               (<= end (length string)))
+           "Invalid string bounds START=~S END=~S for string of length ~D."
            start
            end
            (length string)))

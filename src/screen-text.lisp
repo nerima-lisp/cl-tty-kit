@@ -25,10 +25,12 @@
                (every #'stringp lines)) "LINES ~S must be a proper list of strings." lines))
 
 (defun %assert-screen-text-align (align)
-  (%assert (member align '(:left :right :center) :test #'eq) "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align))
+  (%assert (member align '(:left :right :center) :test #'eq)
+           "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align))
 
 (defun %assert-screen-text-vertical (vertical)
-  (%assert (member vertical '(:top :middle :bottom) :test #'eq) "VERTICAL ~S must be one of :TOP, :MIDDLE, or :BOTTOM." vertical))
+  (%assert (member vertical '(:top :middle :bottom) :test #'eq)
+           "VERTICAL ~S must be one of :TOP, :MIDDLE, or :BOTTOM." vertical))
 
 (defun screen-write-aligned (screen rect text &key (align :left) (vertical :top) style)
   "Write the single line TEXT inside RECT, returning SCREEN.

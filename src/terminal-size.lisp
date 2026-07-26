@@ -57,7 +57,8 @@ to standard input (0)."
       (values nil nil)
       (handler-case
           (sb-alien:with-alien ((winsize (sb-alien:struct %winsize)))
-            (if (and (sb-unix:unix-ioctl fd +tiocgwinsz+ (sb-alien:alien-sap (sb-alien:addr winsize)))
+            (if (and (sb-unix:unix-ioctl fd +tiocgwinsz+
+                                         (sb-alien:alien-sap (sb-alien:addr winsize)))
                      (plusp (sb-alien:slot winsize 'columns))
                      (plusp (sb-alien:slot winsize 'rows)))
                 (values (sb-alien:slot winsize 'columns)
@@ -79,7 +80,9 @@ fails."
                   (sb-alien:slot winsize 'columns) columns
                   (sb-alien:slot winsize 'x-pixels) 0
                   (sb-alien:slot winsize 'y-pixels) 0)
-            (and (sb-unix:unix-ioctl fd +tiocswinsz+ (sb-alien:alien-sap (sb-alien:addr winsize))) t))
+            (and (sb-unix:unix-ioctl fd +tiocswinsz+
+                                     (sb-alien:alien-sap (sb-alien:addr winsize)))
+                 t))
         (error () nil))))
 
 #+sbcl
