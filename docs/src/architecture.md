@@ -48,7 +48,7 @@ the OSC string-terminated ones. See [ANSI Helpers](ansi-helpers.md).
 Rendering separates the *decision* from the *emission*:
 `render-commands.lisp` and `render-diff.lisp` decide which cells changed and
 what to do about it, and `render-style.lisp` turns a normalized style into
-bytes. That is what lets `t/properties.lisp` assert the property that matters
+bytes. That is what lets `t/properties-test.lisp` assert the property that matters
 — a diff's visible result matches a full repaint, and is never longer than
 one — instead of pinning a byte-for-byte transcript. See
 [Screen and Rendering](screen-and-rendering.md).

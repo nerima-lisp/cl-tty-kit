@@ -3,13 +3,13 @@
 ;;; --------------------------------------------------------------------------
 ;;; Mutation, copy-on-write, and error-path coverage for SCREEN and CELL.
 ;;;
-;;; Split out of t/screen.lisp, which keeps the read-oriented API tests
+;;; Split out of t/screen-test.lisp, which keeps the read-oriented API tests
 ;;; (fill, copy, row-string, scroll, blit, crop, ...); this file groups the
 ;;; tests that share a theme instead -- every mutating SCREEN operation's
 ;;; effect on cell state, the copy-on-write contract CELL/SCREEN make about
 ;;; caller-owned style lists, and the bounds/dimension error paths both
 ;;; halves of the API share. Uses BOUNDS-ERROR-IS/DIMENSIONS-ERROR-IS,
-;;; defined in t/screen.lisp, loaded first.
+;;; defined in t/screen-test.lisp, loaded first.
 ;;; --------------------------------------------------------------------------
 
 (defun %test-screen-mutation-sequence ()

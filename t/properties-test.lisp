@@ -106,7 +106,7 @@
   ;; GEN-STATE-MACHINE drives SCREEN-COPY/SCREEN-PUT-CELL through random
   ;; mutation sequences and replays the resulting screen states, so RENDER-DIFF
   ;; is checked against every adjacent (PREVIOUS, CURRENT) pair the trace
-  ;; reaches rather than the fixed handful of examples in t/render-diff.lisp.
+  ;; reaches rather than the fixed handful of examples in t/render-diff-test.lisp.
   ;; %PREFERRED-DIFF-COMMANDS (src/render-diff.lisp) is documented to fall
   ;; back to a full repaint whenever the diff would not be shorter, so this
   ;; length bound is a real invariant, not an incidental one.

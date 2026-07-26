@@ -141,7 +141,7 @@ failing.
 
 ## A real example: the SGR oracle
 
-The test suite (`t/sgr-prolog-oracle.lisp`) uses the engine as an independent
+The test suite (`t/sgr-prolog-oracle-test.lisp`) uses the engine as an independent
 specification for part of the SGR color decoder. The imperative decoder in
 `src/sgr-parse.lisp` classifies color parameters with a hand-written `case`; the
 oracle states the same grammar as one relational fact per parameter and

@@ -17,7 +17,7 @@ The project uses semantic versioning:
 From 1.0.0 onward, the *stable surface* is exactly the set of symbols exported
 from the `cl-tty-kit` package. That set is listed in the
 [API Reference](api-reference.md) and asserted against the live package by
-`t/package-introspection.lisp`, so the documented list and the code cannot
+`t/package-introspection-test.lisp`, so the documented list and the code cannot
 drift apart silently. Alongside the symbol names themselves, the contract
 covers the shape of decoded input events (a `key-event`'s type, code, and
 modifiers — see [Input Decoding](input-decoding.md)) and the condition
@@ -27,7 +27,7 @@ Outside the stable surface, and freely changeable in a minor or patch release:
 `%`-prefixed internals, the opt-in integrations under [Contrib](contrib.md),
 this repository's build and CI plumbing (including `flake.nix`'s inputs and
 outputs), and the exact byte sequence `render-diff` emits — that one is bounded
-only by the property `t/properties.lisp` asserts, namely that its visible
+only by the property `t/properties-test.lisp` asserts, namely that its visible
 result matches `render-screen` and it is never longer than a full repaint.
 
 ### What requires a 2.0
@@ -71,7 +71,7 @@ Before tagging a release:
 5. Bump `:version` in `cl-tty-kit.asd` to match the release being cut.
 6. Confirm that the [API Reference](api-reference.md) still matches the
    exported symbols and that [Examples](examples.md) still lists every file
-   under `examples/` — `t/package-readme.lisp` checks both mechanically, but
+   under `examples/` — `t/package-readme-test.lisp` checks both mechanically, but
    review them by hand too.
 7. Smoke-test the examples on a clean SBCL environment if possible.
 8. If `flake.lock` moved (the `cl-prolog`/`cl-weave`/`paredit-cli`/`nixpkgs`

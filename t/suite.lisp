@@ -137,7 +137,7 @@ macro is the shared assertion for that contract across the test suite."
   ;; The example-based suite above is complemented by the cl-weave
   ;; property-based suite, which searches each pure function's input space for a
   ;; counterexample to its stated algebraic law. Resolve it at runtime so this
-  ;; file need not be compiled after t/properties.lisp.
+  ;; file need not be compiled after t/properties-test.lisp.
   (run-test "properties"
             (lambda ()
               (unless (uiop:symbol-call '#:cl-tty-kit/property-tests '#:run-tests)

@@ -116,7 +116,7 @@ without turning into a UI framework or a shell.
 From 1.0.0 onward `cl-tty-kit` follows [semantic versioning](https://semver.org).
 The stable surface is precisely the symbols exported from the `cl-tty-kit`
 package — every one is listed in the [API Reference](api-reference.md) and
-asserted against the live package by `t/package-introspection.lisp`, so that
+asserted against the live package by `t/package-introspection-test.lisp`, so that
 list cannot silently drift from the code.
 
 Within the 1.x series exported symbols will not be removed or renamed and

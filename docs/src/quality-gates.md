@@ -62,7 +62,7 @@ Expected outcomes:
 
 A test that reaches for any other absolute path — `/bin/sleep`,
 `/usr/bin/env`, a system config file — therefore passes locally on a Mac and
-fails only in CI. This is not hypothetical: `t/pty.lisp`'s SIGTERM case
+fails only in CI. This is not hypothetical: `t/pty-test.lisp`'s SIGTERM case
 spawned `/bin/sleep` and did exactly that.
 
 Spawn external programs through `/bin/sh` and let `PATH` resolve the rest
@@ -118,7 +118,7 @@ reach one.
 Before merging or releasing:
 
 - the [API Reference](api-reference.md) matches the exported symbols, which
-  `t/package-readme.lisp` checks mechanically
+  `t/package-readme-test.lisp` checks mechanically
 - [Examples](examples.md) lists every runnable file under `examples/`
 - `CHANGELOG.md` records externally visible changes under `[Unreleased]`
 - [Development](development.md) and [Release Process](release-process.md)
