@@ -63,9 +63,13 @@
       # output for that platform fails to evaluate, not merely to build.
       # Listing it would make `nix flake check --all-systems` a guaranteed
       # error and advertise a platform this flake cannot serve.
+      # x86_64-linux is verified by CI, aarch64-darwin by the macOS runner in
+      # the same matrix. aarch64-linux is not declared: nothing runs it, and
+      # advertising it made `nix flake check --all-systems` try to realise
+      # aarch64-linux derivations on a darwin runner, which fails with
+      # "platform mismatch". See ADR-0078.
       systems = [
         "x86_64-linux"
-        "aarch64-linux"
         "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;

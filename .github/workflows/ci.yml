@@ -59,12 +59,12 @@ jobs:
       # (checks.formatting), the structural paredit lint (checks.paredit-lint)
       # and the mkdocs --strict build (checks.docs).
       #
-      # --all-systems because flake.nix declares more than one system: without
-      # it a platform this flake advertises but can no longer evaluate (as
-      # x86_64-darwin became once nixpkgs 26.11 dropped it) stays invisible to
-      # CI. Foreign systems are evaluated, not built, so this stays cheap.
+      # No --all-systems. The claim that it only evaluates foreign systems is
+      # wrong: it realises their derivations too, so the darwin runner tried to
+      # build aarch64-linux and failed with "platform mismatch". Each matrix
+      # leg checks its own system, which is what the two legs are for.
       - name: Check flake
-        run: nix flake check --all-systems --print-build-logs
+        run: nix flake check --print-build-logs
 
       # Catches stray conflict markers and whitespace errors that compile fine.
       - name: Check diff hygiene

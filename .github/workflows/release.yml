@@ -48,10 +48,13 @@ jobs:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       # Never publish a release that does not pass its own test suite.
-      # --all-systems because flake.nix declares more than one system, so a tag
-      # must not be publishable while a declared platform fails to evaluate.
+      #
+      # No --all-systems. It does not merely evaluate a foreign system, it
+      # realises its derivations, so this ubuntu runner would try to build the
+      # aarch64-darwin ones and fail with "platform mismatch". The darwin half
+      # is covered by the macOS leg of ci.yml on the same commit.
       - name: Verify the tagged tree
-        run: nix flake check --all-systems --print-build-logs
+        run: nix flake check --print-build-logs
 
       # Extracts this version's CHANGELOG section as the release body. Requires
       # the Keep a Changelog heading format `## [X.Y.Z] - YYYY-MM-DD`.
