@@ -17,6 +17,8 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-26
+
 ### Fixed
 
 - **`*raw-mode-tcsetattr-function*` stayed permanently `nil` on SBCL**,
