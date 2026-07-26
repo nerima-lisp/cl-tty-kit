@@ -17,6 +17,19 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-07-26
+
+### Fixed
+
+- **The v1.0.1 release workflow itself failed** (`nix flake check`'s
+  coverage-report build): `t/helpers-package-data.lisp`'s
+  `+expected-system-metadata+` hardcoded `(:version . "1.0.0")`, so the
+  package-introspection test that asserts the live ASDF `:version` against
+  this table failed the instant the `.asd` moved to `1.0.1`. v1.0.1's tag
+  is left as-is (tags are never moved, matching this org's convention —
+  see cl-process-kit's own v1.0.1 release notes for the same reasoning);
+  this release corrects the version constant and re-cuts.
+
 ## [1.0.1] - 2026-07-26
 
 ### Fixed
