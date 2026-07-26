@@ -22,9 +22,13 @@
 (defun %sb-posix-value (name)
   (symbol-value (%sb-posix-symbol name)))
 
+;;; raw-mode.lisp (loaded before this file on every platform) already
+;;; (defvar *raw-mode-tcsetattr-function* nil) -- defvar is a no-op on an
+;;; already-bound variable, so re-declaring it here with defvar would
+;;; silently never install the real SBCL implementation. setf instead.
 #+sbcl
-(defvar *raw-mode-tcsetattr-function*
-  (%sb-posix-function "TCSETATTR"))
+(setf *raw-mode-tcsetattr-function*
+      (%sb-posix-function "TCSETATTR"))
 
 #+sbcl
 (defun %raw-mode-flag-values (iflag oflag cflag lflag)

@@ -17,6 +17,23 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`*raw-mode-tcsetattr-function*` stayed permanently `nil` on SBCL**,
+  making every real (non-test) call to `enable-raw-mode`/`disable-raw-mode`
+  signal `raw-mode-operation-failed` wrapping "The function COMMON-LISP:NIL
+  is undefined." `src/raw-mode.lisp` (loaded on every platform)
+  `(defvar *raw-mode-tcsetattr-function* nil)`; `src/raw-mode-sbcl.lisp`
+  (loaded after it, `#+sbcl` only) re-declared the same variable with
+  `defvar` and an SBCL-specific initial value — but `defvar` is a no-op on
+  an already-bound variable, so that initial value never took effect. The
+  test suite never caught this because every raw-mode test binds its own
+  stub via `let` for isolation, bypassing the broken global default
+  entirely. Changed the SBCL file's `defvar` to `setf`, which
+  unconditionally installs the real `sb-posix:tcsetattr` binding.
+  Found via a downstream consumer (cl-tmux) crashing on its most basic
+  invocation.
+
 ## [1.0.0] - 2026-07-26
 
 First stable release. The public API -- the symbols exported from the
