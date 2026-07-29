@@ -197,18 +197,30 @@
           # `sbcl --script scripts/coverage.lisp`, for CI to upload as an
           # artifact without a local SBCL/submodule checkout.
           coverage-report =
-            pkgs.runCommand "cl-tty-kit-coverage-report" { nativeBuildInputs = [ pkgs.sbcl ]; }
+            pkgs.runCommand "cl-tty-kit-coverage-report"
+              {
+                nativeBuildInputs = [
+                  pkgs.perl
+                  pkgs.sbcl
+                ];
+              }
               ''
-                cp -R ${src} source
-                chmod -R u+w source
-                cd source
+                  # SB-COVER derives its HTML names from source pathnames.  A
+                  # build-directory-relative source copy makes those names vary
+                  # per invocation, so use Nix's fixed output path instead.
+                  work="$out/work"
+                  mkdir -p "$work"
+                  cp -R ${src}/. "$work/"
+                  chmod -R u+w "$work"
+                  cd "$work"
                 export HOME="$TMPDIR/home"
                 export XDG_CACHE_HOME="$TMPDIR/cache"
                 mkdir -p "$HOME" "$XDG_CACHE_HOME"
                 export CL_SOURCE_REGISTRY="${clSourceRegistryFor}$PWD//:"
-                timeout 300 sbcl --script scripts/coverage.lisp
-                mkdir -p "$out"
-                cp -R coverage/. "$out/"
+                  timeout 300 sbcl --script scripts/coverage.lisp
+                  cp -R coverage/. "$out/"
+                  perl scripts/normalize-coverage-report.pl "$out" "$work"
+                  rm -rf "$work"
               '';
 
           docs = mkDocs pkgs;
