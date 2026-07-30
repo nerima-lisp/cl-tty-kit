@@ -47,6 +47,12 @@
   inputs.treefmt-nix.url = "github:numtide/treefmt-nix";
   inputs.treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
 
+  # `crane` for Common Lisp/ASDF; used here for FROMASDSYSTEM's tested
+  # `:version` extraction, replacing this flake's own hand-rolled regex.
+  inputs.cl-nix-forge.url = "github:nerima-lisp/cl-nix-forge/v0.4.0";
+  inputs.cl-nix-forge.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.cl-nix-forge.inputs.treefmt-nix.follows = "treefmt-nix";
+
   outputs =
     {
       self,
@@ -56,6 +62,7 @@
       paredit-cli,
       cl-parser-kit,
       treefmt-nix,
+      cl-nix-forge,
     }:
     let
       # x86_64-darwin is deliberately absent: nixpkgs 26.11 (which
@@ -87,23 +94,12 @@
         }
       );
 
-      # Single source of truth for the project version: parse `:version`
-      # straight out of cl-tty-kit.asd so the flake can never drift from the
-      # ASDF system definition.
-      projectVersion =
-        let
-          asd = builtins.readFile ./cl-tty-kit.asd;
-          # Match only lines that are literally `:version "X"`, so a comment
-          # or docstring merely mentioning :version can never shadow the
-          # real definition.
-          matches = builtins.filter (m: m != null) (
-            map (builtins.match ''[[:space:]]*:version[[:space:]]+"([^"]+)".*'') (
-              nixpkgs.lib.splitString "\n" asd
-            )
-          );
-        in
-        assert matches != [ ];
-        builtins.head (builtins.head matches);
+      # Single source of truth for the project version: FROMASDSYSTEM reads
+      # `:version` straight out of cl-tty-kit.asd (failing loudly on an
+      # unrecognized shape) so the flake can never drift from the ASDF system
+      # definition. Version extraction has no per-system output, so this picks
+      # one arbitrary system's `lib` -- x86_64-linux, always in `systems`.
+      projectVersion = cl-nix-forge.lib.x86_64-linux.fromAsdSystem ./cl-tty-kit.asd;
 
       sourceFor = pkgs: pkgs.lib.cleanSource ./.;
 

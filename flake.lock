@@ -3,6 +3,30 @@
     "cl-nix-forge": {
       "inputs": {
         "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": [
+          "treefmt-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1785347314,
+        "narHash": "sha256-eSnOllc5L+DuP5TrPGPQUzMzfN8HA88x326EzZvo7V4=",
+        "owner": "nerima-lisp",
+        "repo": "cl-nix-forge",
+        "rev": "53f26644d8cc40f5e677cedb00dd10ca5726d25a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nerima-lisp",
+        "ref": "v0.4.0",
+        "repo": "cl-nix-forge",
+        "type": "github"
+      }
+    },
+    "cl-nix-forge_2": {
+      "inputs": {
+        "nixpkgs": [
           "cl-weave",
           "nixpkgs"
         ],
@@ -83,7 +107,7 @@
     },
     "cl-weave": {
       "inputs": {
-        "cl-nix-forge": "cl-nix-forge",
+        "cl-nix-forge": "cl-nix-forge_2",
         "nixpkgs": [
           "nixpkgs"
         ],
@@ -164,6 +188,7 @@
     },
     "root": {
       "inputs": {
+        "cl-nix-forge": "cl-nix-forge",
         "cl-parser-kit": "cl-parser-kit",
         "cl-prolog": "cl-prolog",
         "cl-weave": "cl-weave",
