@@ -114,6 +114,25 @@ is omitted (already true for `make-cell`'s default, per the test above),
 not by chasing the source form itself to a covered state -- it cannot
 reach one.
 
+The same artifact reaches *branch* coverage too, not only expression
+coverage, once a validation call goes through `DEFINE-SIMPLE-ASSERT`/
+`DEFINE-VALIDATING-ASSERT`: `src/cursor.lisp`'s `%ASSERT-CURSOR-COORDINATE`
+wraps a single `(typep value '(integer 0 *))` check, and `t/cursor-test.lisp`
+demonstrably exercises both outcomes -- `(make-cursor)` for the true branch,
+`(make-cursor :x -1)` (asserting `CURSOR-PARAMETER-INVALID`) for the false
+branch -- yet `sb-cover` still reports that `typep` as a partially-covered
+branch. Treat a low branch-coverage percentage on a file dominated by these
+macros the same way: confirm both outcomes have a passing test, not that
+`sb-cover`'s own percentage reaches 100. For a stronger, artifact-free signal
+on a specific pure function, prefer mutation testing over chasing the
+`sb-cover` percentage -- see `t/properties-test.lisp`'s "clamp's body has no
+surviving mutant" block, built on `cl-weave:run-mutations`: it takes `CLAMP`'s
+own body form, applies cl-weave's arithmetic/comparison/branch mutation
+operators, and asserts every mutant produces a different result from the
+real function on a case battery covering both branches and their boundary --
+a claim no line-coverage percentage can make, since a mutant and the
+original take the identical source paths by construction.
+
 ## Documentation gate
 
 Before merging or releasing:
@@ -154,3 +173,39 @@ Quicklisp flakiness never blocks a core merge.
 
 See [Release Process](release-process.md) for how this gate fits into
 cutting a tagged release.
+
+## Production readiness
+
+"Production ready" is not a separate, informal judgment call layered on top
+of the gates above -- it is what passing all of them, together, means. A
+release is production ready when every one of these holds simultaneously:
+
+- **API contract**: the 1.x line has a semantic-versioning guarantee (see
+  `README.md`'s "API stability" section), checked mechanically against the
+  live package by `t/package-introspection-test.lisp`
+- **Reproducible build**: `nix build` produces the hermetic package from a
+  flake-pinned source registry, with no reliance on host ASDF configuration
+  or caches (see the verification gate above)
+- **CI matrix, not just local**: `.github/workflows/ci.yml` runs the same
+  `nix flake check --all-systems` across `x86_64-linux` and `aarch64-darwin`
+  on every push, not only whichever platform a contributor develops on (see
+  "The local gate is weaker than CI on macOS" above)
+- **Bounded execution**: every entry point (test, example, coverage,
+  benchmark, verify) runs under an explicit OS-level timeout, so a hang is a
+  failed run, not a stuck CI job -- see "Non-functional requirements" above
+- **No backward-compatibility debt**: the change-rejection criteria above
+  reject shims and dual code paths on sight, so the tree carries no
+  deprecated surface waiting to be a future incident
+- **Documented contract**: the documentation gate above keeps the API
+  reference, examples list, and CHANGELOG mechanically or procedurally tied
+  to the actual exported surface, so "production ready" also means
+  "explainable to a new integrator without reading the source"
+- **Security and support policy**: the org-wide
+  [security policy](https://github.com/nerima-lisp/.github/blob/main/SECURITY.md)
+  and [support policy](https://github.com/nerima-lisp/.github/blob/main/SUPPORT.md)
+  apply to this repository, so a vulnerability report has a defined
+  intake path rather than an ad hoc one
+
+None of these is new process -- each is an existing, already-enforced gate.
+This section exists so "is this production ready" has one page to check
+against instead of an implicit standard scattered across this site.

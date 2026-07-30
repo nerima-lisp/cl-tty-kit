@@ -94,6 +94,16 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
   `%SNAPSHOT-RENDERER-SCREEN` (`src/renderer.lisp`): every existing
   `RENDERER-RESIZE` case changed width, so the height-mismatch half of its
   dimension check was never independently exercised
+- adopt `cl-weave`'s mutation-testing runner (`RUN-MUTATIONS`,
+  `MUTATION-SCORE-PASSES-P`) for `CLAMP` (`src/clamp.lisp`), the first use of
+  this DSL surface in the project. `t/properties-test.lisp`'s "clamp's body
+  has no surviving mutant" block takes `CLAMP`'s own body form, applies
+  cl-weave's built-in arithmetic/comparison/branch mutation operators, and
+  asserts every resulting mutant diverges from the real function on a case
+  battery spanning both branches and their boundary (`min > max`, `min =
+  max`, and both in- and out-of-range values) -- a stronger, artifact-free
+  complement to the line/branch percentages `sb-cover` reports (see
+  `docs/src/quality-gates.md`)
 
 ### Documentation
 
@@ -117,6 +127,20 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
   The migration changed which compilation units these forms fall into, which
   is why the same pre-existing artifact became more prominent, not a
   regression in what the suite exercises
+- found the same reporting artifact also reaches `sb-cover`'s *branch*
+  percentage once a check goes through `DEFINE-SIMPLE-ASSERT`/
+  `DEFINE-VALIDATING-ASSERT`: `src/cursor.lisp`'s coordinate check reports as
+  a partially-covered branch even though `t/cursor-test.lisp` exercises both
+  its true and false outcomes. `docs/src/quality-gates.md` now documents this
+  case and points to mutation testing (see Added) as the artifact-free
+  alternative for a specific pure function
+- `docs/src/quality-gates.md` gained a "Production readiness" section
+  consolidating what was previously scattered evidence -- API-stability
+  guarantee, hermetic reproducible build, the cross-platform CI matrix,
+  bounded execution, the no-backward-compatibility-debt rejection criteria,
+  the documentation gate, and the org security/support policies -- into one
+  explicit checklist, rather than an implicit standard a reviewer had to
+  infer from separate pages
 
 ## [1.0.2] - 2026-07-26
 
