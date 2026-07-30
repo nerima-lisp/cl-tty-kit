@@ -19,10 +19,9 @@ simple without a measurable cost."
   #-sb-thread
   `(progn ,@body))
 
-(defun %assert-raw-mode-fd (fd)
-  (unless (and (integerp fd) (not (minusp fd)))
-    (error "Raw mode FD must be a non-negative integer, got ~S." fd))
-  fd)
+(define-validating-assert %assert-raw-mode-fd (fd)
+  (and (integerp fd) (not (minusp fd)))
+  "Raw mode FD must be a non-negative integer, got ~S." fd)
 
 (defun %signal-raw-mode-operation-failed (operation fd reason)
   (error 'raw-mode-operation-failed

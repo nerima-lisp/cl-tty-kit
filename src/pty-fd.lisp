@@ -37,10 +37,9 @@ FD-READ-OCTETS / FD-WRITE-OCTETS."
   '(simple-array (unsigned-byte 8) (*)))
 
 #+sbcl
-(defun %assert-fd (fd)
-  (unless (and (integerp fd) (not (minusp fd)))
-    (error "File descriptor must be a non-negative integer, got ~S." fd))
-  fd)
+(define-validating-assert %assert-fd (fd)
+  (and (integerp fd) (not (minusp fd)))
+  "File descriptor must be a non-negative integer, got ~S." fd)
 
 #+sbcl
 (defun %assert-octet-vector (value name)

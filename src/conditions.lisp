@@ -20,6 +20,20 @@ spelling, so a validation helper is one form instead of a DEFUN wrapping one
   `(defun ,name ,lambda-list
      (%assert ,predicate ,format-string ,@format-args)))
 
+(defmacro define-validating-assert (name lambda-list predicate format-string &rest format-args)
+  "Define NAME as a function of LAMBDA-LIST that signals an error via
+FORMAT-STRING/FORMAT-ARGS unless PREDICATE holds, then returns its final
+argument.
+
+Distinct from DEFINE-SIMPLE-ASSERT: some %ASSERT-* helpers validate purely
+as a side effect (their caller already holds the value), while others
+validate and hand the now-checked value back so the caller can use the
+validation call itself as an expression. This macro is that second shape's
+single declarative spelling."
+  `(defun ,name ,lambda-list
+     (%assert ,predicate ,format-string ,@format-args)
+     ,(car (last lambda-list))))
+
 (defmacro define-tty-kit-condition (name superclasses slots documentation &body options)
   `(define-condition ,name ,superclasses
      ,slots

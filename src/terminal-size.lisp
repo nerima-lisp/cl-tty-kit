@@ -40,10 +40,9 @@ platform is not one this file knows the constant for.")
 platform, or NIL when unknown.")
 
 #+sbcl
-(defun %assert-terminal-fd (fd)
-  (unless (and (integerp fd) (not (minusp fd)))
-    (error "Terminal FD must be a non-negative integer, got ~S." fd))
-  fd)
+(define-validating-assert %assert-terminal-fd (fd)
+  (and (integerp fd) (not (minusp fd)))
+  "Terminal FD must be a non-negative integer, got ~S." fd)
 
 #+sbcl
 (defun terminal-size (&optional (fd 0))

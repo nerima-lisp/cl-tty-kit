@@ -8,25 +8,21 @@
 
 (defun %screen-touch (screen &optional (start-y 0) (end-y (screen-height screen))) (let ((generation (the fixnum (1+ (screen-generation screen))))) (setf (screen-generation screen) generation) (fill (screen-row-generations screen) generation :start start-y :end end-y)) screen)
 
-(defun %assert-screen (screen)
-  (unless (screen-p screen)
-    (error "Expected a SCREEN, got ~S." screen))
-  screen)
+(define-validating-assert %assert-screen (screen)
+  (screen-p screen)
+  "Expected a SCREEN, got ~S." screen)
 
-(defun %assert-screen-rect (rect)
-  (unless (rect-p rect)
-    (error "Expected a RECT, got ~S." rect))
-  rect)
+(define-validating-assert %assert-screen-rect (rect)
+  (rect-p rect)
+  "Expected a RECT, got ~S." rect)
 
-(defun %assert-cell-template (value)
-  (unless (or (null value) (cell-p value) (characterp value))
-    (error "Cell template ~S must be NIL, a CELL, or a character." value))
-  value)
+(define-validating-assert %assert-cell-template (value)
+  (or (null value) (cell-p value) (characterp value))
+  "Cell template ~S must be NIL, a CELL, or a character." value)
 
-(defun %assert-cell-value (value)
-  (unless (or (cell-p value) (characterp value))
-    (error "Cell value ~S must be a CELL or a character." value))
-  value)
+(define-validating-assert %assert-cell-value (value)
+  (or (cell-p value) (characterp value))
+  "Cell value ~S must be a CELL or a character." value)
 
 (defun %coerce-cell-template (value)
   (%assert-cell-template value)
@@ -47,18 +43,17 @@
 
 (defun %coerce-cell-style (style) (and style (copy-tree (%normalize-cell-style style))))
 
-(defun %assert-screen-dimensions (width height)
-  ;; Reject not just negatives but any dimension whose cell grid could not be
-  ;; allocated: each side must be a non-negative fixnum and the total cell
-  ;; count must stay within ARRAY-TOTAL-SIZE-LIMIT. Without the fixnum/product
-  ;; bound a huge-but-non-negative dimension slips past validation and then
-  ;; raises a raw TYPE-ERROR (fixnum slot store) or MAKE-ARRAY error instead of
-  ;; the documented SCREEN-DIMENSIONS-INVALID.
-  (%assert (and (typep width '(and fixnum unsigned-byte))
-               (typep height '(and fixnum unsigned-byte))
-               (< (* width height) array-total-size-limit)) 'screen-dimensions-invalid
-           :width width
-           :height height))
+;; Reject not just negatives but any dimension whose cell grid could not be
+;; allocated: each side must be a non-negative fixnum and the total cell
+;; count must stay within ARRAY-TOTAL-SIZE-LIMIT. Without the fixnum/product
+;; bound a huge-but-non-negative dimension slips past validation and then
+;; raises a raw TYPE-ERROR (fixnum slot store) or MAKE-ARRAY error instead of
+;; the documented SCREEN-DIMENSIONS-INVALID.
+(define-simple-assert %assert-screen-dimensions (width height)
+  (and (typep width '(and fixnum unsigned-byte))
+       (typep height '(and fixnum unsigned-byte))
+       (< (* width height) array-total-size-limit))
+  'screen-dimensions-invalid :width width :height height)
 
 (defun %screen-index (screen x y)
   (+ (* y (screen-width screen)) x))
@@ -85,10 +80,9 @@
     :height
     (screen-height screen)))
 
-(defun %assert-screen-offset (name value)
-  (unless (integerp value)
-    (error "Screen ~A ~S must be an integer." name value))
-  value)
+(define-validating-assert %assert-screen-offset (name value)
+  (integerp value)
+  "Screen ~A ~S must be an integer." name value)
 
 (defun %assert-screen-rect-bounds (screen x y width height)
   (%assert-screen screen)

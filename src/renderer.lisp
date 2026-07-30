@@ -28,15 +28,13 @@ frame into.")
       :diff-plan
       (%make-screen-diff-plan screen))))
 
-(defun %assert-renderer (renderer)
-  (unless (renderer-p renderer)
-    (error "RENDERER ~S must be a renderer." renderer))
-  renderer)
+(define-validating-assert %assert-renderer (renderer)
+  (renderer-p renderer)
+  "RENDERER ~S must be a renderer." renderer)
 
-(defun %assert-render-cursor (cursor)
-  (unless (cursor-p cursor)
-    (error "CURSOR ~S must be a cursor." cursor))
-  cursor)
+(define-validating-assert %assert-render-cursor (cursor)
+  (cursor-p cursor)
+  "CURSOR ~S must be a cursor." cursor)
 
 (defun renderer-width (renderer)
   "Return the column width of RENDERER's back buffer."

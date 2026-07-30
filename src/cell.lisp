@@ -14,15 +14,13 @@
   "Return a defensive copy of the normalized style list stored in CELL."
   (copy-tree (cell-raw-style cell)))
 
-(defun %assert-cell-character (char)
-  (unless (characterp char)
-    (error "Cell character must be a character, got ~S." char))
-  char)
+(define-validating-assert %assert-cell-character (char)
+  (characterp char)
+  "Cell character must be a character, got ~S." char)
 
-(defun %assert-cell (cell)
-  (unless (cell-p cell)
-    (error "Expected a CELL, got ~S." cell))
-  cell)
+(define-validating-assert %assert-cell (cell)
+  (cell-p cell)
+  "Expected a CELL, got ~S." cell)
 
 (defun %style-color (channel first &optional second third)
   (cond

@@ -95,10 +95,9 @@ regardless of the order or duplicates in which they were supplied."
   (or (null value) (characterp value))
   "Key event ~A ~S must be NIL or a character." name value)
 
-(defun %assert-key-event (event)
-  (unless (key-event-p event)
-    (error "EVENT ~S must be a key-event." event))
-  event)
+(define-validating-assert %assert-key-event (event)
+  (key-event-p event)
+  "EVENT ~S must be a key-event." event)
 
 (defun make-key-event (&key (type :character) code modifiers (kind :press) text
                             shifted-key base-key)
