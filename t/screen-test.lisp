@@ -386,7 +386,7 @@
     (is (string= "hel" (screen-row-string screen 0))))
   ;; A full-width glyph uses two terminal cells for alignment and clipping.
   (dolist (case (list (list :left "表    ")
-                      (list :center " 表  ")
+                      (list :center " 表   ")
                       (list :right "   表 ")))
     (let ((screen (make-screen 5 1)))
       (screen-write-aligned screen (make-rect :width 5 :height 1) "表"

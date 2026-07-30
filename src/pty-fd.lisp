@@ -75,9 +75,9 @@ it with select(2)/poll(2)."
   (%with-pty-operation (:fd-read nil)
     (%assert-fd fd)
     (%assert-octet-vector buffer "FD read buffer")
+    (unless (or (null limit) (and (integerp limit) (not (minusp limit))))
+      (error "FD read limit must be a non-negative integer, got ~S." limit))
     (let ((count (if (null limit) (length buffer) (min limit (length buffer)))))
-      (unless (and (integerp count) (not (minusp count)))
-        (error "FD read limit must be a non-negative integer, got ~S." limit))
       (if (zerop count)
           0
           (sb-sys:with-pinned-objects (buffer)

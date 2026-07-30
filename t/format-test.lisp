@@ -136,7 +136,7 @@
     (is (search "$" two-color))
     (is (search "?" two-color)))
   ;; Reusing band color state must not leak the red bits into the next band.
-  (is (string= (format nil "~CPq#21;2;0;0;100#196;2;100;0;0#196~-#21@~C\\" #\Esc #\Esc)
+  (is (string= (format nil "~CPq#21;2;0;0;100#196;2;100;0;0#196~~-#21@~C\\" #\Esc #\Esc)
                (format-sixel #(255 0 0 255 0 0 255 0 0 255 0 0 255 0 0 255 0 0 0 0 255) 1 7))))
   ;; A buffer whose length does not match WIDTH*HEIGHT*3 signals.
   (signals (error c) (format-sixel #(1 2 3) 2 2) (is c))
