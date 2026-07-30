@@ -17,6 +17,8 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-31
+
 ### Fixed
 
 - three regressions left behind by the prior `a8950bd` renderer-modernization
@@ -34,6 +36,11 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
   `TEST-RENDER-CORE`, and `TEST-RENDER-DIFF` a second time on every test run
   -- `t/suite.lisp`'s `RUN-TESTS` already dispatched all three individually
   right after. Deleted the file, its ASDF component, and the dispatch entry
+- `nix build .#coverage-report`'s output embedded the Nix store path of the
+  build's working directory, making the report differ byte-for-byte between
+  otherwise-identical builds. `scripts/normalize-coverage-report.pl` now
+  rewrites the report in place to strip that path, and `flake.nix`'s
+  `coverage-report` derivation runs it as a post-processing step
 
 ### Changed
 

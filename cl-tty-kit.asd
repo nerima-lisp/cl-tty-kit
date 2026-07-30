@@ -48,7 +48,7 @@
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
-  :version "1.0.2"
+  :version "1.0.3"
   ;; SB-POSIX is bundled with SBCL and loaded directly by the SBCL-only
   ;; raw-mode implementation. Keeping it out of :DEPENDS-ON avoids an ASDF
   ;; source-registry scan merely to locate an already installed contrib.
@@ -105,7 +105,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "1.0.2"
+  :version "1.0.3"
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
