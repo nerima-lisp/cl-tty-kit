@@ -111,6 +111,14 @@ migrates, delete CELL-IS/SCREEN-CELLS-IS and rename this to CELL-IS."
     (is (eq ,stream ,render-form))
     (is (string= ,expected-output (get-output-stream-string ,stream)))))
 
+(defmacro expect-render-stream-output ((stream render-form) expected-output)
+  "The cl-weave counterpart to %ASSERT-RENDER-STREAM-OUTPUT, for files already
+migrated onto EXPECT. Once every %ASSERT-RENDER-STREAM-OUTPUT caller
+(t/render-core-test.lisp, t/render-diff-test.lisp) migrates, delete it."
+  `(let ((,stream (make-string-output-stream)))
+    (expect ,render-form :to-be ,stream)
+    (expect (get-output-stream-string ,stream) :to-equal ,expected-output)))
+
 (defun run-test (name thunk)
   (format t "~&[RUN] ~A~%" name)
   (finish-output)
@@ -120,11 +128,9 @@ migrates, delete CELL-IS/SCREEN-CELLS-IS and rename this to CELL-IS."
 
 (defun run-tests ()
   (setf *test-failures* nil)
-  (let ((tests (quote (("ansi" . cl-tty-kit/test::test-ansi)
-                       ("package" . cl-tty-kit/test::test-package)
+  (let ((tests (quote (("package" . cl-tty-kit/test::test-package)
                        ("keys" . cl-tty-kit/test::test-keys)
                        ("text-layout" . cl-tty-kit/test::test-text-layout)
-                       ("color" . cl-tty-kit/test::test-color)
                        ("format" . cl-tty-kit/test::test-format)
                        ("typed-image-octets" . cl-tty-kit/test::test-image-octet-buffers)
                        ("rect" . cl-tty-kit/test::test-rect)
