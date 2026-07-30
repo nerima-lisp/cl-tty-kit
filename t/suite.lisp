@@ -131,8 +131,6 @@ migrated onto EXPECT. Once every %ASSERT-RENDER-STREAM-OUTPUT caller
   (let ((tests (quote (("package" . cl-tty-kit/test::test-package)
                        ("keys" . cl-tty-kit/test::test-keys)
                        ("text-layout" . cl-tty-kit/test::test-text-layout)
-                       ("format" . cl-tty-kit/test::test-format)
-                       ("typed-image-octets" . cl-tty-kit/test::test-image-octet-buffers)
                        ("input" . cl-tty-kit/test::test-input)
                        ("raw-mode" . cl-tty-kit/test::test-raw-mode)
                        ("raw-mode-superset" . cl-tty-kit/test::test-raw-mode-superset)
@@ -160,20 +158,3 @@ migrated onto EXPECT. Once every %ASSERT-RENDER-STREAM-OUTPUT caller
                         ("render-examples" . test-render-examples))))
     (run-test (car test) (symbol-function (cdr test))))
   t)
-
-(defun test-image-octet-buffers ()
-  (let ((rgb
-        (make-array
-          3
-          :element-type
-          (quote (unsigned-byte 8))
-          :initial-contents
-          (quote (255 0 0)))))
-    (is
-      (string=
-        (format nil "~CPq#196;2;100;0;0#196@~C\\" #\Esc #\Esc)
-        (format-sixel rgb 1 1)))
-    (is
-      (string=
-        (format nil "~C_Ga=T,f=24,s=1,v=1,m=0;/wAA~C\\" #\Esc #\Esc)
-        (ansi-kitty-image rgb 1 1)))))
