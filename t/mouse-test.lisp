@@ -3,13 +3,13 @@
 (defun %sgr-mouse (cb cx cy final)
   (format nil "~C[<~D;~D;~D~C" #\Esc cb cx cy final))
 
-(defmacro %mouse-is ((event) &key button action x y modifiers)
+(defmacro %expect-mouse ((event) &key button action x y modifiers)
   `(progn
-     (is (eq ,button (mouse-event-button ,event)))
-     (is (eq ,action (mouse-event-action ,event)))
-     (is (= ,x (mouse-event-x ,event)))
-     (is (= ,y (mouse-event-y ,event)))
-     (is (equal ,modifiers (mouse-event-modifiers ,event)))))
+     (expect (mouse-event-button ,event) :to-be ,button)
+     (expect (mouse-event-action ,event) :to-be ,action)
+     (expect (mouse-event-x ,event) :to-be ,x)
+     (expect (mouse-event-y ,event) :to-be ,y)
+     (expect (mouse-event-modifiers ,event) :to-equal ,modifiers)))
 
 (defparameter +mouse-decode-cases+
   '((0 1 1 #\M :left :press 0 0 nil
@@ -44,103 +44,92 @@
 mouse report parameters %SGR-MOUSE builds, and the MOUSE-EVENT DECODE-MOUSE-
 SEQUENCE must decode it into.")
 
-(defun %test-mouse-decode-cases ()
-  (do-test-case-bind (case +mouse-decode-cases+
-                            (cb cx cy final button action x y modifiers message))
-    (let ((report (%sgr-mouse cb cx cy final)))
-      (multiple-value-bind (event consumed) (decode-mouse-sequence report)
-        (%mouse-is (event) :button button :action action :x x :y y
-                   :modifiers modifiers)
-        (is (= (length report) consumed) message)))))
+(describe "decode-mouse-sequence over the SGR mouse report grammar"
+  (dolist (case +mouse-decode-cases+)
+    (destructuring-bind (cb cx cy final button action x y modifiers message) case
+      (it message
+        (let ((report (%sgr-mouse cb cx cy final)))
+          (multiple-value-bind (event consumed) (decode-mouse-sequence report)
+            (%expect-mouse (event) :button button :action action :x x :y y
+                           :modifiers modifiers)
+            (expect consumed :to-be (length report))))))))
 
-(defun %test-mouse-partial-and-offset ()
-  ;; A report missing its terminator does not decode.
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (format nil "~C[<0;1;1" #\Esc))
-    (is (null event))
-    (is (= 0 consumed)))
-  ;; A non-mouse CSI is declined. This one is too short to reach the `<'
-  ;; check at all -- it fails the earlier length guard first.
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (format nil "~C[A" #\Esc))
-    (is (null event))
-    (is (= 0 consumed)))
-  ;; A non-mouse CSI long enough to reach the `<' check itself is declined
-  ;; there instead of by the earlier length guard.
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (format nil "~C[Axxxx" #\Esc))
-    (is (null event))
-    (is (= 0 consumed)))
-  ;; A terminated report whose body lacks the two `;' separators is declined.
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (format nil "~C[<0;5M" #\Esc))
-    (is (null event))
-    (is (= 0 consumed)))
-  ;; A non-digit character embedded within a field (not just an empty or
-  ;; overlong field) is declined.
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (format nil "~C[<1x;1;1M" #\Esc))
-    (is (null event))
-    (is (= 0 consumed)))
-  ;; Decoding can start partway through a buffer.
-  (let ((buffer (concatenate 'string "ab" (%sgr-mouse 0 1 1 #\M))))
+(describe "decode-mouse-sequence on partial, malformed, or offset input"
+  (it "does not decode a report missing its terminator"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence (format nil "~C[<0;1;1" #\Esc))
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a non-mouse CSI too short to reach the `<' check"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence (format nil "~C[A" #\Esc))
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a non-mouse CSI long enough to reach the `<' check itself"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence (format nil "~C[Axxxx" #\Esc))
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a terminated report whose body lacks the two `;' separators"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence (format nil "~C[<0;5M" #\Esc))
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a non-digit character embedded within a field"
     (multiple-value-bind (event consumed)
-        (decode-mouse-sequence buffer :start 2)
-      (%mouse-is (event) :button :left :action :press :x 0 :y 0 :modifiers nil)
-      (is (= 9 consumed))))
-  ;; Invalid offsets are declined rather than indexing before the buffer.
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (%sgr-mouse 0 1 1 #\M) :start -1)
-    (is (null event))
-    (is (= 0 consumed)))
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (%sgr-mouse 0 1 1 #\M) :start 1.5)
-    (is (null event))
-    (is (= 0 consumed)))
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence (format nil "~C[<1234567890123;1;1M" #\Esc))
-    (is (null event))
-    (is (= 0 consumed)))
-  ;; MAKE-MOUSE-EVENT normalizes its modifier list.
-  (is (equal '(:control :shift)
-             (mouse-event-modifiers
-              (make-mouse-event :modifiers '(:shift :control :shift)))))
-  (%mouse-is ((make-mouse-event :button :left :action :drag :x 2 :y 3))
-             :button :left :action :drag :x 2 :y 3 :modifiers nil)
-  (signals (error c) (make-mouse-event :button :invalid) (is c))
-  (signals (error c) (make-mouse-event :action :invalid) (is c))
-  (signals (error c) (make-mouse-event :x -1) (is c))
-  (signals (error c) (make-mouse-event :y 1.5) (is c))
-  ;; A non-ESC prefix that otherwise resembles an SGR report is declined.
-  (multiple-value-bind (event consumed)
-      (decode-mouse-sequence "x[<0;1;1M")
-    (is (null event))
-    (is (= 0 consumed)))
-)
+        (decode-mouse-sequence (format nil "~C[<1x;1;1M" #\Esc))
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "decodes starting partway through a buffer"
+    (let ((buffer (concatenate 'string "ab" (%sgr-mouse 0 1 1 #\M))))
+      (multiple-value-bind (event consumed) (decode-mouse-sequence buffer :start 2)
+        (%expect-mouse (event) :button :left :action :press :x 0 :y 0 :modifiers nil)
+        (expect consumed :to-be 9))))
+  (it "declines an out-of-range start offset rather than indexing before the buffer"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence (%sgr-mouse 0 1 1 #\M) :start -1)
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a fractional start offset"
+    (multiple-value-bind (event consumed)
+        (decode-mouse-sequence (%sgr-mouse 0 1 1 #\M) :start 1.5)
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a report whose field overflows the parser's digit budget"
+    (multiple-value-bind (event consumed)
+        (decode-mouse-sequence (format nil "~C[<1234567890123;1;1M" #\Esc))
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a non-ESC prefix that otherwise resembles an SGR report"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence "x[<0;1;1M")
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0))))
 
-(defun %test-mouse-input-integration ()
-  ;; DECODE-INPUT surfaces mouse events inline with key events.
-  (let ((events (decode-input (concatenate 'string
-                                            "a" (%sgr-mouse 2 4 2 #\M) "b"))))
-    (is (= 3 (length events)))
-    (is (typep (first events) (quote key-event)))
-    (is (char= #\a (key-event-code (first events))))
-    (is (typep (second events) (quote mouse-event)))
-    (%mouse-is ((second events)) :button :right :action :press
-               :x 3 :y 1 :modifiers nil)
-    (is (typep (third events) (quote key-event)))
-    (is (char= #\b (key-event-code (third events)))))
-  ;; A mouse report split across chunks is buffered, not mis-decoded as ESC.
-  (let ((decoder (make-input-decoder)))
-    (is (null (decode-input-chunk decoder (format nil "~C[<0;1" #\Esc))))
-    (let ((events (decode-input-chunk decoder ";1M")))
-      (is (= 1 (length events)))
-      (is (typep (first events) (quote mouse-event)))
-      (%mouse-is ((first events)) :button :left :action :press
-                 :x 0 :y 0 :modifiers nil))))
+(describe "make-mouse-event"
+  (it "normalizes its modifier list (deduplicated and sorted)"
+    (expect (mouse-event-modifiers (make-mouse-event :modifiers '(:shift :control :shift)))
+            :to-equal '(:control :shift)))
+  (it "stores every supplied field"
+    (%expect-mouse ((make-mouse-event :button :left :action :drag :x 2 :y 3))
+                   :button :left :action :drag :x 2 :y 3 :modifiers nil))
+  (it "rejects an invalid button"
+    (expect (lambda () (make-mouse-event :button :invalid)) :to-throw))
+  (it "rejects an invalid action"
+    (expect (lambda () (make-mouse-event :action :invalid)) :to-throw))
+  (it "rejects a negative x"
+    (expect (lambda () (make-mouse-event :x -1)) :to-throw))
+  (it "rejects a fractional y"
+    (expect (lambda () (make-mouse-event :y 1.5)) :to-throw)))
 
-(defun test-mouse ()
-  (%test-mouse-decode-cases)
-  (%test-mouse-partial-and-offset)
-  (%test-mouse-input-integration)
-  t)
+(describe "mouse events integrated into decode-input"
+  (it "surfaces a mouse event inline with surrounding key events"
+    (let ((events (decode-input (concatenate 'string "a" (%sgr-mouse 2 4 2 #\M) "b"))))
+      (expect (length events) :to-be 3)
+      (expect (first events) :to-be-instance-of 'key-event)
+      (expect (key-event-code (first events)) :to-be #\a)
+      (expect (second events) :to-be-instance-of 'mouse-event)
+      (%expect-mouse ((second events)) :button :right :action :press :x 3 :y 1 :modifiers nil)
+      (expect (third events) :to-be-instance-of 'key-event)
+      (expect (key-event-code (third events)) :to-be #\b)))
+  (it "buffers a mouse report split across chunks instead of mis-decoding it as ESC"
+    (let ((decoder (make-input-decoder)))
+      (expect (decode-input-chunk decoder (format nil "~C[<0;1" #\Esc)) :to-be-falsy)
+      (let ((events (decode-input-chunk decoder ";1M")))
+        (expect (length events) :to-be 1)
+        (expect (first events) :to-be-instance-of 'mouse-event)
+        (%expect-mouse ((first events)) :button :left :action :press :x 0 :y 0 :modifiers nil)))))

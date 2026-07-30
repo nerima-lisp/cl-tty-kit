@@ -143,7 +143,6 @@
                (:file "t/render-core-test")
                (:file "t/sgr-prolog-oracle-test")
                (:file "t/render-diff-test")
-               (:file "t/render-test")
                (:file "t/renderer-test")
                (:file "t/cursor-test")
                (:file "t/properties-test")))
