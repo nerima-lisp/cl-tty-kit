@@ -1,4 +1,4 @@
-(in-package #:cl-tty-kit/prolog-tests)
+(in-package #:cl-tty-kit/test)
 
 ;;; cl-prolog's rulebase is an immutable value by default (see the Rule DSL
 ;;; docs on EXTEND-RULEBASE) rather than the retired hand-rolled engine's

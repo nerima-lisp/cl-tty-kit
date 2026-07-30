@@ -88,6 +88,16 @@ macro is the shared assertion for that contract across the test suite."
           `(cell-is (,screen ,x ,y) ,char ,style)))
       cells)))
 
+(defmacro expect-cell ((screen x y) char &optional style)
+  "The cl-weave counterpart to CELL-IS, for files already migrated onto
+EXPECT. Once every CELL-IS caller (t/screen-test.lisp, t/screen-mutation-test.lisp)
+migrates, delete CELL-IS/SCREEN-CELLS-IS and rename this to CELL-IS."
+  (let ((cell (gensym "CELL-")))
+    `(let ((,cell (screen-cell ,screen ,x ,y)))
+      (expect (cell-char ,cell) :to-be ,char)
+      ,@(when style
+        `((expect (cell-style ,cell) :to-equal ,style))))))
+
 (defmacro do-test-case-bind ((case cases
       lambda-list)
     &body
@@ -120,17 +130,14 @@ macro is the shared assertion for that contract across the test suite."
                        ("rect" . cl-tty-kit/test::test-rect)
                        ("input" . cl-tty-kit/test::test-input)
                        ("mouse" . cl-tty-kit/test::test-mouse)
-                       ("utf8" . cl-tty-kit/test::test-utf8)
                        ("raw-mode" . cl-tty-kit/test::test-raw-mode)
                        ("raw-mode-superset" . cl-tty-kit/test::test-raw-mode-superset)
                        ("session" . cl-tty-kit/test::test-terminal-session)
                        ("pty" . cl-tty-kit/test::test-pty)
                        ("pty-fd" . cl-tty-kit/test::test-pty-fd)
                        ("screen" . cl-tty-kit/test::test-screen)
-                       ("box" . cl-tty-kit/test::test-box)
                        ("render" . cl-tty-kit/test::test-render)
-                       ("renderer" . cl-tty-kit/test::test-renderer)
-                       ("cursor" . cl-tty-kit/test::test-cursor)))))
+                       ("renderer" . cl-tty-kit/test::test-renderer)))))
     (dolist (test tests)
       (run-test (car test) (symbol-function (cdr test)))))
   (finish-output)

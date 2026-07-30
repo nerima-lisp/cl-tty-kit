@@ -1,10 +1,4 @@
-(defpackage #:cl-tty-kit/property-tests
-  (:use #:cl #:cl-tty-kit)
-  (:shadowing-import-from #:cl-weave #:describe)
-  (:import-from #:cl-weave
-                #:expect #:it #:it-property))
-
-(in-package #:cl-tty-kit/property-tests)
+(in-package #:cl-tty-kit/test)
 
 ;;; --------------------------------------------------------------------------
 ;;; Property-based invariants for the pure core, built on nerima-lisp/cl-weave.

@@ -1,4 +1,4 @@
-(in-package #:cl-tty-kit/prolog-tests)
+(in-package #:cl-tty-kit/test)
 
 (describe "unify"
   (it "unifies a shared free variable across two terms"

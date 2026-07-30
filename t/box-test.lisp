@@ -3,104 +3,102 @@
 (defun %chars (&rest code-points)
   (map 'string #'code-char code-points))
 
-(defun %test-box-single ()
-  (let* ((screen (make-screen 3 3))
-         (result (screen-draw-box screen 0 0 3 3)))
-    (is (eq screen result))
-    ;; H=2500 V=2502 TL=250C TR=2510 BL=2514 BR=2518
-    (is (string= (%chars #x250C #x2500 #x2510) (screen-row-string screen 0)))
-    (is (string= (%chars #x2502 #x0020 #x2502) (screen-row-string screen 1)))
-    (is (string= (%chars #x2514 #x2500 #x2518) (screen-row-string screen 2)))))
+(describe "screen-draw-box"
+  (it "draws a single-line Unicode box border and returns the screen"
+    (let* ((screen (make-screen 3 3))
+           (result (screen-draw-box screen 0 0 3 3)))
+      (expect result :to-be screen)
+      ;; H=2500 V=2502 TL=250C TR=2510 BL=2514 BR=2518
+      (expect (screen-row-string screen 0) :to-equal (%chars #x250C #x2500 #x2510))
+      (expect (screen-row-string screen 1) :to-equal (%chars #x2502 #x0020 #x2502))
+      (expect (screen-row-string screen 2) :to-equal (%chars #x2514 #x2500 #x2518))))
+  (it "draws an ASCII border"
+    (let ((screen (make-screen 4 3)))
+      (screen-draw-box screen 0 0 4 3 :border :ascii)
+      (expect (screen-row-string screen 0) :to-equal "+--+")
+      (expect (screen-row-string screen 1) :to-equal "|  |")
+      (expect (screen-row-string screen 2) :to-equal "+--+")))
+  (it "draws offset from the origin, with style applied to the border"
+    (let ((screen (make-screen 5 4)))
+      (screen-draw-box screen 1 1 3 2 :border :ascii :style '(:bold))
+      (expect (screen-row-string screen 0) :to-equal "     ")
+      (expect (screen-row-string screen 1) :to-equal " +-+ ")
+      (expect (screen-row-string screen 2) :to-equal " +-+ ")
+      (expect-cell (screen 1 1) #\+ '(:bold))
+      (expect-cell (screen 2 1) #\- '(:bold))))
+  (it "collapses a one-row-tall box to a horizontal line"
+    (let ((screen (make-screen 3 1)))
+      (screen-draw-box screen 0 0 3 1 :border :ascii)
+      (expect (screen-row-string screen 0) :to-equal "---")))
+  (it "collapses a one-column-wide box to a vertical line"
+    (let ((screen (make-screen 1 3)))
+      (screen-draw-box screen 0 0 1 3 :border :ascii)
+      (expect (cell-char (screen-cell screen 0 0)) :to-be #\|)
+      (expect (cell-char (screen-cell screen 0 2)) :to-be #\|)))
+  (it "is a no-op for a zero-area box even at an off-screen origin"
+    (let ((screen (make-screen 3 3)))
+      (expect (screen-draw-box screen 9 9 0 0) :to-be screen)))
+  (it "signals screen-index-out-of-bounds when the box would overflow the screen"
+    (let ((screen (make-screen 3 3)))
+      (expect (lambda () (screen-draw-box screen 0 0 4 3))
+              :to-throw 'screen-index-out-of-bounds)))
+  (it "signals screen-dimensions-invalid for a negative width"
+    (let ((screen (make-screen 3 3)))
+      (expect (lambda () (screen-draw-box screen 0 0 -1 3))
+              :to-throw 'screen-dimensions-invalid)))
+  (it "signals an error for an unknown :border"
+    (let ((screen (make-screen 3 3)))
+      (expect (lambda () (screen-draw-box screen 0 0 3 3 :border :nope)) :to-throw)))
+  (it "signals a non-type-error for a malformed :title"
+    (let ((screen (make-screen 3 3)))
+      (expect (lambda () (screen-draw-box screen 0 0 3 3 :title :bad))
+              :to-throw (lambda (c) (not (typep c 'type-error))))))
+  (it "signals a non-type-error for a malformed :title-align"
+    (let ((screen (make-screen 3 3)))
+      (expect (lambda () (screen-draw-box screen 0 0 3 3 :title-align :bad))
+              :to-throw (lambda (c) (not (typep c 'type-error)))))))
 
-(defun %test-box-ascii ()
-  (let ((screen (make-screen 4 3)))
-    (screen-draw-box screen 0 0 4 3 :border :ascii)
-    (is (string= "+--+" (screen-row-string screen 0)))
-    (is (string= "|  |" (screen-row-string screen 1)))
-    (is (string= "+--+" (screen-row-string screen 2)))))
+(describe "screen-draw-horizontal-line and screen-draw-vertical-line"
+  (it "draws a horizontal ASCII line"
+    (let ((screen (make-screen 4 3)))
+      (screen-draw-horizontal-line screen 0 0 4 :border :ascii)
+      (expect (screen-row-string screen 0) :to-equal "----")))
+  (it "draws a vertical ASCII line"
+    (let ((screen (make-screen 4 3)))
+      (screen-draw-vertical-line screen 0 0 3 :border :ascii)
+      (expect (cell-char (screen-cell screen 0 1)) :to-be #\|)
+      (expect (cell-char (screen-cell screen 0 2)) :to-be #\|)))
+  (it "is a no-op for a zero-length line even off-screen"
+    (let ((screen (make-screen 4 3)))
+      (expect (screen-draw-horizontal-line screen 10 10 0) :to-be screen))))
 
-(defun %test-box-offset-and-style ()
-  (let ((screen (make-screen 5 4)))
-    (screen-draw-box screen 1 1 3 2 :border :ascii :style '(:bold))
-    (is (string= "     " (screen-row-string screen 0)))
-    (is (string= " +-+ " (screen-row-string screen 1)))
-    (is (string= " +-+ " (screen-row-string screen 2)))
-    (cell-is (screen 1 1) #\+ '(:bold))
-    (cell-is (screen 2 1) #\- '(:bold))))
-
-(defun %test-box-lines ()
-  (let ((screen (make-screen 4 3)))
-    (screen-draw-horizontal-line screen 0 0 4 :border :ascii)
-    (is (string= "----" (screen-row-string screen 0)))
-    (screen-draw-vertical-line screen 0 0 3 :border :ascii)
-    (is (char= #\| (cell-char (screen-cell screen 0 1))))
-    (is (char= #\| (cell-char (screen-cell screen 0 2))))
-    ;; A zero-length line is a no-op even off-screen.
-    (is (eq screen (screen-draw-horizontal-line screen 10 10 0)))))
-
-(defun %test-box-degenerate ()
-  ;; One-cell-tall box collapses to a horizontal line.
-  (let ((screen (make-screen 3 1)))
-    (screen-draw-box screen 0 0 3 1 :border :ascii)
-    (is (string= "---" (screen-row-string screen 0))))
-  ;; One-cell-wide box collapses to a vertical line.
-  (let ((screen (make-screen 1 3)))
-    (screen-draw-box screen 0 0 1 3 :border :ascii)
-    (is (char= #\| (cell-char (screen-cell screen 0 0))))
-    (is (char= #\| (cell-char (screen-cell screen 0 2))))))
-
-(defun %test-box-errors ()
-  (let ((screen (make-screen 3 3)))
-    (signals (screen-index-out-of-bounds c)
-        (screen-draw-box screen 0 0 4 3)
-      (is c))
-    (signals (screen-dimensions-invalid c)
-        (screen-draw-box screen 0 0 -1 3)
-      (is c))
-    (signals (error c) (screen-draw-box screen 0 0 3 3 :border :nope) (is c))
-    (signals-non-type-error (screen-draw-box screen 0 0 3 3 :title :bad))
-    (signals-non-type-error (screen-draw-box screen 0 0 3 3 :title-align :bad))
-    ;; A zero-area box is a no-op even with an off-screen origin.
-    (is (eq screen (screen-draw-box screen 9 9 0 0)))))
-
-(defun %test-box-title ()
-  ;; Centered title punched into the top border.
-  (let ((screen (make-screen 9 3)))
-    (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi")
-    (is (string= "+--Hi---+" (screen-row-string screen 0))))
-  ;; Left- and right-aligned titles.
-  (let ((screen (make-screen 9 3)))
-    (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi" :title-align :left)
-    (is (string= "+Hi-----+" (screen-row-string screen 0))))
-  (let ((screen (make-screen 9 3)))
-    (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi" :title-align :right)
-    (is (string= "+-----Hi+" (screen-row-string screen 0))))
-  ;; A title too wide for the interior is clipped.
-  (let ((screen (make-screen 6 3)))
-    (screen-draw-box screen 0 0 6 3 :border :ascii :title "verylong")
-    (is (char= #\+ (cell-char (screen-cell screen 0 0))))
-    (is (char= #\+ (cell-char (screen-cell screen 5 0)))))
-  ;; An empty TITLE is a no-op for the title row -- a plain border, since it
-  ;; clips to zero cells even though the interior has room.
-  (let ((screen (make-screen 9 3)))
-    (screen-draw-box screen 0 0 9 3 :border :ascii :title "")
-    (is (string= "+-------+" (screen-row-string screen 0))))
-  ;; Title style is applied.
-  (let ((screen (make-screen 9 3)))
-    (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi"
-                     :title-style '(:bold))
-    (cell-is (screen 3 0) #\H '(:bold)))
-  ;; With no TITLE-STYLE, a supplied box STYLE colors the title too.
-  (let ((screen (make-screen 9 3)))
-    (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi" :style '(:underline))
-    (cell-is (screen 3 0) #\H '(:underline))))
-
-(defun test-box ()
-  (%test-box-single)
-  (%test-box-ascii)
-  (%test-box-offset-and-style)
-  (%test-box-lines)
-  (%test-box-degenerate)
-  (%test-box-errors)
-  (%test-box-title)
-  t)
+(describe "screen-draw-box titles"
+  (it "centers the title in the top border by default"
+    (let ((screen (make-screen 9 3)))
+      (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi")
+      (expect (screen-row-string screen 0) :to-equal "+--Hi---+")))
+  (it "left-aligns the title when requested"
+    (let ((screen (make-screen 9 3)))
+      (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi" :title-align :left)
+      (expect (screen-row-string screen 0) :to-equal "+Hi-----+")))
+  (it "right-aligns the title when requested"
+    (let ((screen (make-screen 9 3)))
+      (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi" :title-align :right)
+      (expect (screen-row-string screen 0) :to-equal "+-----Hi+")))
+  (it "clips a title too wide for the interior"
+    (let ((screen (make-screen 6 3)))
+      (screen-draw-box screen 0 0 6 3 :border :ascii :title "verylong")
+      (expect (cell-char (screen-cell screen 0 0)) :to-be #\+)
+      (expect (cell-char (screen-cell screen 5 0)) :to-be #\+)))
+  (it "leaves a plain border for an empty title"
+    (let ((screen (make-screen 9 3)))
+      (screen-draw-box screen 0 0 9 3 :border :ascii :title "")
+      (expect (screen-row-string screen 0) :to-equal "+-------+")))
+  (it "applies :title-style to the title"
+    (let ((screen (make-screen 9 3)))
+      (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi" :title-style '(:bold))
+      (expect-cell (screen 3 0) #\H '(:bold))))
+  (it "falls back to :style for the title when :title-style is absent"
+    (let ((screen (make-screen 9 3)))
+      (screen-draw-box screen 0 0 9 3 :border :ascii :title "Hi" :style '(:underline))
+      (expect-cell (screen 3 0) #\H '(:underline)))))

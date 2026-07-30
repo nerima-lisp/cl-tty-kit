@@ -1,4 +1,4 @@
-(in-package #:cl-tty-kit/prolog-tests)
+(in-package #:cl-tty-kit/test)
 
 (describe "resolving a goal against a rulebase"
   (dolist (case +prolog-query-cases+)

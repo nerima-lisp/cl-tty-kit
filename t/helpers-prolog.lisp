@@ -1,4 +1,4 @@
-(in-package #:cl-tty-kit/prolog-tests)
+(in-package #:cl-tty-kit/test)
 
 (defun %genealogy-db ()
   (cl-prolog:prolog

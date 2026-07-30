@@ -1,9 +1,4 @@
-(defpackage #:cl-tty-kit/prolog-tests
-  (:use #:cl #:cl-tty-kit)
-  (:shadowing-import-from #:cl-weave #:describe)
-  (:import-from #:cl-weave #:expect #:it))
-
-(in-package #:cl-tty-kit/prolog-tests)
+(in-package #:cl-tty-kit/test)
 
 ;;; Shared prolog test data and helpers. Keeping this file declarative makes the
 ;;; actual test files small and lets the suite enumerate behaviors one by one.

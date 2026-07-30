@@ -3,77 +3,95 @@
 (defun %u8 (&rest octets)
   (coerce octets '(vector (unsigned-byte 8))))
 
-(defun %assert-invalid-utf8 (octets expected-reason &key (position 0) octet)
-  (signals (invalid-utf8-sequence condition)
-      (cl-tty-kit::%utf8-octets-to-string octets)
-    (is (= position (invalid-utf8-sequence-position condition)))
-    (is (eq expected-reason
-            (invalid-utf8-sequence-reason condition)))
-    (when octet
-      (is (= octet (invalid-utf8-sequence-octet condition))))))
+(defun %invalid-utf8-matcher (expected-reason position octet)
+  (lambda (condition)
+    (and (typep condition 'invalid-utf8-sequence)
+         (= position (invalid-utf8-sequence-position condition))
+         (eq expected-reason (invalid-utf8-sequence-reason condition))
+         (or (null octet) (= octet (invalid-utf8-sequence-octet condition))))))
 
-(defun %assert-octets= (expected actual)
-  (is (equalp expected actual)))
+(defmacro expect-invalid-utf8 (octets expected-reason &key (position 0) octet)
+  `(expect (lambda () (cl-tty-kit::%utf8-octets-to-string ,octets))
+           :to-throw
+           (%invalid-utf8-matcher ,expected-reason ,position ,octet)))
 
-(defun test-utf8 ()
-  (is (string= "abc"
-               (cl-tty-kit::%utf8-octets-to-string (%u8 97 98 99))))
-  (is (string= "¢"
-               (cl-tty-kit::%utf8-octets-to-string (%u8 #xC2 #xA2))))
-  (is (string= "あ"
-               (cl-tty-kit::%utf8-octets-to-string (%u8 #xE3 #x81 #x82))))
-  (is (string= "😀"
-               (cl-tty-kit::%utf8-octets-to-string (%u8 #xF0 #x9F #x98 #x80))))
-  (%assert-octets= (%u8 97 98 99)
-                   (cl-tty-kit::%string-to-utf8-octets "abc"))
-  (%assert-octets= (%u8 #xC2 #xA2)
-                   (cl-tty-kit::%string-to-utf8-octets "¢"))
-  (%assert-octets= (%u8 #xE3 #x81 #x82)
-                   (cl-tty-kit::%string-to-utf8-octets "あ"))
-  (%assert-octets= (%u8 #xF0 #x9F #x98 #x80)
-                   (cl-tty-kit::%string-to-utf8-octets "😀"))
-  (%assert-invalid-utf8 #(256) :non-octet :octet 256)
-  (%assert-invalid-utf8 (%u8 #xC2) :truncated-sequence :octet #xC2)
-  (%assert-invalid-utf8 (%u8 #xE3 #x81) :truncated-sequence :octet #xE3)
-  (%assert-invalid-utf8 (%u8 #xF0 #x9F #x98) :truncated-sequence :octet #xF0)
-  (%assert-invalid-utf8 (%u8 #xC2 #x20) :invalid-continuation-byte
-                        :position 1
-                        :octet #x20)
-  (%assert-invalid-utf8 (%u8 #xE0 #x80 #x80) :overlong-sequence
-                        :octet #xE0)
-  (%assert-invalid-utf8 (%u8 #xED #xA0 #x80) :surrogate-half
-                        :octet #xED)
-  (%assert-invalid-utf8 (%u8 #xF0 #x80 #x80 #x80) :overlong-sequence
-                        :octet #xF0)
-  (%assert-invalid-utf8 (%u8 #xF4 #x90 #x80 #x80) :code-point-too-large
-                        :octet #xF4)
-  (%assert-invalid-utf8 (%u8 #x80) :invalid-leading-byte :octet #x80)
-  (%assert-invalid-utf8 (%u8 #xC0) :invalid-leading-byte :octet #xC0)
-  (%assert-invalid-utf8 (%u8 #xC1) :invalid-leading-byte :octet #xC1)
-  (%assert-invalid-utf8 (%u8 #xF5) :invalid-leading-byte :octet #xF5)
-  (signals (invalid-utf8-sequence condition)
-      (cl-tty-kit::%utf8-decode-prefix #(97 :not-an-octet))
-    (is (= 1 (invalid-utf8-sequence-position condition)))
-    (is (eq :non-octet (invalid-utf8-sequence-reason condition))))
-  (let ((octets (%u8 97 #xC2 #xA2)))
-    (multiple-value-bind (string leftover)
-        (cl-tty-kit::%utf8-decode-prefix octets)
-      (is (string= "a¢" string))
-      (is (zerop (length leftover)))
-      (is (typep leftover '(vector (unsigned-byte 8))))
-      (is (not (eq octets leftover)))))
-  (let ((octets (%u8 97 #xC2)))
-    (multiple-value-bind (string leftover)
-        (cl-tty-kit::%utf8-decode-prefix octets)
-      (is (string= "a" string))
-      (setf (aref octets 1) #xA2)
-      (%assert-octets= (%u8 #xC2) leftover)))
+(describe "decoding UTF-8 octets to a string"
+  (it "decodes plain ASCII"
+    (expect (cl-tty-kit::%utf8-octets-to-string (%u8 97 98 99)) :to-equal "abc"))
+  (it "decodes a 2-byte sequence"
+    (expect (cl-tty-kit::%utf8-octets-to-string (%u8 #xC2 #xA2)) :to-equal "¢"))
+  (it "decodes a 3-byte sequence"
+    (expect (cl-tty-kit::%utf8-octets-to-string (%u8 #xE3 #x81 #x82)) :to-equal "あ"))
+  (it "decodes a 4-byte sequence"
+    (expect (cl-tty-kit::%utf8-octets-to-string (%u8 #xF0 #x9F #x98 #x80)) :to-equal "😀")))
+
+(describe "encoding a string to UTF-8 octets"
+  (it "encodes plain ASCII"
+    (expect (cl-tty-kit::%string-to-utf8-octets "abc") :to-equalp (%u8 97 98 99)))
+  (it "encodes a 2-byte sequence"
+    (expect (cl-tty-kit::%string-to-utf8-octets "¢") :to-equalp (%u8 #xC2 #xA2)))
+  (it "encodes a 3-byte sequence"
+    (expect (cl-tty-kit::%string-to-utf8-octets "あ") :to-equalp (%u8 #xE3 #x81 #x82)))
+  (it "encodes a 4-byte sequence"
+    (expect (cl-tty-kit::%string-to-utf8-octets "😀") :to-equalp (%u8 #xF0 #x9F #x98 #x80))))
+
+(describe "rejecting malformed UTF-8"
+  (it "rejects a non-octet element outright"
+    (expect-invalid-utf8 #(256) :non-octet :octet 256))
+  (it "rejects a 2-byte sequence truncated after its leading byte"
+    (expect-invalid-utf8 (%u8 #xC2) :truncated-sequence :octet #xC2))
+  (it "rejects a 3-byte sequence truncated after one continuation byte"
+    (expect-invalid-utf8 (%u8 #xE3 #x81) :truncated-sequence :octet #xE3))
+  (it "rejects a 4-byte sequence truncated after two continuation bytes"
+    (expect-invalid-utf8 (%u8 #xF0 #x9F #x98) :truncated-sequence :octet #xF0))
+  (it "rejects a continuation byte that isn't in 80-BF"
+    (expect-invalid-utf8 (%u8 #xC2 #x20) :invalid-continuation-byte
+                         :position 1 :octet #x20))
+  (it "rejects a 3-byte overlong encoding"
+    (expect-invalid-utf8 (%u8 #xE0 #x80 #x80) :overlong-sequence :octet #xE0))
+  (it "rejects a UTF-16 surrogate half encoded as UTF-8"
+    (expect-invalid-utf8 (%u8 #xED #xA0 #x80) :surrogate-half :octet #xED))
+  (it "rejects a 4-byte overlong encoding"
+    (expect-invalid-utf8 (%u8 #xF0 #x80 #x80 #x80) :overlong-sequence :octet #xF0))
+  (it "rejects a code point beyond U+10FFFF"
+    (expect-invalid-utf8 (%u8 #xF4 #x90 #x80 #x80) :code-point-too-large :octet #xF4))
+  (it "rejects a bare continuation byte as a leading byte"
+    (expect-invalid-utf8 (%u8 #x80) :invalid-leading-byte :octet #x80))
+  (it "rejects the overlong-only leading byte 0xC0"
+    (expect-invalid-utf8 (%u8 #xC0) :invalid-leading-byte :octet #xC0))
+  (it "rejects the overlong-only leading byte 0xC1"
+    (expect-invalid-utf8 (%u8 #xC1) :invalid-leading-byte :octet #xC1))
+  (it "rejects a leading byte beyond the valid U+10FFFF range"
+    (expect-invalid-utf8 (%u8 #xF5) :invalid-leading-byte :octet #xF5)))
+
+(describe "%utf8-decode-prefix"
+  (it "signals invalid-utf8-sequence for a non-octet element"
+    (expect (lambda () (cl-tty-kit::%utf8-decode-prefix #(97 :not-an-octet)))
+            :to-throw (%invalid-utf8-matcher :non-octet 1 nil)))
+  (it "decodes every complete character and returns an empty leftover"
+    (let ((octets (%u8 97 #xC2 #xA2)))
+      (multiple-value-bind (string leftover) (cl-tty-kit::%utf8-decode-prefix octets)
+        (expect string :to-equal "a¢")
+        (expect (zerop (length leftover)))
+        (expect (typep leftover '(vector (unsigned-byte 8))))
+        (expect (not (eq octets leftover))))))
+  (it "leaves a trailing incomplete sequence in the returned leftover, independent of the input"
+    (let ((octets (%u8 97 #xC2)))
+      (multiple-value-bind (string leftover) (cl-tty-kit::%utf8-decode-prefix octets)
+        (expect string :to-equal "a")
+        (setf (aref octets 1) #xA2)
+        (expect leftover :to-equalp (%u8 #xC2))))))
+
+(describe "%octet-input-p"
   ;; %OCTET-INPUT-P's own contract, verified directly: a string is never
   ;; octet input regardless of being a vector, nor is a character vector;
   ;; only a vector of integers (or one typed (UNSIGNED-BYTE 8)) is. Neither
   ;; caller of this predicate (%INPUT->STRING, %DECODER-DECODE-CHUNK-STRING)
   ;; reaches it with a string -- both check STRINGP first -- so this is the
   ;; only place the string case is exercised at all.
-  (is (null (cl-tty-kit::%octet-input-p "abc")))
-  (is (null (cl-tty-kit::%octet-input-p (coerce (list #\a #\b) 'vector))))
-  (is (cl-tty-kit::%octet-input-p (%u8 97 98 99))))
+  (it "rejects a string even though it is a vector"
+    (expect (cl-tty-kit::%octet-input-p "abc") :to-be-falsy))
+  (it "rejects a character vector"
+    (expect (cl-tty-kit::%octet-input-p (coerce (list #\a #\b) 'vector)) :to-be-falsy))
+  (it "accepts a vector of octets"
+    (expect (cl-tty-kit::%octet-input-p (%u8 97 98 99)) :to-be-truthy)))

@@ -1,9 +1,4 @@
-(defpackage #:cl-tty-kit/conditions-tests
-  (:use #:cl #:cl-tty-kit)
-  (:shadowing-import-from #:cl-weave #:describe)
-  (:import-from #:cl-weave #:expect #:it))
-
-(in-package #:cl-tty-kit/conditions-tests)
+(in-package #:cl-tty-kit/test)
 
 ;;; --------------------------------------------------------------------------
 ;;; The condition hierarchy, built on nerima-lisp/cl-weave.
