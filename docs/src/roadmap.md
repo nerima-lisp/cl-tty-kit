@@ -22,6 +22,20 @@ multi-implementation (non-SBCL) support.
 - richer diff rendering strategies for large screens
 - more examples for embedding the library in real terminal tools
 
+## Related nerima-lisp projects, and why they aren't dependencies
+
+[`cl-process-kit`](https://github.com/nerima-lisp/cl-process-kit)'s `cl-process-kit/pty`
+subsystem already depends on `cl-tty-kit` (for `terminal-size`'s default rows/cols) and
+layers session/job-control semantics -- `spawn-pty`, `pty-resize`, session-wide
+SIGTERM/SIGKILL -- on top of a native PTY trampoline. A caller wanting that layer should
+reach for `cl-process-kit/pty` directly rather than cl-tty-kit growing an equivalent; the
+reverse dependency also means `cl-tty-kit` itself must never depend on `cl-process-kit`,
+which would create a cycle. `cl-log-kit` (structured logging) and `cl-boundary-kit`
+(swappable-fake testing seams for external effects) were evaluated too: both are
+application-level concerns with no current call site in this dependency-free primitives
+library, and `cl-boundary-kit`'s own docs are explicit that its process boundary is a
+testing seam, not a PTY-shaped runner.
+
 ## Deferred capabilities from the feature audit
 
 [Feature Audit](feature-audit.md) is the comprehensive enumeration of the
