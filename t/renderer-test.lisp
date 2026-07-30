@@ -183,4 +183,11 @@
       (expect (renderer-resize renderer 3 1) :to-be renderer)
       (expect (renderer-width renderer) :to-be 3)
       (screen-write-string (renderer-screen renderer) 0 0 "x")
+      (expect (renderer-render renderer) :to-equal (render-screen (renderer-screen renderer)))))
+  (it "renderer-resize also forces a full repaint when only the height changes"
+    (let ((renderer (make-renderer 2 1)))
+      (renderer-render renderer)
+      (renderer-resize renderer 2 3)
+      (expect (renderer-height renderer) :to-be 3)
+      (screen-write-string (renderer-screen renderer) 0 0 "x")
       (expect (renderer-render renderer) :to-equal (render-screen (renderer-screen renderer))))))
