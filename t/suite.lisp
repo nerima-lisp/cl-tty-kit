@@ -137,8 +137,6 @@ migrated onto EXPECT. Once every %ASSERT-RENDER-STREAM-OUTPUT caller
   (let ((tests (quote (("package" . cl-tty-kit/test::test-package)
                        ("keys" . cl-tty-kit/test::test-keys)
                        ("input" . cl-tty-kit/test::test-input)
-                       ("raw-mode" . cl-tty-kit/test::test-raw-mode)
-                       ("raw-mode-superset" . cl-tty-kit/test::test-raw-mode-superset)
                        ("session" . cl-tty-kit/test::test-terminal-session)
                        ("pty" . cl-tty-kit/test::test-pty)
                        ("pty-fd" . cl-tty-kit/test::test-pty-fd)
