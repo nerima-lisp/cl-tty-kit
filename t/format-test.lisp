@@ -6,11 +6,6 @@
                (if partial (string (code-char partial)) "")
                (make-string pad :initial-element #\Space)))
 
-(defmacro expect-non-type-error (form)
-  "The cl-weave counterpart to SIGNALS-NON-TYPE-ERROR: FORM must signal an
-ERROR that is not a TYPE-ERROR."
-  `(expect (lambda () ,form) :to-throw (lambda (c) (not (typep c 'type-error)))))
-
 (describe "format-progress-bar, coarse (whole cells only)"
   (it "fills proportionally to the ratio"
     (expect (format-progress-bar 1/2 4 :fractional nil) :to-equal (%blocks 2 nil 2))

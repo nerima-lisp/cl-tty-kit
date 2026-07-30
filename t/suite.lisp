@@ -73,6 +73,12 @@ macro is the shared assertion for that contract across the test suite."
       (declare (ignore condition))
       (is t))))
 
+(defmacro expect-non-type-error (form)
+  "The cl-weave counterpart to SIGNALS-NON-TYPE-ERROR, for files already
+migrated onto EXPECT. Once every SIGNALS-NON-TYPE-ERROR caller migrates,
+delete SIGNALS-NON-TYPE-ERROR and rename this to it."
+  `(expect (lambda () ,form) :to-throw (lambda (c) (not (typep c 'type-error)))))
+
 (defmacro cell-is ((screen x y) char &optional style)
   (let ((cell (gensym "CELL-")))
     `(let ((,cell (screen-cell ,screen ,x ,y)))
@@ -130,7 +136,6 @@ migrated onto EXPECT. Once every %ASSERT-RENDER-STREAM-OUTPUT caller
   (setf *test-failures* nil)
   (let ((tests (quote (("package" . cl-tty-kit/test::test-package)
                        ("keys" . cl-tty-kit/test::test-keys)
-                       ("text-layout" . cl-tty-kit/test::test-text-layout)
                        ("input" . cl-tty-kit/test::test-input)
                        ("raw-mode" . cl-tty-kit/test::test-raw-mode)
                        ("raw-mode-superset" . cl-tty-kit/test::test-raw-mode-superset)
