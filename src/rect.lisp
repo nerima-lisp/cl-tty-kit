@@ -29,14 +29,17 @@
   "Return the row just past RECT's bottom edge (RECT-Y + RECT-HEIGHT)."
   (+ (rect-y rect) (rect-height rect)))
 
-(defun %assert-rect-extent (name value)
-  (%assert (typep value '(integer 0 *)) "RECT ~A ~S must be a non-negative integer." name value))
+(define-simple-assert %assert-rect-extent (name value)
+  (typep value '(integer 0 *))
+  "RECT ~A ~S must be a non-negative integer." name value)
 
-(defun %assert-rect-integer (name value)
-  (%assert (integerp value) "RECT ~A ~S must be an integer." name value))
+(define-simple-assert %assert-rect-integer (name value)
+  (integerp value)
+  "RECT ~A ~S must be an integer." name value)
 
-(defun %assert-constraint-real (name value constraint)
-  (%assert (realp value) "Layout constraint ~S has non-real ~A ~S." constraint name value))
+(define-simple-assert %assert-constraint-real (name value constraint)
+  (realp value)
+  "Layout constraint ~S has non-real ~A ~S." constraint name value)
 
 (defun make-rect (&key (x 0) (y 0) (width 0) (height 0))
   "Create a RECT at (X, Y) with the given WIDTH and HEIGHT.

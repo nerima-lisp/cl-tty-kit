@@ -9,6 +9,17 @@ centralizing it here removes dozens of duplicated UNLESS/ERROR bodies."
   `(unless ,predicate
      (error ,format-string ,@format-args)))
 
+(defmacro define-simple-assert (name lambda-list predicate format-string &rest format-args)
+  "Define NAME as a function of LAMBDA-LIST that signals an error via
+FORMAT-STRING/FORMAT-ARGS unless PREDICATE holds.
+
+Every %ASSERT-* validation helper in this codebase is a DEFUN whose entire
+body is one %ASSERT call; this macro is that shape's single declarative
+spelling, so a validation helper is one form instead of a DEFUN wrapping one
+%ASSERT wrapping one UNLESS."
+  `(defun ,name ,lambda-list
+     (%assert ,predicate ,format-string ,@format-args)))
+
 (defmacro define-tty-kit-condition (name superclasses slots documentation &body options)
   `(define-condition ,name ,superclasses
      ,slots

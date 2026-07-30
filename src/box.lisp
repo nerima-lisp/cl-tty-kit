@@ -30,12 +30,13 @@ horizontal, vertical, top-left, top-right, bottom-left, bottom-right.")
              (mapcar #'car +box-borders+)))
     (mapcar #'code-char (rest entry))))
 
-(defun %assert-box-title (title)
-  (%assert (or (null title) (stringp title)) "Box TITLE ~S must be NIL or a string." title))
+(define-simple-assert %assert-box-title (title)
+  (or (null title) (stringp title))
+  "Box TITLE ~S must be NIL or a string." title)
 
-(defun %assert-box-title-align (align)
-  (%assert (member align '(:left :center :right))
-           "Box TITLE-ALIGN ~S must be one of :LEFT, :CENTER, or :RIGHT." align))
+(define-simple-assert %assert-box-title-align (align)
+  (member align '(:left :center :right))
+  "Box TITLE-ALIGN ~S must be one of :LEFT, :CENTER, or :RIGHT." align)
 
 (defun %box-put (screen x y char style style-supplied-p)
   (if style-supplied-p

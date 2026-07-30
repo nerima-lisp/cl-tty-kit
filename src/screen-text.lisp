@@ -8,29 +8,33 @@
 ;;; block of content can be dropped into a region without the caller measuring.
 ;;; --------------------------------------------------------------------------
 
-(defun %assert-screen-text-screen (screen)
-  (%assert (screen-p screen) "SCREEN ~S must be a screen." screen))
+(define-simple-assert %assert-screen-text-screen (screen)
+  (screen-p screen)
+  "SCREEN ~S must be a screen." screen)
 
-(defun %assert-screen-text-rect (rect)
-  (%assert (rect-p rect) "RECT ~S must be a rect." rect))
+(define-simple-assert %assert-screen-text-rect (rect)
+  (rect-p rect)
+  "RECT ~S must be a rect." rect)
 
-(defun %assert-screen-text-string (name value)
-  (%assert (stringp value) "~A ~S must be a string." name value))
+(define-simple-assert %assert-screen-text-string (name value)
+  (stringp value)
+  "~A ~S must be a string." name value)
 
-(defun %assert-screen-text-coordinate (name value)
-  (%assert (integerp value) "~A ~S must be an integer coordinate." name value))
+(define-simple-assert %assert-screen-text-coordinate (name value)
+  (integerp value)
+  "~A ~S must be an integer coordinate." name value)
 
-(defun %assert-screen-text-lines (lines)
-  (%assert (and (%proper-list-p lines)
-               (every #'stringp lines)) "LINES ~S must be a proper list of strings." lines))
+(define-simple-assert %assert-screen-text-lines (lines)
+  (and (%proper-list-p lines) (every #'stringp lines))
+  "LINES ~S must be a proper list of strings." lines)
 
-(defun %assert-screen-text-align (align)
-  (%assert (member align '(:left :right :center) :test #'eq)
-           "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align))
+(define-simple-assert %assert-screen-text-align (align)
+  (member align '(:left :right :center) :test #'eq)
+  "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align)
 
-(defun %assert-screen-text-vertical (vertical)
-  (%assert (member vertical '(:top :middle :bottom) :test #'eq)
-           "VERTICAL ~S must be one of :TOP, :MIDDLE, or :BOTTOM." vertical))
+(define-simple-assert %assert-screen-text-vertical (vertical)
+  (member vertical '(:top :middle :bottom) :test #'eq)
+  "VERTICAL ~S must be one of :TOP, :MIDDLE, or :BOTTOM." vertical)
 
 
 

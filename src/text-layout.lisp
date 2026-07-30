@@ -9,20 +9,21 @@
 ;;; never split across a column boundary.
 ;;; --------------------------------------------------------------------------
 
-(defun %assert-layout-string (name value)
-  (%assert (stringp value) "~A ~S must be a string." name value))
+(define-simple-assert %assert-layout-string (name value)
+  (stringp value)
+  "~A ~S must be a string." name value)
 
-(defun %assert-layout-width (name value &key positive)
-  (%assert (and (integerp value)
-               (if positive (plusp value) t)) "~A ~S must be ~:[an integer~;a positive integer~]."
-           name value positive))
+(define-simple-assert %assert-layout-width (name value &key positive)
+  (and (integerp value) (if positive (plusp value) t))
+  "~A ~S must be ~:[an integer~;a positive integer~]." name value positive)
 
-(defun %assert-layout-character (name value)
-  (%assert (characterp value) "~A ~S must be a character." name value))
+(define-simple-assert %assert-layout-character (name value)
+  (characterp value)
+  "~A ~S must be a character." name value)
 
-(defun %assert-layout-align (align)
-  (%assert (member align '(:left :right :center) :test #'eq)
-           "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align))
+(define-simple-assert %assert-layout-align (align)
+  (member align '(:left :right :center) :test #'eq)
+  "ALIGN ~S must be one of :LEFT, :RIGHT, or :CENTER." align)
 
 (defun %width-prefix-end (string budget &key (start 0) (end (length string)))
   "Return the largest index E in [START, END] whose column span from START is

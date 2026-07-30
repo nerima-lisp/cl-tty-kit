@@ -10,21 +10,25 @@
 (defparameter +full-block+ (code-char #x2588)
   "The full block glyph used as the default filled cell of a progress bar.")
 
-(defun %assert-real (name value)
-  (%assert (realp value) "~A ~S must be a real number." name value))
+(define-simple-assert %assert-real (name value)
+  (realp value)
+  "~A ~S must be a real number." name value)
 
-(defun %assert-non-negative-width (name value)
-  (%assert (typep value '(integer 0 *)) "~A ~S must be a non-negative integer." name value))
+(define-simple-assert %assert-non-negative-width (name value)
+  (typep value '(integer 0 *))
+  "~A ~S must be a non-negative integer." name value)
 
-(defun %assert-string-field (name value)
-  (%assert (stringp value) "~A ~S must be a string." name value))
+(define-simple-assert %assert-string-field (name value)
+  (stringp value)
+  "~A ~S must be a string." name value)
 
-(defun %assert-character-field (name value)
-  (%assert (characterp value) "~A ~S must be a character." name value))
+(define-simple-assert %assert-character-field (name value)
+  (characterp value)
+  "~A ~S must be a character." name value)
 
-(defun %assert-column-align (name value)
-  (%assert (member value '(:left :right :center) :test #'eq)
-           "~A ~S must be :LEFT, :RIGHT, or :CENTER." name value))
+(define-simple-assert %assert-column-align (name value)
+  (member value '(:left :right :center) :test #'eq)
+  "~A ~S must be :LEFT, :RIGHT, or :CENTER." name value)
 
 (defun %assert-aligns (aligns)
   (unless (or (null aligns) (listp aligns))
