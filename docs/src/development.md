@@ -36,19 +36,19 @@ nix flake check      # tests + paredit-lint + formatting + docs, the CI gate
 nix fmt              # format Nix sources (treefmt/nixfmt)
 ```
 
-## Running the suites directly
+## Running the bounded suite commands
 
 Run the repository-local test entry point from the project root:
 
 ```bash
-sbcl --script run-tests.lisp
+nix run .#test
 ```
 
 Run the example smoke test as well — every file in `examples/` is loaded and
 its runner executed (see [Examples](examples.md)):
 
 ```bash
-sbcl --script scripts/examples.lisp
+nix run .#examples
 ```
 
 Run the fresh source-registry smoke test too, which confirms `cl-tty-kit` and
@@ -56,23 +56,22 @@ Run the fresh source-registry smoke test too, which confirms `cl-tty-kit` and
 the repository bootstrap:
 
 ```bash
-sbcl --script scripts/source-registry-smoke.lisp
+nix run .#source-registry-smoke
 ```
 
-For the complete repository gate — the same one CI runs — see
-[Quality Gates](quality-gates.md):
+For the complete local repository gate, see [Quality Gates](quality-gates.md):
 
 ```bash
-sbcl --script scripts/verify.lisp
+nix run .#verify
 ```
 
 Generate an SBCL coverage report for `src/`:
 
 ```bash
-sbcl --script scripts/coverage.lisp
+nix run .#coverage
 ```
 
-`scripts/verify.lisp` runs the repository-local tests, the example smoke
+`nix run .#verify` runs the repository-local tests, the example smoke
 checks, and the fresh source-registry packaging smoke in one pass. The
 canonical test package is `cl-tty-kit/test`, and the tests live in `t/`.
 
@@ -92,6 +91,34 @@ system, as described in [Installation](installation.md):
 - preserve the [`unsupported-feature`](conditions.md#unsupported-feature)
   contract for implementation-specific APIs
 - keep pure modules free from ambient I/O and timeout-free waits
+
+## Renderer performance regression checks
+
+The normal test entry point executes the fixed renderer, diff-renderer, and
+renderer example suites in addition to the property suite. Keep renderer
+changes correct before optimizing them: the diff tests compare ANSI output and
+exercise cursor-coordinate boundaries where decimal escape-sequence lengths
+change.
+
+`t/properties-test.lisp` also includes an allocation regression guard for an
+80x24 full repaint. It uses a deliberately generous 2 MiB ceiling to catch
+accidental per-cell string construction without treating machine-specific GC
+noise as a failure. Do not claim a latency or throughput improvement without a
+separate, repeatable benchmark on an otherwise idle host.
+
+Use the renderer benchmark for stable stateless-diff, sparse-update renderer,
+and full-repaint renderer measurements:
+
+```sh
+nix run .#benchmark-renderer
+nix run .#benchmark-renderer -- 500000
+```
+
+It warms up SBCL, then reports throughput and allocated bytes per frame for an
+80x24 screen. Compare runs only on the same idle host, SBCL build, and
+iteration count; it is a regression signal, not a portable performance claim.
+The renderer cases reuse their alternating cell templates, so their allocation
+figures do not include constructing a new cell for every input mutation.
 
 ## Reporting issues
 

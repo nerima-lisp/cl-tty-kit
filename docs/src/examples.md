@@ -93,7 +93,7 @@ the core system once; individual examples never load the library themselves.
 Run every example as a smoke test from a clean checkout:
 
 ```bash
-sbcl --script scripts/examples.lisp
+nix run .#examples
 ```
 
 The runner loads the core system once, then loads and runs each example file in

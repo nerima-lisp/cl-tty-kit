@@ -43,8 +43,10 @@ diff renderer uses to decide a cell can be *cleared* rather than repainted.
 
 ### Screens
 
-A `screen` is a `width` by `height` grid of independent cells stored in a flat
-backing vector. Create one with `make-screen`:
+A `screen` is a `width` by `height` grid stored in a flat backing vector.
+Equivalent cells may share an immutable template; screen mutation APIs replace
+the affected vector entries, so normal updates remain isolated. Create one
+with `make-screen`:
 
 ```lisp
 (let ((screen (make-screen 20 4)))
@@ -54,7 +56,8 @@ backing vector. Create one with `make-screen`:
 ```
 
 `make-screen` accepts an `:initial-cell` — a `cell` template, a bare character,
-or `nil` for a blank cell — and gives every position an independent copy of it:
+or `nil` for a blank cell — and initializes every position from one shared,
+immutable template:
 
 ```lisp
 (make-screen 8 2 :initial-cell #\.)   ; a grid of dots
@@ -176,9 +179,10 @@ background:
 (screen-fill screen #\Space :style (make-style (style-bg 236)))
 ```
 
-`screen-clear` resets every cell to a fresh copy of a template (default blank),
-and `screen-resize` changes the dimensions in place, preserving the overlapping
-top-left region and filling any newly exposed area from `:initial-cell`.
+`screen-clear` resets every cell to one shared immutable template (default
+blank), and `screen-resize` changes the dimensions in place, preserving the
+overlapping top-left region and filling any newly exposed area from
+`:initial-cell`. Subsequent writes replace only their target entries.
 
 ### Writing text
 
@@ -240,8 +244,8 @@ content can be dropped in without measuring first:
 
 `screen-regions.lisp` composes the single-cell primitives into whole-grid moves:
 
-- `screen-copy` — a deep, independent copy; a natural previous-frame snapshot
-  for `render-diff`.
+- `screen-copy` — an independent backing vector which shares immutable cells;
+  a natural previous-frame snapshot for `render-diff`.
 - `screen-crop` — extract a `rect` region into a new screen (clipped to bounds).
 - `screen-blit` — composite a region of one screen onto another, clipped to the
   overlap; the primitive for dropping panels and widgets onto a frame.

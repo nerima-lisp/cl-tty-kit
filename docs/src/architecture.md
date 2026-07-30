@@ -18,7 +18,7 @@ where it is.
 | ANSI sequences | `ansi.lisp`, `ansi-control.lisp`, `ansi-osc.lisp`, `sixel.lisp` | none |
 | Input decoding | `key-tables.lisp`, `keys.lisp`, `keys-decode*.lisp`, `input-state.lisp`, `input-decode*.lisp`, `mouse.lisp` | none |
 | Screen and cells | `cell.lisp`, `screen.lisp`, `screen-regions.lisp`, `screen-text.lisp`, `box.lisp`, `cursor.lisp` | none |
-| Rendering | `render-style.lisp`, `sgr-parse.lisp`, `render-commands.lisp`, `render-diff.lisp`, `render.lisp`, `renderer.lisp` | none |
+| Rendering | `render-style.lisp`, `sgr-parse.lisp`, `render-commands.lisp`, `render-diff-plan.lisp`, `render-diff.lisp`, `render.lisp`, `renderer.lisp` | none |
 | Raw mode and size | `raw-mode.lisp`, `raw-mode-sbcl.lisp`, `terminal-size.lisp` | **SBCL-specific** |
 | Session lifecycle | `session.lisp` | **SBCL-specific** |
 | PTY | `pty.lisp`, `pty-fd.lisp` | **SBCL-specific** |
@@ -52,6 +52,10 @@ bytes. That is what lets `t/properties-test.lisp` assert the property that matte
 — a diff's visible result matches a full repaint, and is never longer than
 one — instead of pinning a byte-for-byte transcript. See
 [Screen and Rendering](screen-and-rendering.md).
+
+`render-diff-plan.lisp` owns the reusable packed diff operation plan and
+changed-cell snapshot application, while `render-diff.lisp` owns ANSI
+emission and strategy.
 
 `pty.lisp` wraps the SBCL process and stream; `pty-fd.lisp` sits alongside it
 as a byte-transparent layer over the bare master file descriptor, for callers

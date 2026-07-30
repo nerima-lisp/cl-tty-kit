@@ -28,16 +28,17 @@ must satisfy before it is treated as release-ready.
 
 ## Verification gate
 
-Run these commands from the project root, inside a Nix dev shell (`nix
-develop`; see [Installation](installation.md#nix)) so `cl-prolog`/`cl-weave`
-are on `CL_SOURCE_REGISTRY`:
+Run these commands from the project root. Each `nix run` app applies an
+OS-level timeout around SBCL, including ASDF/bootstrap loading. The runner
+also supplies the flake-pinned source registry and a temporary `HOME` and XDG
+directory, so host ASDF configuration and caches do not affect the result:
 
 ```bash
-sbcl --script run-tests.lisp
-sbcl --script scripts/examples.lisp
-sbcl --script scripts/source-registry-smoke.lisp
-sbcl --script scripts/verify.lisp
-sbcl --script scripts/coverage.lisp
+nix run .#test
+nix run .#examples
+nix run .#source-registry-smoke
+nix run .#verify
+nix run .#coverage
 git diff --check
 ```
 

@@ -130,7 +130,7 @@ The pure screen/cell model, style construction, and text placement. See
 | Category | Symbols |
 | --- | --- |
 | Cells / styles | `cell`, `make-cell`, `cell-char`, `cell-style`, `make-style`, `style-fg`, `style-bg`, `style-underline-color`, `style-ansi`, `style-merge`, `named-color`, `copy-cell`, `cell-blank-p` |
-| Screen struct | `screen`, `make-screen`, `screen-width`, `screen-height`, `screen-cells`, `screen-cell`, `screen-resize`, `screen-clear` |
+| Screen struct | `screen`, `make-screen`, `screen-width`, `screen-height`, `screen-cell`, `screen-resize`, `screen-clear` |
 | Writing / filling | `screen-put-cell`, `screen-fill-rect`, `screen-fill`, `screen-write-string`, `screen-write-lines`, `screen-write-wrapped`, `screen-write-aligned` |
 | Region ops | `screen-copy`, `screen-blit`, `screen-crop`, `screen-scroll` |
 | Inspection | `screen-row-string`, `screen-to-string` |

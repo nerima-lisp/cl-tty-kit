@@ -17,7 +17,7 @@
 
 ```sh
 nix develop              # SBCL, Git, paredit-cli, treefmt on PATH; CL_SOURCE_REGISTRY pre-wired
-nix run .#test           # same scripts CI's `nix` job runs: test / verify / coverage
+nix run .#test           # test suite wrapper
 nix run .#verify
 nix run .#coverage
 nix build                # hermetic `cl-tty-kit` package (sbcl.buildASDFSystem)
@@ -26,10 +26,12 @@ nix flake check          # hermetic test suite + a paredit-lint structural-parse
 ```
 
 `flake.nix` declares `nerima-lisp/cl-prolog`, `nerima-lisp/cl-weave`, and
-`nerima-lisp/paredit-cli` as flake inputs — the same systems `cl-tty-kit.asd`
-depends on — and every app, check, and `devShell` above puts them on
-`CL_SOURCE_REGISTRY`. Continue with [Load it](#load-it) below once you're in
-a Nix shell (or have `CL_SOURCE_REGISTRY` set some other way).
+`nerima-lisp/paredit-cli` as development inputs. Only `cl-prolog` and
+`cl-weave` are ASDF dependencies, and only for `:cl-tty-kit/test`; the core
+system depends on SBCL's `sb-posix` layer. The Nix apps, checks, and
+`devShell` put the test dependencies on `CL_SOURCE_REGISTRY`; `paredit-cli`
+is a development binary. Continue with [Load it](#load-it) below once you're
+in a Nix shell (or have `CL_SOURCE_REGISTRY` set some other way).
 
 ## Without Nix
 
@@ -67,9 +69,8 @@ Any directory ASDF already searches works too — for example a path added to
 `cl-tty-kit` ships a repository-local bootstrap script,
 `scripts/bootstrap.lisp`, that registers the project tree with ASDF's source
 registry and exposes helpers for loading the core system, the test system,
-and example files. This is the supported way to load the code — it works from
-a plain checkout with no environment variables to export first, as long as
-`cl-prolog` is already on `CL_SOURCE_REGISTRY` (see above):
+and example files. This is the supported way to load the core code from a
+plain checkout with no environment variables to export first:
 
 ```lisp
 (load "scripts/bootstrap.lisp")
@@ -101,14 +102,13 @@ itself, used directly under its own `cl-prolog` package — see
 
 ## Dependencies
 
-The core `:cl-tty-kit` system has exactly one, conditional, dependency:
-`sb-posix`, used only by the SBCL-specific raw-mode layer, gated behind
-`#+sbcl` so ASDF never fails dependency resolution with a confusing "system
-not found" on a non-SBCL host. On any other implementation, loading
-`cl-tty-kit` fails fast with a clear "requires SBCL" error instead — see
-[Compatibility](compatibility.md). Everything else — screen state, cursor
-state, rendering, UTF-8 handling, and input decoding — is pure Common Lisp
-with no external dependencies.
+The core `:cl-tty-kit` system has no ASDF dependencies. Its SBCL-only
+raw-mode layer loads SBCL's bundled `sb-posix` contrib directly with `require`,
+so ASDF does not scan caller source registries merely to locate an installed
+library. On any other implementation, loading `cl-tty-kit` fails fast with a
+clear "requires SBCL" error instead — see [Compatibility](compatibility.md).
+Everything else — screen state, cursor state, rendering, UTF-8 handling, and
+input decoding — is pure Common Lisp with no external dependencies.
 
 `:cl-tty-kit/test` additionally depends on `cl-prolog` (the test suite's
 differential-testing oracle; see [Logic Engine](logic-engine.md)) and
@@ -123,14 +123,16 @@ From a Nix shell (`nix develop`), the repository-local scripts double as an
 installation smoke test:
 
 ```sh
-sbcl --script run-tests.lisp                  # run the test suite
-sbcl --script scripts/examples.lisp            # run every example as a smoke test
-sbcl --script scripts/source-registry-smoke.lisp  # fresh source-registry discoverability
-sbcl --script scripts/verify.lisp              # all of the above in one pass
+nix run .#test                  # run the test suite
+nix run .#examples              # run every example as a smoke test
+nix run .#source-registry-smoke # fresh source-registry discoverability
+nix run .#verify                # all of the above in one pass
 ```
 
-`scripts/verify.lisp` is what CI's `nix` job runs (via `nix flake check`) on
-Linux and macOS on every push — see [Quality Gates](quality-gates.md).
+CI runs `nix flake check` on Linux and macOS on every push. Its default check
+executes `run-tests.lisp`; the separate coverage job builds
+`.#coverage-report`. Run `scripts/verify.lisp` locally for the broader
+repository gate with an OS-level timeout — see [Quality Gates](quality-gates.md).
 
 ## Optional integrations
 

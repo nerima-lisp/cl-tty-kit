@@ -74,11 +74,19 @@ nix fmt              # format Nix sources (treefmt)
 
 Tests live in `t/` and run under
 [cl-weave](https://github.com/nerima-lisp/cl-weave), the org's test framework;
-`sbcl --script run-tests.lisp` is the Lisp-level entry point. See
+`nix run .#test` is the supported bounded test entry point. The Lisp-level
+script remains useful for debugger sessions. See
 [Development](https://nerima-lisp.github.io/cl-tty-kit/development/) for the
 coverage, example-smoke and source-registry scripts, and
 [Quality Gates](https://nerima-lisp.github.io/cl-tty-kit/quality-gates/) for
 the bar a patch has to clear.
+
+The renderer keeps public screen access checked, while its private full-frame
+and diff loops traverse the screen's backing vector directly. It reuses a
+preallocated diff plan and copies only its recorded changed runs into the
+private front buffer after a sparse render. This avoids a second comparison
+pass, temporary render-part lists, and a full-frame buffer copy for sparse
+updates. The rendered byte stream is unchanged.
 
 ## Contributing
 

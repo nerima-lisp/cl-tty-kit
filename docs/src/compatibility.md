@@ -14,10 +14,10 @@ portable Lisp standard doesn't cover:
 
 Loading the system on another Common Lisp implementation fails fast with a
 clear "requires SBCL" error, rather than a confusing missing-dependency
-report partway through a load. The core system's single dependency,
-`sb-posix`, is itself gated behind `#+sbcl` in `cl-tty-kit.asd`, specifically
-so ASDF's dependency resolution doesn't fail with an opaque "system sb-posix
-not found" on a non-SBCL host before that clearer error has a chance to run.
+report partway through a load. `sb-posix` is an SBCL-bundled contrib loaded
+directly with `require` by the SBCL-only raw-mode implementation; it is not
+an ASDF dependency. This avoids scanning caller source registries merely to
+locate an already installed library.
 
 ## Portability by concern, not by promise
 
