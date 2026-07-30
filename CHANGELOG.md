@@ -107,6 +107,16 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
   testing expectations now point new tests at cl-weave's DSL instead of the
   retired `IS`/`IS-EQUAL`/`SIGNALS` macros and explain the `IT-EACH` literal-data
   restriction above
+- investigated a post-migration expression-coverage drop (98.7% -> 95.5%;
+  branch coverage held flat at 95.2%) surfaced by `nix build
+  .#coverage-report`. Confirmed it is the `&key`/`&optional` default-init-form
+  reporting artifact `docs/src/quality-gates.md` already documents, not lost
+  test rigor: e.g. `src/box.lisp`'s `SCREEN-DRAW-BOX` shows its `(border
+  :single)` default as "not executed" even though `t/box-test.lisp` calls it
+  with no `:border` on its very first case, hitting exactly that default.
+  The migration changed which compilation units these forms fall into, which
+  is why the same pre-existing artifact became more prominent, not a
+  regression in what the suite exercises
 
 ## [1.0.2] - 2026-07-26
 
