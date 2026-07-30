@@ -98,351 +98,406 @@ behind every literal terminal escape sequence these tests construct."
         (key-event-code event)
         (key-event-modifiers event)))
 
-(defun %assert-key-event= (event expected-signature)
-  (is (equal (%key-event-signature event) expected-signature)))
-
-(defun %assert-key-event (event expected-type expected-code expected-modifiers)
-  (%assert-key-event= event
-                      (list expected-type expected-code expected-modifiers)))
-
-(defun %assert-single-decode-case (input expected-type expected-code
-                                   expected-modifiers)
-  (let ((events (decode-input input)))
-    (is (= 1 (length events)))
-    (%assert-key-event (first events)
-                       expected-type
-                       expected-code
-                       expected-modifiers)))
-
-(defun %assert-decode-key-sequence-case (input expected-type expected-code
-                                         expected-modifiers expected-consumed
-                                         &key (start 0))
-  (multiple-value-bind (event consumed)
-      (decode-key-sequence input :start start)
-    (%assert-key-event event expected-type expected-code expected-modifiers)
-    (is (= expected-consumed consumed))))
-
-(defun %assert-decode-key-sequence-declined (input start)
-  (multiple-value-bind (event consumed)
-      (decode-key-sequence input :start start)
-    (is (null event))
-    (is (= 0 consumed))))
-
-(defun %assert-decoded-event-codes (input expected-codes)
-  (let ((events (decode-input input)))
-    (is (= (length expected-codes) (length events)))
-    (loop for event in events
-          for expected-code in expected-codes
-          do (if (characterp expected-code)
-                 (is (char= expected-code (key-event-code event)))
-                 (is (eq expected-code (key-event-code event)))))))
-
-(defun %test-key-event->string ()
-  (flet ((label (type code &optional modifiers)
-           (key-event->string (make-key-event :type type :code code
-                                              :modifiers modifiers))))
-    (is (string= "C-a" (label :character #\a '(:control))))
-    (is (string= "x" (label :character #\x)))
-    (is (string= "S-Up" (label :special :up '(:shift))))
-    (is (string= "Enter" (label :special :enter)))
-    (is (string= "Page-Up" (label :special :page-up)))
-    (is (string= "C-a" (label :special :control-a)))
-    (is (string= "F1" (label :special :f1)))
-    (is (string= "<paste 5 bytes>" (label :paste "hello")))
-    (is (string= "<paste 0 bytes>" (label :paste "")))
-    ;; Modifier prefix is Ctrl-Alt-Shift order regardless of input order.
-    (is (string= "C-S-a" (label :character #\a '(:shift :control)))))
-  (signals-non-type-error (key-event->string :not-a-key-event)))
-
-(defun %test-focus-decode ()
-  (let ((event (first (decode-input (format nil "~C[I" #\Esc)))))
-    (is (eq :special (key-event-type event)))
-    (is (eq :focus-in (key-event-code event))))
-  (let ((event (first (decode-input (format nil "~C[O" #\Esc)))))
-    (is (eq :special (key-event-type event)))
-    (is (eq :focus-out (key-event-code event)))))
-
-(defun %test-cursor-position-report ()
-  ;; A complete report yields 0-based row/col and the consumed length.
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "~C[12;40R" #\Esc))
-    (is (= 11 row))
-    (is (= 39 col))
-    (is (= 8 consumed)))
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "~C[1;1R" #\Esc))
-    (is (= 0 row))
-    (is (= 0 col))
-    (is (= 6 consumed)))
-  ;; Incomplete or non-report input is declined.
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "~C[12;40" #\Esc))
-    (is (null row))
-    (is (null col))
-    (is (= 0 consumed)))
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "~C[A" #\Esc))
-    (declare (ignore row col))
-    (is (= 0 consumed)))
-  ;; A complete report body missing its `;' separator is declined.
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "~C[12R" #\Esc))
-    (is (null row))
-    (is (null col))
-    (is (= 0 consumed)))
-  ;; Decoding can start partway through a buffer.
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "xx~C[3;5R" #\Esc) :start 2)
-    (is (= 2 row))
-    (is (= 4 col))
-    (is (= 6 consumed)))
-  ;; Invalid offsets are declined rather than indexing before the buffer.
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "~C[3;5R" #\Esc) :start -1)
-    (is (null row))
-    (is (null col))
-    (is (= 0 consumed)))
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "~C[3;5R" #\Esc) :start 1.5)
-    (is (null row))
-    (is (null col))
-    (is (= 0 consumed)))
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report (format nil "~C[1234567890123;1R" #\Esc))
-    (is (null row))
-    (is (null col))
-    (is (= 0 consumed)))
-  ;; A non-ESC prefix is declined without consuming the apparent report body.
-  (multiple-value-bind (row col consumed)
-      (decode-cursor-position-report "x[3;5R")
-    (is (null row))
-    (is (null col))
-    (is (= 0 consumed)))
-  ;; CSI integer fields accept the configured maximum digit run, but no more.
-  (is (= 999999999999999999
-         (cl-tty-kit::%parse-csi-integer "999999999999999999" 0 18)))
-  (is (null (cl-tty-kit::%parse-csi-integer
-             "9999999999999999999" 0 19)))
-)
-
-(defun %test-color-report ()
-  ;; 4-hex-digit components scaled to 8-bit, ESC\ terminator.
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C]11;rgb:ffff/0000/8080~C\\" #\Esc #\Esc))
-    (is (= 255 r))
-    (is (= 0 g))
-    (is (= 128 b))
-    (is (= 25 consumed)))
-  ;; 2-hex-digit components, BEL terminator.
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C]10;rgb:ff/00/00~C" #\Esc (code-char 7)))
-    (is (= 255 r))
-    (is (= 0 g))
-    (is (= 0 b))
-    (is (= 18 consumed)))
-  ;; Incomplete / non-report input is declined.
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C]11;rgb:ffff/0000" #\Esc))
-    (declare (ignore r g b))
-    (is (= 0 consumed)))
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C[A" #\Esc))
-    (declare (ignore r g b))
-    (is (= 0 consumed)))
-  ;; A well-formed OSC prefix whose body never contains "rgb:" is declined.
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C]11;notrgb~C\\" #\Esc #\Esc))
-    (declare (ignore r g b))
-    (is (= 0 consumed)))
-  ;; A complete report missing the second "/" separator (only one channel
-  ;; boundary, so R/G/B cannot be split) is declined, as opposed to missing
-  ;; the terminator entirely (the case above).
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C]10;rgb:ff/00~C\\" #\Esc #\Esc))
-    (declare (ignore r g b))
-    (is (= 0 consumed)))
-  ;; Invalid offsets are declined without signaling.
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C]10;rgb:ff/00/00~C" #\Esc (code-char 7))
-                           :start -1)
-    (is (null r))
-    (is (null g))
-    (is (null b))
-    (is (= 0 consumed)))
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C]10;rgb:ff/00/00~C" #\Esc (code-char 7))
-                           :start 1.5)
-    (is (null r))
-    (is (null g))
-    (is (null b))
-    (is (= 0 consumed)))
-  (multiple-value-bind (r g b consumed)
-      (decode-color-report (format nil "~C]10;rgb:fffffffff/00/00~C" #\Esc
-                                   (code-char 7)))
-    (is (null r))
-    (is (null g))
-    (is (null b))
-    (is (= 0 consumed))))
-
 (defun %csi (params final)
   (%esc "[" params (string final)))
 
-(defun %test-kitty-and-f-keys ()
+(defmacro %expect-key-event ((event) type code modifiers)
+  `(progn
+     (expect (key-event-type ,event) :to-be ,type)
+     (expect (key-event-code ,event) :to-be ,code)
+     (expect (key-event-modifiers ,event) :to-equal ,modifiers)))
+
+(describe "key-event->string"
+  (flet ((label (type code &optional modifiers)
+           (key-event->string (make-key-event :type type :code code
+                                              :modifiers modifiers))))
+    (it "renders a control-modified character as C-<char>"
+      (expect (label :character #\a '(:control)) :to-equal "C-a"))
+    (it "renders a plain character with no modifier prefix"
+      (expect (label :character #\x) :to-equal "x"))
+    (it "renders a shift-modified special key as S-<Name>"
+      (expect (label :special :up '(:shift)) :to-equal "S-Up"))
+    (it "renders the :enter special key as Enter"
+      (expect (label :special :enter) :to-equal "Enter"))
+    (it "renders the :page-up special key as Page-Up"
+      (expect (label :special :page-up) :to-equal "Page-Up"))
+    (it "renders :control-a as C-a"
+      (expect (label :special :control-a) :to-equal "C-a"))
+    (it "renders :f1 as F1"
+      (expect (label :special :f1) :to-equal "F1"))
+    (it "renders a paste event with its byte count"
+      (expect (label :paste "hello") :to-equal "<paste 5 bytes>"))
+    (it "renders an empty paste event with a zero byte count"
+      (expect (label :paste "") :to-equal "<paste 0 bytes>"))
+    ;; Modifier prefix is Ctrl-Alt-Shift order regardless of input order.
+    (it "orders combined modifiers as Ctrl-Alt-Shift regardless of input order"
+      (expect (label :character #\a '(:shift :control)) :to-equal "C-S-a")))
+  (it "signals a non-type-error for a non-key-event argument"
+    (expect-non-type-error (key-event->string :not-a-key-event))))
+
+(describe "focus-in/focus-out event decoding"
+  (it "decodes ESC[I as a :focus-in special event"
+    (let ((event (first (decode-input (format nil "~C[I" #\Esc)))))
+      (expect (key-event-type event) :to-be :special)
+      (expect (key-event-code event) :to-be :focus-in)))
+  (it "decodes ESC[O as a :focus-out special event"
+    (let ((event (first (decode-input (format nil "~C[O" #\Esc)))))
+      (expect (key-event-type event) :to-be :special)
+      (expect (key-event-code event) :to-be :focus-out))))
+
+(describe "decode-cursor-position-report"
+  ;; A complete report yields 0-based row/col and the consumed length.
+  (it "decodes a complete report to 0-based row/col and reports the consumed length"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "~C[12;40R" #\Esc))
+      (expect row :to-be 11)
+      (expect col :to-be 39)
+      (expect consumed :to-be 8)))
+  (it "decodes the top-left report (1,1) to (0,0)"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "~C[1;1R" #\Esc))
+      (expect row :to-be 0)
+      (expect col :to-be 0)
+      (expect consumed :to-be 6)))
+  ;; Incomplete or non-report input is declined.
+  (it "declines an incomplete report"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "~C[12;40" #\Esc))
+      (expect row :to-be-falsy)
+      (expect col :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a non-report CSI sequence"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "~C[A" #\Esc))
+      (declare (ignore row col))
+      (expect consumed :to-be 0)))
+  ;; A complete report body missing its `;' separator is declined.
+  (it "declines a complete report body missing its `;' separator"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "~C[12R" #\Esc))
+      (expect row :to-be-falsy)
+      (expect col :to-be-falsy)
+      (expect consumed :to-be 0)))
+  ;; Decoding can start partway through a buffer.
+  (it "decodes starting partway through a buffer"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "xx~C[3;5R" #\Esc) :start 2)
+      (expect row :to-be 2)
+      (expect col :to-be 4)
+      (expect consumed :to-be 6)))
+  ;; Invalid offsets are declined rather than indexing before the buffer.
+  (it "declines a negative start offset rather than indexing before the buffer"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "~C[3;5R" #\Esc) :start -1)
+      (expect row :to-be-falsy)
+      (expect col :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a fractional start offset"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "~C[3;5R" #\Esc) :start 1.5)
+      (expect row :to-be-falsy)
+      (expect col :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a report whose field overflows the parser's digit budget"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report (format nil "~C[1234567890123;1R" #\Esc))
+      (expect row :to-be-falsy)
+      (expect col :to-be-falsy)
+      (expect consumed :to-be 0)))
+  ;; A non-ESC prefix is declined without consuming the apparent report body.
+  (it "declines a non-ESC prefix without consuming the apparent report body"
+    (multiple-value-bind (row col consumed)
+        (decode-cursor-position-report "x[3;5R")
+      (expect row :to-be-falsy)
+      (expect col :to-be-falsy)
+      (expect consumed :to-be 0)))
+  ;; CSI integer fields accept the configured maximum digit run, but no more.
+  (it "accepts a CSI integer field up to the configured maximum digit run"
+    (expect (cl-tty-kit::%parse-csi-integer "999999999999999999" 0 18)
+            :to-be 999999999999999999))
+  (it "declines a CSI integer field one digit past the configured maximum"
+    (expect (cl-tty-kit::%parse-csi-integer "9999999999999999999" 0 19)
+            :to-be-falsy)))
+
+(describe "decode-color-report"
+  ;; 4-hex-digit components scaled to 8-bit, ESC\ terminator.
+  (it "decodes 4-hex-digit RGB components scaled to 8-bit, with an ESC\\ terminator"
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C]11;rgb:ffff/0000/8080~C\\" #\Esc #\Esc))
+      (expect r :to-be 255)
+      (expect g :to-be 0)
+      (expect b :to-be 128)
+      (expect consumed :to-be 25)))
+  ;; 2-hex-digit components, BEL terminator.
+  (it "decodes 2-hex-digit RGB components with a BEL terminator"
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C]10;rgb:ff/00/00~C" #\Esc (code-char 7)))
+      (expect r :to-be 255)
+      (expect g :to-be 0)
+      (expect b :to-be 0)
+      (expect consumed :to-be 18)))
+  ;; Incomplete / non-report input is declined.
+  (it "declines incomplete/non-report input"
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C]11;rgb:ffff/0000" #\Esc))
+      (declare (ignore r g b))
+      (expect consumed :to-be 0)))
+  (it "declines a non-OSC CSI sequence"
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C[A" #\Esc))
+      (declare (ignore r g b))
+      (expect consumed :to-be 0)))
+  ;; A well-formed OSC prefix whose body never contains "rgb:" is declined.
+  (it "declines a well-formed OSC prefix whose body never contains \"rgb:\""
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C]11;notrgb~C\\" #\Esc #\Esc))
+      (declare (ignore r g b))
+      (expect consumed :to-be 0)))
+  ;; A complete report missing the second "/" separator (only one channel
+  ;; boundary, so R/G/B cannot be split) is declined, as opposed to missing
+  ;; the terminator entirely (the case above).
+  (it "declines a complete report missing the second \"/\" separator, as opposed to a missing terminator"
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C]10;rgb:ff/00~C\\" #\Esc #\Esc))
+      (declare (ignore r g b))
+      (expect consumed :to-be 0)))
+  ;; Invalid offsets are declined without signaling.
+  (it "declines a negative start offset without signaling"
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C]10;rgb:ff/00/00~C" #\Esc (code-char 7))
+                             :start -1)
+      (expect r :to-be-falsy)
+      (expect g :to-be-falsy)
+      (expect b :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a fractional start offset without signaling"
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C]10;rgb:ff/00/00~C" #\Esc (code-char 7))
+                             :start 1.5)
+      (expect r :to-be-falsy)
+      (expect g :to-be-falsy)
+      (expect b :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines an overlong hex component"
+    (multiple-value-bind (r g b consumed)
+        (decode-color-report (format nil "~C]10;rgb:fffffffff/00/00~C" #\Esc
+                                     (code-char 7)))
+      (expect r :to-be-falsy)
+      (expect g :to-be-falsy)
+      (expect b :to-be-falsy)
+      (expect consumed :to-be 0))))
+
+(describe "kitty CSI-u protocol and legacy CSI-tilde F-keys"
   ;; Kitty CSI-u event types: MODIFIER:EVENT. 'a' = 97; event 3 = release.
-  (let ((event (first (decode-input (%csi "97;1:3" #\u)))))
-    (is (eq :character (key-event-type event)))
-    (is (char= #\a (key-event-code event)))
-    (is (eq :release (key-event-kind event))))
-  (let ((event (first (decode-input (%csi "97;1:2" #\u)))))
-    (is (eq :repeat (key-event-kind event))))
+  (it "decodes a kitty CSI-u release event (event type 3)"
+    (let ((event (first (decode-input (%csi "97;1:3" #\u)))))
+      (expect (key-event-type event) :to-be :character)
+      (expect (key-event-code event) :to-be #\a)
+      (expect (key-event-kind event) :to-be :release)))
+  (it "decodes a kitty CSI-u repeat event (event type 2)"
+    (let ((event (first (decode-input (%csi "97;1:2" #\u)))))
+      (expect (key-event-kind event) :to-be :repeat)))
   ;; Shift (modifier 2) + press (event 1).
-  (let ((event (first (decode-input (%csi "97;2:1" #\u)))))
-    (is (equal '(:shift) (key-event-modifiers event)))
-    (is (eq :press (key-event-kind event))))
+  (it "decodes shift modifier (2) with a press event (1)"
+    (let ((event (first (decode-input (%csi "97;2:1" #\u)))))
+      (expect (key-event-modifiers event) :to-equal '(:shift))
+      (expect (key-event-kind event) :to-be :press)))
   ;; Event kinds also apply to arrows and other CSI keys.
-  (let ((event (first (decode-input (%csi "1;1:3" #\A)))))
-    (is (eq :up (key-event-code event)))
-    (is (eq :release (key-event-kind event))))
+  (it "applies event kinds to arrow and other CSI keys too, not just kitty character keys"
+    (let ((event (first (decode-input (%csi "1;1:3" #\A)))))
+      (expect (key-event-code event) :to-be :up)
+      (expect (key-event-kind event) :to-be :release)))
   ;; A plain key defaults to :PRESS.
-  (is (eq :press (key-event-kind (first (decode-input "a")))))
+  (it "defaults a plain key's kind to :press"
+    (expect (key-event-kind (first (decode-input "a"))) :to-be :press))
   ;; Legacy CSI-tilde F13-F20.
-  (is (eq :f13 (key-event-code (first (decode-input (%csi "25" #\~))))))
-  (is (eq :f20 (key-event-code (first (decode-input (%csi "34" #\~))))))
+  (it "decodes legacy CSI-tilde F13"
+    (expect (key-event-code (first (decode-input (%csi "25" #\~)))) :to-be :f13))
+  (it "decodes legacy CSI-tilde F20"
+    (expect (key-event-code (first (decode-input (%csi "34" #\~)))) :to-be :f20))
   ;; Kitty associated text (field 3) and the shifted-key subfield of field 1.
-  (let ((event (first (decode-input (%csi "97;1;97" #\u)))))
-    (is (char= #\a (key-event-code event)))
-    (is (string= "a" (key-event-text event))))
-  (let ((event (first (decode-input (%csi "97:65;2;65" #\u)))))
-    (is (char= #\a (key-event-code event)))
-    (is (equal '(:shift) (key-event-modifiers event)))
-    (is (string= "A" (key-event-text event))))
+  (it "decodes kitty associated text (field 3) alongside the shifted-key subfield of field 1"
+    (let ((event (first (decode-input (%csi "97;1;97" #\u)))))
+      (expect (key-event-code event) :to-be #\a)
+      (expect (key-event-text event) :to-equal "a")))
+  (it "decodes a shift modifier together with field-3 text"
+    (let ((event (first (decode-input (%csi "97:65;2;65" #\u)))))
+      (expect (key-event-code event) :to-be #\a)
+      (expect (key-event-modifiers event) :to-equal '(:shift))
+      (expect (key-event-text event) :to-equal "A")))
   ;; A plain key has no associated text.
-  (is (null (key-event-text (first (decode-input "a")))))
+  (it "leaves a plain key's text as NIL"
+    (expect (key-event-text (first (decode-input "a"))) :to-be-falsy))
   ;; Kitty shifted / base-layout key alternates (field-1 sub-fields).
-  (let ((event (first (decode-input (%csi "97:65:97;2" #\u)))))
-    (is (char= #\a (key-event-code event)))
-    (is (char= #\A (key-event-shifted-key event)))
-    (is (char= #\a (key-event-base-key event)))
-    (is (equal '(:shift) (key-event-modifiers event))))
+  (it "decodes kitty shifted- and base-layout-key alternates (field-1 sub-fields)"
+    (let ((event (first (decode-input (%csi "97:65:97;2" #\u)))))
+      (expect (key-event-code event) :to-be #\a)
+      (expect (key-event-shifted-key event) :to-be #\A)
+      (expect (key-event-base-key event) :to-be #\a)
+      (expect (key-event-modifiers event) :to-equal '(:shift))))
   ;; Shifted without base.
-  (let ((event (first (decode-input (%csi "97:65;1" #\u)))))
-    (is (char= #\A (key-event-shifted-key event)))
-    (is (null (key-event-base-key event))))
+  (it "decodes a shifted-key alternate without a base-key alternate"
+    (let ((event (first (decode-input (%csi "97:65;1" #\u)))))
+      (expect (key-event-shifted-key event) :to-be #\A)
+      (expect (key-event-base-key event) :to-be-falsy)))
   ;; No alternates on a plain key.
-  (let ((event (first (decode-input "a"))))
-    (is (null (key-event-shifted-key event)))
-    (is (null (key-event-base-key event))))
+  (it "leaves shifted-/base-key alternates NIL on a plain key"
+    (let ((event (first (decode-input "a"))))
+      (expect (key-event-shifted-key event) :to-be-falsy)
+      (expect (key-event-base-key event) :to-be-falsy)))
   ;; Multi-code-point text (colon-separated within field 3).
-  (let ((event (first (decode-input (%csi "97;1;104:105" #\u)))))
-    (is (string= "hi" (key-event-text event))))
+  (it "decodes multi-code-point text (colon-separated within field 3)"
+    (let ((event (first (decode-input (%csi "97;1;104:105" #\u)))))
+      (expect (key-event-text event) :to-equal "hi")))
   ;; An empty text field (nothing between the second `;' and the final byte)
   ;; is NIL, same as when field 3 is absent entirely.
-  (let ((event (first (decode-input (%csi "97;1;" #\u)))))
-    (is (null (key-event-text event))))
+  (it "treats an empty text field the same as an absent field 3 (NIL)"
+    (let ((event (first (decode-input (%csi "97;1;" #\u)))))
+      (expect (key-event-text event) :to-be-falsy)))
   ;; A code point in field 3 out of the Unicode range is malformed; the
   ;; whole text field is dropped rather than partially decoded.
-  (let ((event (first (decode-input (%csi "97;1;9999999" #\u)))))
-    (is (null (key-event-text event))))
+  (it "drops the whole text field when its code point is out of Unicode range, rather than partially decoding"
+    (let ((event (first (decode-input (%csi "97;1;9999999" #\u)))))
+      (expect (key-event-text event) :to-be-falsy)))
   ;; More than three `;'-separated fields is not a form this decoder
   ;; recognizes -- it declines and falls back to raw character decoding
   ;; rather than misinterpreting the extra field.
-  (is (eq :escape (key-event-code (first (decode-input (%csi "97;1;104;200" #\u))))))
+  (it "declines more than three `;'-separated fields and falls back to raw character decoding"
+    (expect (key-event-code (first (decode-input (%csi "97;1;104;200" #\u))))
+            :to-be :escape))
   ;; A non-digit character embedded in a field is likewise declined.
-  (is (eq :unknown-csi (key-event-code (first (decode-input (%csi "9x;1" #\u)))))))
+  (it "declines a non-digit character embedded in a field"
+    (expect (key-event-code (first (decode-input (%csi "9x;1" #\u))))
+            :to-be :unknown-csi)))
 
-(defun %test-device-attributes ()
-  (multiple-value-bind (params consumed)
-      (decode-device-attributes (%csi "?1;2" #\c))
-    (is (equal '(1 2) params))
-    (is (= 7 consumed)))
-  (multiple-value-bind (params consumed)
-      (decode-device-attributes (%csi ">0;276;0" #\c))
-    (is (equal '(0 276 0) params))
-    (is (plusp consumed)))
+(describe "decode-device-attributes"
+  (it "decodes primary device attributes parameters"
+    (multiple-value-bind (params consumed)
+        (decode-device-attributes (%csi "?1;2" #\c))
+      (expect params :to-equal '(1 2))
+      (expect consumed :to-be 7)))
+  (it "decodes secondary device attributes parameters"
+    (multiple-value-bind (params consumed)
+        (decode-device-attributes (%csi ">0;276;0" #\c))
+      (expect params :to-equal '(0 276 0))
+      (expect consumed :to-be-greater-than 0)))
   ;; A bare `ESC [ c' has no parameters.
-  (multiple-value-bind (params consumed)
-      (decode-device-attributes (%csi "" #\c))
-    (is (null params))
-    (is (= 3 consumed)))
+  (it "has no parameters for a bare ESC [ c"
+    (multiple-value-bind (params consumed)
+        (decode-device-attributes (%csi "" #\c))
+      (expect params :to-be-falsy)
+      (expect consumed :to-be 3)))
   ;; Non-ESC-prefixed input is declined.
-  (multiple-value-bind (params consumed)
-      (decode-device-attributes "hello")
-    (is (null params))
-    (is (= 0 consumed)))
+  (it "declines non-ESC-prefixed input"
+    (multiple-value-bind (params consumed)
+        (decode-device-attributes "hello")
+      (expect params :to-be-falsy)
+      (expect consumed :to-be 0)))
   ;; A bare `ESC [' with nothing after is declined before the `?'/`>' prefix
   ;; check even looks past the end of the string.
-  (multiple-value-bind (params consumed)
-      (decode-device-attributes (format nil "~C[" #\Esc))
-    (is (null params))
-    (is (= 0 consumed)))
+  (it "declines a bare ESC [ before the `?'/`>' prefix check looks past the end of the string"
+    (multiple-value-bind (params consumed)
+        (decode-device-attributes (format nil "~C[" #\Esc))
+      (expect params :to-be-falsy)
+      (expect consumed :to-be 0)))
   ;; Incomplete input is declined.
-  (multiple-value-bind (params consumed)
-      (decode-device-attributes (format nil "~C[?1;2" #\Esc))
-    (is (null params))
-    (is (= 0 consumed)))
+  (it "declines incomplete input"
+    (multiple-value-bind (params consumed)
+        (decode-device-attributes (format nil "~C[?1;2" #\Esc))
+      (expect params :to-be-falsy)
+      (expect consumed :to-be 0)))
   ;; Invalid offsets are declined without signaling.
-  (multiple-value-bind (params consumed)
-      (decode-device-attributes (%csi "?1;2" #\c) :start -1)
-    (is (null params))
-    (is (= 0 consumed)))
-  (multiple-value-bind (params consumed)
-      (decode-device-attributes (%csi "?1;2" #\c) :start 1.5)
-    (is (null params))
-    (is (= 0 consumed))))
+  (it "declines a negative start offset without signaling"
+    (multiple-value-bind (params consumed)
+        (decode-device-attributes (%csi "?1;2" #\c) :start -1)
+      (expect params :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a fractional start offset without signaling"
+    (multiple-value-bind (params consumed)
+        (decode-device-attributes (%csi "?1;2" #\c) :start 1.5)
+      (expect params :to-be-falsy)
+      (expect consumed :to-be 0))))
 
-(defun test-keys ()
-  (%test-key-event->string)
-  (%test-focus-decode)
-  (%test-cursor-position-report)
-  (%test-color-report)
-  (%test-kitty-and-f-keys)
-  (%test-device-attributes)
-  (let ((event (make-key-event :type :special :code :enter :modifiers '(:control))))
-    (%assert-key-event= event '(:special :enter (:control))))
-  (let ((event (make-key-event :type :special
-                               :code :enter
-                               :modifiers '(:reverse :alt :bold :alt))))
-    (%assert-key-event= event '(:special :enter (:alt :bold :reverse))))
-  (handler-case
-      (progn
-        (error 'unsupported-feature :feature :pty)
-        (is nil))
-    (unsupported-feature (condition)
-      (is (eq :pty (unsupported-feature-feature condition)))
-      (is (search "Unsupported feature: PTY" (format nil "~A" condition)))))
-  (let ((event (make-key-event :type :special
-                               :code :enter
-                               :modifiers '(:control :control :shift 1))))
-    (%assert-key-event= event '(:special :enter (:control :shift))))
-  (signals-non-type-error (make-key-event :type "bad" :code #\a))
-  (signals-non-type-error (make-key-event :type :character :code :not-a-character))
-  (signals-non-type-error (make-key-event :type :special :code #\a))
-  (signals-non-type-error (make-key-event :type :paste :code #\a))
-  (signals-non-type-error (make-key-event :type :character :code #\a :kind :down))
-  (signals-non-type-error (make-key-event :type :character :code #\a :text :bad))
-  (signals-non-type-error (make-key-event :type :character :code #\a :shifted-key "A"))
-  (do-test-case-bind
-      (case +single-decode-cases+
-            (input expected-type expected-code expected-modifiers))
-    (%assert-single-decode-case input
-                                expected-type
-                                expected-code
-                                expected-modifiers))
-  (do-test-case-bind
-      (case +decode-key-sequence-cases+
-            (input expected-type expected-code expected-modifiers
-                   expected-consumed &key (start 0)))
-    (%assert-decode-key-sequence-case input
-                                      expected-type
-                                      expected-code
-                                      expected-modifiers
-                                      expected-consumed
-                                      :start start))
-  (%assert-decode-key-sequence-declined "a" -1)
-  (%assert-decode-key-sequence-declined "a" 1.5)
-  (%assert-decode-key-sequence-declined "a" 1)
-  (do-test-case-bind
-      (case +decoded-event-code-cases+
-            (input expected-codes))
-    (%assert-decoded-event-codes input expected-codes))
-  t)
+(describe "make-key-event modifier normalization"
+  (it "accepts a single modifier"
+    (let ((event (make-key-event :type :special :code :enter :modifiers '(:control))))
+      (%expect-key-event (event) :special :enter '(:control))))
+  (it "deduplicates and sorts modifiers into canonical order regardless of input order/duplicates"
+    (let ((event (make-key-event :type :special
+                                 :code :enter
+                                 :modifiers '(:reverse :alt :bold :alt))))
+      (%expect-key-event (event) :special :enter '(:alt :bold :reverse))))
+  (it "deduplicates repeated modifiers and drops non-keyword modifier entries"
+    (let ((event (make-key-event :type :special
+                                 :code :enter
+                                 :modifiers '(:control :control :shift 1))))
+      (%expect-key-event (event) :special :enter '(:control :shift)))))
+
+(describe "unsupported-feature condition"
+  (it "stores the feature and reports it in the condition message"
+    (expect (lambda () (error 'unsupported-feature :feature :pty))
+            :to-throw (lambda (condition)
+                        (and (typep condition 'unsupported-feature)
+                             (eq :pty (unsupported-feature-feature condition))
+                             (search "Unsupported feature: PTY"
+                                     (format nil "~A" condition)))))))
+
+(describe "make-key-event argument validation"
+  (it "rejects a non-keyword :type"
+    (expect-non-type-error (make-key-event :type "bad" :code #\a)))
+  (it "rejects a :character type whose :code is not a character"
+    (expect-non-type-error (make-key-event :type :character :code :not-a-character)))
+  (it "rejects a :special type whose :code is a character instead of a keyword"
+    (expect-non-type-error (make-key-event :type :special :code #\a)))
+  (it "rejects a :paste type with a character :code"
+    (expect-non-type-error (make-key-event :type :paste :code #\a)))
+  (it "rejects :kind :down, which is not a recognized event kind"
+    (expect-non-type-error (make-key-event :type :character :code #\a :kind :down)))
+  (it "rejects a non-string :text"
+    (expect-non-type-error (make-key-event :type :character :code #\a :text :bad)))
+  (it "rejects a non-character :shifted-key"
+    (expect-non-type-error (make-key-event :type :character :code #\a :shifted-key "A"))))
+
+(describe "decode-input over the single-key-event decode table"
+  (dolist (case +single-decode-cases+)
+    (destructuring-bind (input expected-type expected-code expected-modifiers) case
+      (it (format nil "decodes ~S as (~S ~S ~S)"
+                  input expected-type expected-code expected-modifiers)
+        (let ((events (decode-input input)))
+          (expect (length events) :to-be 1)
+          (%expect-key-event ((first events))
+                             expected-type expected-code expected-modifiers))))))
+
+(describe "decode-key-sequence"
+  (dolist (case +decode-key-sequence-cases+)
+    (destructuring-bind (input expected-type expected-code expected-modifiers
+                          expected-consumed &key (start 0))
+        case
+      (it (format nil "decodes ~S (start ~D) as (~S ~S ~S), consuming ~D"
+                  input start expected-type expected-code expected-modifiers
+                  expected-consumed)
+        (multiple-value-bind (event consumed) (decode-key-sequence input :start start)
+          (%expect-key-event (event) expected-type expected-code expected-modifiers)
+          (expect consumed :to-be expected-consumed)))))
+  (it "declines a negative start offset"
+    (multiple-value-bind (event consumed) (decode-key-sequence "a" :start -1)
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a fractional start offset"
+    (multiple-value-bind (event consumed) (decode-key-sequence "a" :start 1.5)
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a start offset at the end of the buffer"
+    (multiple-value-bind (event consumed) (decode-key-sequence "a" :start 1)
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0))))
+
+(describe "decode-input event codes for CSI edge cases"
+  (dolist (case +decoded-event-code-cases+)
+    (destructuring-bind (input expected-codes) case
+      (it (format nil "decodes ~S to codes ~S" input expected-codes)
+        (let ((events (decode-input input)))
+          (expect (length events) :to-be (length expected-codes))
+          (loop for event in events
+                for expected-code in expected-codes
+                do (expect (key-event-code event) :to-be expected-code)))))))

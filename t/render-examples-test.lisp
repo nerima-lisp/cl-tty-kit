@@ -188,32 +188,41 @@
     ("examples/status-dashboard.lisp" . %status-dashboard-output)))
 
 (defun %assert-example-renders (file expected-output)
-  (let ((example (symbol-function (load-example-symbol file))))
-    (is (string= (funcall example) expected-output)
-        (format nil "~A should render the documented output" file))))
+  (expect (funcall (symbol-function (load-example-symbol file)))
+          :to-equal expected-output))
 
-(defun test-render-examples ()
-  (let ((screen (make-screen 2 1)))
-    (screen-put-cell screen 0 0 #\H)
-    (screen-put-cell screen 1 0 #\i)
-    (let ((output (render-screen screen)))
-      (is (search "Hi" output))
-      (is (search (ansi-clear-screen) output)))
-    (is (string= (%quick-start-output)
-                 (%quick-start-expected-output)))
-    (do-test-case-bind
-        (example-case +render-example-cases+ (file . expected-output-fn))
-      (%assert-example-renders file (funcall expected-output-fn)))
-    ;; The event-loop example returns its decoded event trace, so its rendered
-    ;; frames come from a dedicated EVENT-LOOP-EXAMPLE-RENDER entry point.
+(describe "render-screen quick check"
+  (it "renders written text and clears the screen first"
+    (let ((screen (make-screen 2 1)))
+      (screen-put-cell screen 0 0 #\H)
+      (screen-put-cell screen 1 0 #\i)
+      (let ((output (render-screen screen)))
+        (expect (search "Hi" output))
+        (expect (search (ansi-clear-screen) output))))))
+
+(describe "the documented quick-start snippet"
+  (it "renders the documented output"
+    (expect (%quick-start-output) :to-equal (%quick-start-expected-output))))
+
+(describe "documented example renders"
+  (dolist (example-case +render-example-cases+)
+    (destructuring-bind (file . expected-output-fn) example-case
+      (it (format nil "~A renders the documented output" file)
+        (%assert-example-renders file (funcall expected-output-fn))))))
+
+;; The event-loop example returns its decoded event trace, so its rendered
+;; frames come from a dedicated EVENT-LOOP-EXAMPLE-RENDER entry point.
+(describe "examples/event-loop.lisp"
+  (it "renders the documented output via EVENT-LOOP-EXAMPLE-RENDER"
     (load-example-symbol "examples/event-loop.lisp")
-    (is (string= (funcall (symbol-function
-                           (find-symbol "EVENT-LOOP-EXAMPLE-RENDER" :cl-user)))
-                 (%event-loop-output))
-        "examples/event-loop.lisp should render the documented output"))
-  (let ((example (symbol-function
-                  (load-example-symbol "examples/terminal-session.lisp"))))
-    (is (string= (with-output-to-string (out)
-                   (funcall example out))
-                 (%terminal-session-example-expected-output))))
-  t)
+    (expect (funcall (symbol-function
+                      (find-symbol "EVENT-LOOP-EXAMPLE-RENDER" :cl-user)))
+            :to-equal (%event-loop-output))))
+
+(describe "examples/terminal-session.lisp"
+  (it "renders the documented output when writing to an explicit stream"
+    (let ((example (symbol-function
+                    (load-example-symbol "examples/terminal-session.lisp"))))
+      (expect (with-output-to-string (out)
+                (funcall example out))
+              :to-equal (%terminal-session-example-expected-output)))))
