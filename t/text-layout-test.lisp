@@ -11,6 +11,11 @@
   ;; Ellipsis reserves its own columns so the result stays within WIDTH.
   (is (string= "he..." (truncate-string "hello world" 5 :ellipsis "...")))
   (is (= 5 (string-width (truncate-string "hello world" 5 :ellipsis "..."))))
+  ;; A zero-width but nonempty ellipsis is still appended.
+  (let* ((ellipsis (string (code-char #x0301)))
+         (result (truncate-string "hello" 2 :ellipsis ellipsis)))
+    (is (string= (concatenate 'string "he" ellipsis) result))
+    (is (= 2 (string-width result))))
   ;; An ellipsis too wide for WIDTH is dropped rather than overflowing.
   (is (string= "h" (truncate-string "hello" 1 :ellipsis "...")))
   ;; Wide (double-width) glyphs are never split across the boundary.
@@ -34,7 +39,12 @@
   (is (string= "hello" (pad-string "hello" 3)))
   (is (string= "hello" (pad-string "hello" 5)))
   ;; Column-accurate padding around a double-width glyph.
-  (is (string= (format nil "~C  " #\U+4E00) (pad-string (format nil "~C" #\U+4E00) 4)))
+  (let ((cjk (format nil "~C" #\U+4E00)))
+    (is (string= (format nil "~C  " #\U+4E00) (pad-string cjk 4)))
+    (is (string= (format nil "   ~C" #\U+4E00)
+                 (pad-string cjk 5 :align :right)))
+    (is (string= (format nil " ~C  " #\U+4E00)
+                 (pad-string cjk 5 :align :center))))
   ;; A multi-column pad character is rejected.
   (signals (error c) (pad-string "hi" 5 :pad #\U+4E00) (is c))
   (signals-non-type-error (pad-string :not-a-string 3))
@@ -47,10 +57,26 @@
              (wrap-string "the quick brown fox" 9)))
   ;; Runs of spaces collapse to a single separator.
   (is (equal '("a b") (wrap-string "a   b" 5)))
+  ;; An unsplit word is measured once before placement.
+  (let ((calls 0)
+        (original (symbol-function 'cl-tty-kit:string-width)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'cl-tty-kit:string-width)
+                 (lambda (&rest arguments)
+                   (incf calls)
+                   (apply original arguments)))
+           (is (equal '("a bb ccc") (wrap-string "a bb ccc" 10)))
+           (is (= 3 calls)))
+      (setf (symbol-function 'cl-tty-kit:string-width) original)))
   ;; A word longer than the width is hard-split at a column boundary.
   (is (equal '("abcde" "fghij" "k") (wrap-string "abcdefghijk" 5)))
   ;; Embedded newlines force breaks; a blank line yields an empty string.
   (is (equal '("a" "" "b") (wrap-string (format nil "a~%~%b") 5)))
+  ;; A trailing newline preserves the final empty paragraph.
+  (is (equal '("a" "") (wrap-string (format nil "a~%") 5)))
+  (is (equal '("" "") (wrap-string (format nil "~%") 5)))
+
   ;; Wide glyphs are packed by column width, not character count.
   (let ((cjk (format nil "~C~C~C" #\U+4E00 #\U+4E8C #\U+4E09)))
     (is (equal (list (format nil "~C~C" #\U+4E00 #\U+4E8C)

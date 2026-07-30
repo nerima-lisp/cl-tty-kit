@@ -54,7 +54,11 @@
     (is (= 5 (length ramp)))
     (is (equal '(0 0 0) (first ramp)))
     (is (equal '(10 10 10) (car (last ramp)))))
-  (signals (error c) (color-gradient '(0 0 0) '(1 1 1) 0) (is c)))
+  (signals (error c) (color-gradient '(0 0 0) '(1 1 1) 0) (is c))
+  ;; Fractional step counts are invalid public input.
+  (signals-non-type-error
+    (color-gradient '(0 0 0) '(1 1 1) 1.5))
+)
 
 (defun %test-rgb-to-ansi16 ()
   (is (= 0 (rgb-to-ansi16 0 0 0)))

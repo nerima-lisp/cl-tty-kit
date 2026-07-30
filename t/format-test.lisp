@@ -36,6 +36,9 @@
   (is (string= "a   bb  " (format-columns '("a" "bb") '(3 4))))
   (is (string= "  a  b " (format-columns '("a" "b") '(3 3)
                                           :aligns '(:right :center))))
+  ;; A shorter alignment list defaults remaining fields to left alignment.
+  (is (string= "  a b  " (format-columns '("a" "b") '(3 3)
+                                          :aligns '(:right))))
   (is (string= "x |y " (format-columns '("x" "y") '(2 2) :separator "|")))
   ;; A field wider than its column is left intact.
   (is (string= "hello" (format-columns '("hello") '(3))))
@@ -128,9 +131,13 @@
   (is (search "-" (format-sixel (make-array 21 :initial-element 50) 1 7)))
   ;; Two colors within one band separate with "$"; a color whose columns are
   ;; not contiguous emits a "?" filler for the gap.
+  (progn
   (let ((two-color (format-sixel #(255 0 0 0 0 255) 2 1)))
     (is (search "$" two-color))
     (is (search "?" two-color)))
+  ;; Reusing band color state must not leak the red bits into the next band.
+  (is (string= (format nil "~CPq#21;2;0;0;100#196;2;100;0;0#196~-#21@~C\\" #\Esc #\Esc)
+               (format-sixel #(255 0 0 255 0 0 255 0 0 255 0 0 255 0 0 255 0 0 0 0 255) 1 7))))
   ;; A buffer whose length does not match WIDTH*HEIGHT*3 signals.
   (signals (error c) (format-sixel #(1 2 3) 2 2) (is c))
   (signals-non-type-error (format-sixel '(1 2 3 4 5 6) 1 2))

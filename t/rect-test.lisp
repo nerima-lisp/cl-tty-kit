@@ -164,6 +164,14 @@
                     '((:fill 1) (:fill 1)))
     (%rect-is a 5 3 5 2)
     (%rect-is b 10 3 5 2))
+  ;; A larger constraint set exercises the indexed remainder updates.
+  (let* ((constraints (loop repeat 64 collect '(:fill 1)))
+         (rects (layout-split (make-rect :width 257 :height 1)
+                              :horizontal constraints))
+         (sizes (mapcar #'rect-width rects)))
+    (is (= 64 (length rects)))
+    (is (= 257 (reduce #'+ sizes)))
+    (is (every (lambda (size) (member size '(4 5))) sizes)))
   (is (null (layout-split (make-rect :width 10 :height 4) :horizontal '()))))
 
 (defun test-rect ()

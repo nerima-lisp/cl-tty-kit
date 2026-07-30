@@ -19,12 +19,6 @@ simple without a measurable cost."
   #-sb-thread
   `(progn ,@body))
 
-(defmacro define-unsupported-raw-mode-operation (name)
-  `(defun ,name (&optional (fd 0))
-     "Signal that raw mode is unsupported on this implementation."
-     (declare (ignore fd))
-     (unsupported :raw-mode)))
-
 (defun %assert-raw-mode-fd (fd)
   (unless (and (integerp fd) (not (minusp fd)))
     (error "Raw mode FD must be a non-negative integer, got ~S." fd))
@@ -67,9 +61,3 @@ simple without a measurable cost."
               ,@body)
          (when ,enabled
            (disable-raw-mode ,fd))))))
-
-#-sbcl
-(define-unsupported-raw-mode-operation enable-raw-mode)
-
-#-sbcl
-(define-unsupported-raw-mode-operation disable-raw-mode)

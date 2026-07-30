@@ -1,7 +1,6 @@
 (in-package #:cl-tty-kit)
 
-(defparameter +style-sgr-keywords+
-  '((:bold . "1")
+(defparameter +style-sgr-keywords+ '((:bold . "1")
     (:dim . "2")
     (:italic . "3")
     (:underline . "4")
@@ -15,49 +14,63 @@
     (:strikethrough . "9")
     (:overline . "53")))
 
-(defun %keyword-style-sgr-codes (style)
-  (let ((code (cdr (assoc style +style-sgr-keywords+))))
-    (and code (list code))))
-
-(defun %color-style-sgr-codes (style)
-  (destructuring-bind (channel &rest values) style
-    (let ((prefix (case channel
-                    (:fg "38")
-                    (:bg "48")
-                    (:underline-color "58")
-                    (otherwise nil))))
-      (when prefix
-        (case (length values)
-          (1 (list prefix "5" (write-to-string (first values))))
-          (3 (list prefix "2"
-                   (write-to-string (first values))
-                   (write-to-string (second values))
-                   (write-to-string (third values))))
-          (otherwise nil))))))
-
-(defun %style-sgr-codes (style)
-  (cond
-    ((keywordp style)
-     (%keyword-style-sgr-codes style))
-    ((consp style)
-     (%color-style-sgr-codes style))
-    (t nil)))
-
-(defun %style-list-sgr-codes (style-list)
-  (loop for style in style-list
-        append (%style-sgr-codes style)))
-
-(defun %supported-cell-style-codes (cell)
-  (%style-list-sgr-codes (cell-style cell)))
-
-(defun cell-blank-p (cell)
-  "Return true when CELL is a space that renders no visible styling.
+(progn
+  (defun cell-blank-p (cell)
+    "Return true when CELL is a space that renders no visible styling.
 This is the same emptiness test RENDER-DIFF uses to decide a cell can be cleared
 rather than repainted: the character is a space and the style emits no SGR codes
 (an unsupported-only style still counts as blank)."
-  (let ((cell (%assert-cell cell)))
-    (and (char= (cell-char cell) #\Space)
-         (null (%supported-cell-style-codes cell)))))
+    (let ((cell (%assert-cell cell)))
+      (and (char= (cell-char cell) #\Space) (null (%cell-style-sequence cell)))))
+  (declaim (inline %write-style-sgr-number))
+  (defun %write-style-sgr-number (number stream)
+    (write number :stream stream :escape nil :base 10 :radix nil))
+  (defun %write-style-sgr-code (style stream wrote-p)
+    (cond
+      ((keywordp style)
+        (let ((code (cdr (assoc style +style-sgr-keywords+))))
+          (when code
+            (when wrote-p
+              (write-char #\; stream))
+            (write-string code stream)
+            t)))
+      ((consp style)
+        (destructuring-bind (channel &rest values) style
+          (let ((prefix
+                (case channel
+                  (:fg "38")
+                  (:bg "48")
+                  (:underline-color "58")
+                  (otherwise nil))))
+            (when (and prefix (member (length values) '(1 3)))
+              (when wrote-p
+                (write-char #\; stream))
+              (write-string prefix stream)
+              (write-char #\; stream)
+              (case (length values)
+                (1
+                  (write-char #\5 stream)
+                  (write-char #\; stream)
+                  (%write-style-sgr-number (first values) stream))
+                (3
+                  (write-char #\2 stream)
+                  (dolist (value values)
+                    (write-char #\; stream)
+                    (%write-style-sgr-number value stream))))
+              t))))
+      (t nil)))
+  (defun %style-sgr-sequence (style-list)
+    (let ((wrote-p nil))
+      (let ((sequence
+            (with-output-to-string (stream)
+              (write-char +escape+ stream)
+              (write-char #\[ stream)
+              (dolist (style style-list)
+                (when (%write-style-sgr-code style stream wrote-p)
+                  (setf wrote-p t)))
+              (when wrote-p
+                (write-char #\m stream)))))
+        (and wrote-p sequence)))))
 
 (defun style-ansi (&rest style)
   "Return the SGR escape string for STYLE, or an empty string if it emits none.
@@ -66,41 +79,56 @@ STYLE is any mix of modifier keywords and color entries accepted by MAKE-STYLE
 same way a cell's style is, so ambiguous or duplicate entries collapse before
 the escape is built. Callers that render their own text -- outside the SCREEN
 grid -- can prefix a run with this and terminate it with ANSI-RESET-STYLE."
-  (let ((codes (%style-list-sgr-codes (%normalize-cell-style style))))
-    (if codes
-        (format nil "~C[~{~A~^;~}m" +escape+ codes)
-        "")))
+  (or (%style-sgr-sequence (%normalize-cell-style style)) ""))
 
-(defparameter *cell-style-sequence-cache* (make-hash-table :test 'equal)
-  "Memoizes the SGR escape string built for a cell's (already-normalized)
-style list. A real screen has a small, bounded set of distinct styles in
-use at once but many cells sharing each one, and the render/diff/length
-passes each rebuild the same style's escape string independently, so
-caching by style list turns repeat lookups into an O(1) hash hit.")
+(progn
+  (defvar *style-sgr-sequence-cache* nil)
 
-(defun %cell-style-sequence (cell)
-  (let ((style (cell-style cell)))
-    (multiple-value-bind (cached foundp)
-        (gethash style *cell-style-sequence-cache*)
-      (if foundp
-          cached
-          (setf (gethash style *cell-style-sequence-cache*)
-                (let ((codes (%supported-cell-style-codes cell)))
-                  (when codes
-                    (format nil "~C[~{~A~^;~}m" +escape+ codes))))))))
+  (defvar *style-sgr-sequence-cache-enabled-p* nil)
+
+  (defmacro %with-style-sgr-sequence-cache (&body body)
+    `(let ((*style-sgr-sequence-cache* nil)
+           (*style-sgr-sequence-cache-enabled-p* t))
+       ,@body))
+
+  (defun %cell-style-sequence (cell)
+    (if (cell-style-sequence-ready-p cell)
+        (cell-style-sequence cell)
+        (let* ((style (cell-raw-style cell))
+               (sequence
+                 (and style
+                      (if *style-sgr-sequence-cache-enabled-p*
+                          (let ((cache
+                                  (or *style-sgr-sequence-cache*
+                                      (setf *style-sgr-sequence-cache*
+                                            (make-hash-table :test (function equal))))))
+                            (multiple-value-bind (cached present-p)
+                                (gethash style cache)
+                              (if present-p
+                                  cached
+                                  (setf (gethash style cache)
+                                        (%style-sgr-sequence style)))))
+                          (%style-sgr-sequence style)))))
+          (setf (cell-style-sequence cell) sequence
+                (cell-style-sequence-ready-p cell) t)
+          sequence))))
 
 (defun %render-safe-cell-character (char)
-  (if (%terminal-control-character-p char)
-      #\Space
-      char))
+  (if (%terminal-control-character-p char) #\Space
+    char))
 
-(defun %cell-render-parts (cell)
-  (let ((prefix (%cell-style-sequence cell))
-        (char (string (%render-safe-cell-character (cell-char cell)))))
-    (if prefix
-        (list prefix char (ansi-reset-style))
-        (list char))))
+(defun %cell-rendered-length (cell)
+  (let ((prefix (%cell-style-sequence cell)))
+    (+
+      1
+      (if prefix (+ (length prefix) +ansi-reset-style-length+)
+        0))))
 
 (defun %write-cell (cell stream)
-  (dolist (part (%cell-render-parts cell) stream)
-    (write-string part stream)))
+  (let ((prefix (%cell-style-sequence cell)))
+    (when prefix
+      (write-string prefix stream))
+    (write-char (%render-safe-cell-character (cell-char cell)) stream)
+    (when prefix
+      (%write-ansi-reset-style stream)))
+  stream)

@@ -196,11 +196,14 @@ largest-remainder method so the integer sizes still sum exactly."
                (floors (mapcar #'floor shares))
                (leftover (- remaining (reduce #'+ floors)))
                (order (%largest-remainder-order shares weights))
-               (result (mapcar #'+ sizes floors)))
+               ;; Incrementing selected list elements with NTH is quadratic.
+               ;; Keep the public list result while updating a transient vector.
+               (result (coerce (mapcar #'+ sizes floors) 'vector)))
+          (declare (type vector result))
           (loop repeat leftover
                 for index in order
-                do (incf (nth index result)))
-          result))))
+                do (incf (aref result index)))
+          (coerce result 'list)))))
 
 (defun %layout-solve-sizes (available constraints)
   (let* ((baselines (mapcar (lambda (constraint)

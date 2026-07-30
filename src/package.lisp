@@ -218,7 +218,6 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:make-screen
    #:screen-width
    #:screen-height
-   #:screen-cells
    #:screen-cell
    #:screen-resize
    #:screen-clear

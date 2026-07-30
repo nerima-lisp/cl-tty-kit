@@ -55,6 +55,19 @@
       (cl-tty-kit::%utf8-decode-prefix #(97 :not-an-octet))
     (is (= 1 (invalid-utf8-sequence-position condition)))
     (is (eq :non-octet (invalid-utf8-sequence-reason condition))))
+  (let ((octets (%u8 97 #xC2 #xA2)))
+    (multiple-value-bind (string leftover)
+        (cl-tty-kit::%utf8-decode-prefix octets)
+      (is (string= "a¢" string))
+      (is (zerop (length leftover)))
+      (is (typep leftover '(vector (unsigned-byte 8))))
+      (is (not (eq octets leftover)))))
+  (let ((octets (%u8 97 #xC2)))
+    (multiple-value-bind (string leftover)
+        (cl-tty-kit::%utf8-decode-prefix octets)
+      (is (string= "a" string))
+      (setf (aref octets 1) #xA2)
+      (%assert-octets= (%u8 #xC2) leftover)))
   ;; %OCTET-INPUT-P's own contract, verified directly: a string is never
   ;; octet input regardless of being a vector, nor is a character vector;
   ;; only a vector of integers (or one typed (UNSIGNED-BYTE 8)) is. Neither

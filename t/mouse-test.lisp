@@ -110,7 +110,13 @@ SEQUENCE must decode it into.")
   (signals (error c) (make-mouse-event :button :invalid) (is c))
   (signals (error c) (make-mouse-event :action :invalid) (is c))
   (signals (error c) (make-mouse-event :x -1) (is c))
-  (signals (error c) (make-mouse-event :y 1.5) (is c)))
+  (signals (error c) (make-mouse-event :y 1.5) (is c))
+  ;; A non-ESC prefix that otherwise resembles an SGR report is declined.
+  (multiple-value-bind (event consumed)
+      (decode-mouse-sequence "x[<0;1;1M")
+    (is (null event))
+    (is (= 0 consumed)))
+)
 
 (defun %test-mouse-input-integration ()
   ;; DECODE-INPUT surfaces mouse events inline with key events.

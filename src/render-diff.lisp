@@ -1,158 +1,185 @@
 (in-package #:cl-tty-kit)
 
-(defun %cell-equal-p (left right)
-  (and (char= (cell-char left) (cell-char right))
-       ;; Cell styles are already normalized (see %NORMALIZE-CELL-STYLE), so
-       ;; an EQUAL raw-style comparison answers the common case -- identical
-       ;; or both-blank cells, the bulk of any diff -- without rebuilding
-       ;; each cell's SGR code list. Differing raw styles can still render
-       ;; identically (e.g. two distinct SGR-unsupported keywords both drop
-       ;; out), so fall back to the semantic comparison only then.
-       (or (equal (cell-style left) (cell-style right))
-           (equal (%supported-cell-style-codes left)
-                  (%supported-cell-style-codes right)))))
-
-(defun %render-blank-cell-p (cell)
-  (and (char= (cell-char cell) #\Space)
-       (null (%supported-cell-style-codes cell))))
-
-(defun %same-screen-dimensions-p (screen previous)
-  (and previous
-       (= (screen-width screen) (screen-width previous))
-       (= (screen-height screen) (screen-height previous))))
-
-(defun %row-blank-suffix-start (screen y)
-  (do ((x (1- (screen-width screen)) (1- x))
-       (start (screen-width screen)))
-      ((< x 0) start)
-    (if (%render-blank-cell-p (screen-cell screen x y))
-        (setf start x)
-        (return start))))
-
-(defun %write-diff-run (screen previous start-x y stream)
-  (do ((x start-x (1+ x)))
-      ((>= x (screen-width screen)) (screen-width screen))
-    (let ((current (screen-cell screen x y))
-          (old (screen-cell previous x y)))
+(defun %write-diff-run (cells previous-cells start-index row-end stream)
+  (declare (type simple-vector cells previous-cells)
+           (type fixnum start-index row-end))
+  (do ((index start-index (1+ index)))
+    ((>= index row-end) row-end)
+    (let ((current (aref cells index))
+          (old (aref previous-cells index)))
       (when (%cell-equal-p current old)
-        (return x))
+        (return index))
       (%write-cell current stream))))
 
-(defun %collect-diff-run-output (screen previous start-x y)
-  (let ((stream (make-string-output-stream)))
-    (let ((next-x (%write-diff-run screen previous start-x y stream)))
-      (values (get-output-stream-string stream)
-              next-x))))
+(defun %diff-render-length (screen previous max-length)
+  "Return the diff output length and whether it loses to a full repaint."
+  (block too-long
+    (let ((cells (screen-cells screen))
+          (previous-cells (screen-cells previous))
+          (width (screen-width screen))
+          (height (screen-height screen))
+          (length 0))
+      (declare (type simple-vector cells previous-cells)
+               (type fixnum width height length))
+      (flet ((count-output (amount)
+               (let ((next-length (+ length amount)))
+              (when (>= next-length max-length)
+                (return-from too-long (values next-length t)))
+              (setf length next-length))))
+        (do ((y 0 (1+ y))
+             (row-start 0 (+ row-start width)))
+          ((>= y height) (values length nil))
+          (let ((row-end (+ row-start width))
+                (blank-suffix-start nil))
+            (do ((index row-start))
+              ((>= index row-end))
+              (if (%cell-equal-p (aref cells index) (aref previous-cells index)) (incf index)
+                (let ((x (- index row-start)))
+                  (when (and (null blank-suffix-start)
+                        (%render-blank-cell-p (aref cells index)))
+                  (setf blank-suffix-start
+                        (%row-blank-suffix-start cells row-start width)))
+                  (if (and blank-suffix-start (>= x blank-suffix-start)) (progn
+                      (count-output (%diff-cursor-length x y))
+                      (count-output 4)
+                      (setf index row-end))
+                    (progn
+                      (count-output (%diff-cursor-length x y))
+                      (do ()
+                        ((or
+                            (>= index row-end)
+                            (%cell-equal-p (aref cells index) (aref previous-cells index))))
+                        (count-output (%cell-rendered-length (aref cells index)))
+                        (incf index)))))))))))))
 
-(defun %emit-diff-cursor (emit x y)
-  (funcall emit `(:cursor ,(1+ y) ,(1+ x))))
-
-(defun %emit-diff-clear-line (emit)
-  (funcall emit '(:clear-line 0)))
-
-(defun %emit-diff-run (screen previous x y emit)
-  "Emit one run of changed cells starting at (X, Y), returning the column just
-past it. The (UNLESS (> NEXT-X X) ...) check below cannot currently fail:
-%DIFF-RENDER-COMMANDS, this function's only caller, calls it exclusively from
-the branch already guarded by (NOT (%CELL-EQUAL-P current old)) at X, and
-%WRITE-DIFF-RUN re-checks that identical, unmutated comparison first -- so its
-loop always writes at least one cell before it can return early. Kept as a
-guard against the alternative -- the caller's outer DO loop advancing X by
-NEXT-X, so a failure here would hang it in an infinite loop -- rather than a
-merely cosmetic assertion."
-  (multiple-value-bind (run-string next-x)
-      (%collect-diff-run-output screen previous x y)
-    (unless (> next-x x)
-      (error "Diff run did not advance at (~D,~D)" x y))
-    (%emit-diff-cursor emit x y)
-    (funcall emit `(:string ,run-string))
-    next-x))
-
-(defun %render-parts-length (parts)
-  (reduce #'+ parts :key #'length :initial-value 0))
-
-(defun %render-command-length (command)
-  ;; Sum each part's length directly instead of concatenating them into a
-  ;; throwaway string via %RENDER-COMMAND-STRING: %PREFERRED-DIFF-COMMANDS
-  ;; calls this once per command in both the full-screen and diff command
-  ;; lists just to pick the smaller one, and the chosen list is rendered for
-  ;; real afterwards -- so the old body paid for a full string build (and,
-  ;; for a screen-sized command list, effectively a whole extra frame of
-  ;; rendering) purely to throw the result away.
-  (%render-parts-length (%render-command-parts command)))
+(defun %write-diff (screen previous stream)
+  "Write the sparse changes from PREVIOUS to SCREEN to STREAM."
+  (let ((cells (screen-cells screen))
+        (previous-cells (screen-cells previous))
+        (width (screen-width screen))
+        (height (screen-height screen))
+        (wrote-output-p nil))
+    (declare (type simple-vector cells previous-cells)
+             (type fixnum width height))
+    (do ((y 0 (1+ y))
+         (row-start 0 (+ row-start width)))
+        ((>= y height) (values stream wrote-output-p))
+      (let ((row-end (+ row-start width))
+            (blank-suffix-start nil))
+        (do ((index row-start))
+            ((>= index row-end))
+          (if (%cell-equal-p (aref cells index) (aref previous-cells index))
+              (incf index)
+              (let ((x (- index row-start)))
+                (when (and (null blank-suffix-start)
+                           (%render-blank-cell-p (aref cells index)))
+                  (setf blank-suffix-start
+                        (%row-blank-suffix-start cells row-start width)))
+                (%write-ansi-move-cursor (1+ y) (1+ x) stream)
+                (setf wrote-output-p t)
+                (if (and blank-suffix-start (>= x blank-suffix-start))
+                    (progn
+                      (%write-ansi-clear-line stream)
+                      (setf index row-end))
+                    (setf index
+                          (%write-diff-run cells previous-cells index row-end stream))))))))))
 
 (defun %screen-render-length (screen)
-  (let ((length (+ (length (ansi-clear-screen))
-                   (length (ansi-move-cursor 1 1)))))
-    (loop for y from 0 below (screen-height screen) do
-      (loop for x from 0 below (screen-width screen) do
-        (incf length (%render-parts-length
-                      (%cell-render-parts (screen-cell screen x y)))))
-      (unless (%screen-last-row-p screen y)
-        (incf length 1)))
-    length))
+    (let ((length 10)
+          (cells (screen-cells screen))
+          (height (screen-height screen)))
+      (declare (type simple-vector cells)
+               (type fixnum length height))
+      (loop for cell across cells
+            do (incf length (%cell-rendered-length cell)))
+      (incf length (max 0 (1- height)))
+      length))
 
-(defun %diff-render-commands (screen previous &key max-length)
-  (block too-long
-    (let ((length 0))
-      (with-render-commands (emit finish)
-        (flet ((emit-counted (command)
-                 (let ((next-length (+ length (%render-command-length command))))
-                   (when (and max-length (>= next-length max-length))
-                     (return-from too-long (values nil next-length t)))
-                   (setf length next-length)
-                   (emit command))))
-          (do ((y 0 (1+ y)))
-              ((>= y (screen-height screen)))
-            (let ((blank-suffix-start (%row-blank-suffix-start screen y)))
-              (do ((x 0))
-                  ((>= x (screen-width screen)))
-                (let ((current (screen-cell screen x y))
-                      (old (screen-cell previous x y)))
-                  (cond
-                    ((%cell-equal-p current old)
-                     (incf x))
-                    ((<= blank-suffix-start x)
-                     (%emit-diff-cursor #'emit-counted x y)
-                     (%emit-diff-clear-line #'emit-counted)
-                     (setf x (screen-width screen)))
-                    (t
-                     (setf x (%emit-diff-run screen previous x y
-                                             #'emit-counted))))))))
-          (values (finish) length nil))))))
+  (defun %screen-render-length-exceeds-p (screen maximum)
+    "Return whether a complete repaint of SCREEN is longer than MAXIMUM."
+    (let ((length 10)
+          (cells (screen-cells screen))
+          (height (screen-height screen)))
+      (declare (type simple-vector cells)
+               (type fixnum length height maximum))
+      (when (> length maximum)
+        (return-from %screen-render-length-exceeds-p t))
+      (loop for cell across cells
+            do (incf length (%cell-rendered-length cell))
+               (when (> length maximum)
+                 (return t)))
+      (> (+ length (max 0 (1- height))) maximum)))
 
-(defun %preferred-diff-commands (screen previous)
-  "Return the diff commands bringing SCREEN to its current state from PREVIOUS,
-or a full repaint when that is shorter or the frames differ in size.
-The final (T ...) clause below cannot currently fire: %DIFF-RENDER-COMMANDS is
-only ever called here with MAX-LENGTH SCREEN-LENGTH, and its EMIT-COUNTED
-helper returns TOO-LONG-P as soon as any partial length would reach
-MAX-LENGTH -- so whenever it instead returns normally, the length it
-committed on every step, including the last, was already confirmed below
-MAX-LENGTH, meaning DIFF-LENGTH < SCREEN-LENGTH always holds and the
-preceding clause always matches first. Kept as a safety net -- worst case if
-it ever did fire is an unnecessary full repaint, not incorrect output."
+(defun %minimum-screen-render-length (screen)
+  "Return a lower bound for a complete repaint of SCREEN."
+  (+ 10
+     (length (screen-cells screen))
+     (max 0 (1- (screen-height screen)))))
+
+(defun %write-diff-plan (screen plan stream)
+  (let ((cells (screen-cells screen))
+        (width (screen-width screen))
+        (operations (diff-plan-operations plan)))
+    (declare (type simple-vector cells)
+             (type (vector fixnum) operations)
+             (type fixnum width))
+    (do ((operation-index 0 (+ operation-index 2))
+         (operation-limit (fill-pointer operations)))
+        ((>= operation-index operation-limit)
+         (values stream (plusp operation-limit)))
+      (declare (type fixnum operation-index operation-limit))
+      (let ((start (aref operations operation-index))
+            (end (aref operations (1+ operation-index))))
+        (declare (type fixnum start end))
+        (multiple-value-bind (y x) (floor start width)
+          (declare (type fixnum y x))
+          (%write-ansi-move-cursor (1+ y) (1+ x) stream)
+          (if (minusp end)
+              (%write-ansi-clear-line stream)
+              (do ((index start (1+ index)))
+                  ((>= index end))
+                (declare (type fixnum index))
+                (%write-cell (aref cells index) stream))))))))
+
+(defun %write-preferred-diff (screen previous stream &optional plan changed-since)
+  "Write the smaller valid screen update and report its rendering strategy."
   (if (not (%same-screen-dimensions-p screen previous))
-      (%screen-render-commands screen)
-      (let ((screen-length (%screen-render-length screen)))
-        (multiple-value-bind (diff-commands diff-length too-long-p)
-            (%diff-render-commands screen previous :max-length screen-length)
-          (cond
-            (too-long-p
-             (%screen-render-commands screen))
-            ((null diff-commands)
-             nil)
-            ((< diff-length screen-length)
-             diff-commands)
-            (t
-             (%screen-render-commands screen)))))))
+      (values (%write-screen screen stream) t t)
+      (if plan
+          (let ((diff-length (%plan-diff-length screen previous plan changed-since)))
+            (if (or (< diff-length (%minimum-screen-render-length screen))
+                    (< diff-length (%screen-render-length screen)))
+                (multiple-value-bind (result wrote-output-p)
+                    (%write-diff-plan screen plan stream)
+                  (values result wrote-output-p nil))
+                (values (%write-screen screen stream) t t)))
+          (let ((screen-length (%screen-render-length screen)))
+            (multiple-value-bind (diff-length too-long-p)
+                (%diff-render-length screen previous screen-length)
+              (if too-long-p
+                  (values (%write-screen screen stream) t t)
+                  (multiple-value-bind (result wrote-output-p)
+                      (%write-diff screen previous stream)
+                    (declare (ignore diff-length))
+                    (values result wrote-output-p nil))))))))
+(defun %render-diff-output (screen previous stream &optional plan changed-since)
+  (%with-style-sgr-sequence-cache
+    (if stream
+        (multiple-value-bind (result diff-output-p full-repaint-p)
+            (%write-preferred-diff screen previous stream plan changed-since)
+          (declare (ignore result))
+          (values stream diff-output-p full-repaint-p))
+        (let ((output (make-string-output-stream)))
+          (multiple-value-bind (result diff-output-p full-repaint-p)
+              (%write-preferred-diff screen previous output plan changed-since)
+            (declare (ignore result))
+            (values
+              (get-output-stream-string output)
+              diff-output-p
+              full-repaint-p))))))
 
-(defun %frame-diff-render-commands (screen previous cursor previous-cursor)
-  (let ((commands (%preferred-diff-commands screen previous))
-        (cursor-commands (%cursor-render-commands cursor)))
-    (if (and (null commands)
-             previous-cursor
-             (%cursor-equal-p cursor previous-cursor))
-        commands
-        (nconc commands
-               cursor-commands))))
+
+
+(defun %render-frame-diff-output (screen previous cursor previous-cursor stream &optional plan changed-since) (%with-style-sgr-sequence-cache (if stream (%write-frame-diff screen previous cursor previous-cursor stream plan changed-since) (let ((output (make-string-output-stream))) (multiple-value-bind (result diff-output-p full-repaint-p) (%write-frame-diff screen previous cursor previous-cursor output plan changed-since) (declare (ignore result)) (values (get-output-stream-string output) diff-output-p full-repaint-p))))))
+
+(defun %write-frame-diff (screen previous cursor previous-cursor stream &optional plan changed-since) (multiple-value-bind (result diff-output-p full-repaint-p) (%write-preferred-diff screen previous stream plan changed-since) (declare (ignore result)) (if (or diff-output-p (null previous-cursor) (not (%cursor-equal-p cursor previous-cursor))) (values (%write-cursor cursor stream) t full-repaint-p) (values stream nil full-repaint-p))))

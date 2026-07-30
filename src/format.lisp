@@ -49,22 +49,21 @@ integer)."
   (%assert-non-negative-width "Progress bar WIDTH" width)
   (%assert-character-field "Progress bar FULL" full)
   (%assert-character-field "Progress bar EMPTY" empty)
-  (let ((ratio (clamp ratio 0 1)))
-    (with-output-to-string (out)
-      (if fractional
-          (let* ((eighths (round (* ratio width 8)))
-                 (complete (floor eighths 8))
-                 (remainder (mod eighths 8))
-                 (partial-p (and (plusp remainder) (< complete width))))
-            (dotimes (index complete)
-              (write-char full out))
-            (when partial-p
-              (write-char (%fractional-block remainder) out))
-            (dotimes (index (- width complete (if partial-p 1 0)))
-              (write-char empty out)))
-          (let ((filled (clamp (round (* ratio width)) 0 width)))
-            (dotimes (index filled) (write-char full out))
-            (dotimes (index (- width filled)) (write-char empty out)))))))
+  (let ((ratio (clamp ratio 0 1))
+        (result (make-string width :initial-element empty)))
+    (if fractional
+        (let* ((eighths (round (* ratio width 8)))
+               (complete (floor eighths 8))
+               (remainder (mod eighths 8))
+               (partial-p (and (plusp remainder) (< complete width))))
+          (loop for index fixnum below complete
+                do (setf (schar result index) full))
+          (when partial-p
+            (setf (schar result complete) (%fractional-block remainder))))
+        (let ((filled (clamp (round (* ratio width)) 0 width)))
+          (loop for index fixnum below filled
+                do (setf (schar result index) full))))
+    result))
 
 (defparameter +sparkline-levels+ 8
   "The number of distinct sparkline bar heights (U+2581 through U+2588).")
@@ -84,22 +83,25 @@ VALUES yields an empty string."
     (error "VALUES ~S must be a sequence." values))
   (when min (%assert-real "MIN" min))
   (when max (%assert-real "MAX" max))
-  (let ((values (coerce values 'list)))
-    (if (null values)
-        ""
-        (progn
-          (dolist (value values)
-            (%assert-real "Sparkline value" value))
-          (let* ((low (or min (reduce #'min values)))
-                 (high (or max (reduce #'max values)))
-                 (range (- high low)))
-            (with-output-to-string (out)
-              (dolist (value values)
-                (let ((level (if (<= range 0)
-                                 0
-                                 (round (* (/ (- (clamp value low high) low) range)
-                                           (1- +sparkline-levels+))))))
-                  (write-char (%sparkline-char level) out)))))))))
+  (if (zerop (length values))
+      ""
+      (progn
+        (map nil (lambda (value)
+                   (%assert-real "Sparkline value" value))
+             values)
+        (let* ((low (or min (reduce #'min values)))
+               (high (or max (reduce #'max values)))
+               (range (- high low))
+               (result (make-string (length values))))
+          (map-into result
+                    (lambda (value)
+                      (let ((level (if (<= range 0)
+                                       0
+                                       (round (* (/ (- (clamp value low high) low) range)
+                                                 (1- +sparkline-levels+))))))
+                        (%sparkline-char level)))
+                    values)
+          result))))
 
 (defparameter +spinner-frame-sets+
   (list (cons :dots (map 'vector #'code-char
@@ -157,8 +159,8 @@ TRUNCATE-STRING if a hard cap is needed."
   (with-output-to-string (out)
     (loop for field in fields
           for width in widths
-          for index from 0
-          for align = (or (nth index aligns) :left)
+          for align-tail = aligns then (cdr align-tail)
+          for align = (if align-tail (car align-tail) :left)
           for first = t then nil
           do (unless first
                (write-string separator out))

@@ -1,28 +1,34 @@
 (in-package #:cl-tty-kit/test)
 
 (defmacro bounds-error-is ((condition x y width height) form)
-  `(signals (screen-index-out-of-bounds ,condition) ,form
-     (is (= ,x (screen-index-out-of-bounds-x ,condition)))
-     (is (= ,y (screen-index-out-of-bounds-y ,condition)))
-     (is (= ,width (screen-index-out-of-bounds-width ,condition)))
-     (is (= ,height (screen-index-out-of-bounds-height ,condition)))))
+  `(signals
+    (screen-index-out-of-bounds ,condition)
+    ,form
+    (is (= ,x (screen-index-out-of-bounds-x ,condition)))
+    (is (= ,y (screen-index-out-of-bounds-y ,condition)))
+    (is (= ,width (screen-index-out-of-bounds-width ,condition)))
+    (is (= ,height (screen-index-out-of-bounds-height ,condition)))))
 
 (defmacro dimensions-error-is ((condition width height) form)
-  `(signals (screen-dimensions-invalid ,condition) ,form
-     (is (= ,width (screen-dimensions-invalid-width ,condition)))
-     (is (= ,height (screen-dimensions-invalid-height ,condition)))))
+  `(signals
+    (screen-dimensions-invalid ,condition)
+    ,form
+    (is (= ,width (screen-dimensions-invalid-width ,condition)))
+    (is (= ,height (screen-dimensions-invalid-height ,condition)))))
 
 (defun %screen-rows (&rest rows)
   "Build a screen from string ROWS, writing each non-space character into place."
   (let* ((height (length rows))
-         (width (if rows (length (first rows)) 0))
+         (width
+        (if rows (length (first rows))
+          0))
          (screen (make-screen width height)))
     (loop for row in rows
           for y from 0
           do (loop for char across row
-                   for x from 0
-                   unless (char= char #\Space)
-                     do (screen-put-cell screen x y char)))
+            for x from 0
+            unless (char= char #\Space)
+              do (screen-put-cell screen x y char)))
     screen))
 
 (defun %test-screen-public-validation ()
@@ -30,7 +36,8 @@
     (signals-non-type-error (make-screen 1 1 :initial-cell :bad))
     (signals-non-type-error (screen-clear screen :cell :bad))
     (signals-non-type-error (screen-resize screen 3 3 :initial-cell :bad))
-    (signals-non-type-error (setf (screen-cell screen 0 0) :bad))
+    (signals-non-type-error
+      (setf (screen-cell screen 0 0) :bad))
     (signals-non-type-error (screen-put-cell screen 0 0 :bad))
     (signals-non-type-error (screen-fill-rect screen 0 0 1 1 :bad))
     (signals-non-type-error (screen-fill screen :bad))
@@ -65,8 +72,9 @@
     (is (= (screen-width screen) (screen-width copy)))
     (is (= (screen-height screen) (screen-height copy)))
     (is (string= "" (render-diff copy screen)))
-    ;; Independent cells: mutating the copy leaves the original alone.
+    (is (eq (screen-cell screen 1 1) (screen-cell copy 1 1)))
     (screen-put-cell copy 0 0 #\Z)
+    (is (not (eq (screen-cell screen 0 0) (screen-cell copy 0 0))))
     (cell-is (screen 0 0) #\A)
     (cell-is (copy 0 0) #\Z)))
 
@@ -77,14 +85,17 @@
     (is (string= "ELL" (screen-row-string screen 0 :start 1 :end 4)))
     (is (string= "" (screen-row-string screen 0 :start 2 :end 2)))
     (signals (screen-index-out-of-bounds c) (screen-row-string screen 2) (is c))
-    (signals (screen-index-out-of-bounds c)
-        (screen-row-string screen 0 :end 6)
+    (signals
+      (screen-index-out-of-bounds c)
+      (screen-row-string screen 0 :end 6)
       (is c))
-    (signals (screen-index-out-of-bounds c)
-        (screen-row-string screen 0 :start -1)
+    (signals
+      (screen-index-out-of-bounds c)
+      (screen-row-string screen 0 :start -1)
       (is c))
-    (signals (screen-index-out-of-bounds c)
-        (screen-row-string screen 0 :start 2 :end 1)
+    (signals
+      (screen-index-out-of-bounds c)
+      (screen-row-string screen 0 :start 2 :end 1)
       (is c))))
 
 (defun %test-screen-scroll ()
@@ -123,7 +134,8 @@
     (screen-blit dest src :dest-x 1 :dest-y 0)
     (is (string= ".XY." (screen-row-string dest 0)))
     (is (string= ".ZW." (screen-row-string dest 1)))
-    ;; Independent cells after a blit.
+    ;; Blitting reuses immutable cell values but never aliases screen vectors.
+    (is (eq (screen-cell dest 1 0) (screen-cell src 0 0)))
     (screen-put-cell src 0 0 #\Q)
     (cell-is (dest 1 0) #\X))
   ;; Sub-region and clipping past the destination edge.
@@ -171,6 +183,14 @@
   (let ((screen (make-screen 3 1)))
     (screen-write-lines screen 0 0 '("hi") :style '(:bold))
     (cell-is (screen 0 0) #\h '(:bold)))
+  ;; The normalized style remains independent from the caller-owned list.
+  (let* ((style (list :bold))
+         (screen (make-screen 3 2)))
+    (screen-write-lines screen 0 0 '("A" "B") :style style)
+    (setf (car style) :italic)
+    (screen-cells-is screen
+      (0 0 #\A :style '(:bold))
+      (0 1 #\B :style '(:bold))))
   ;; An X at or past the right edge is a silent no-op, not an error --
   ;; distinct from the type-validation cases below, since 5 is itself a
   ;; perfectly valid non-negative integer.
@@ -201,41 +221,149 @@
   (let ((screen (make-screen 6 3)))
     (multiple-value-bind (result count)
         (screen-write-wrapped screen 0 0 6 "the quick brown fox")
-      (is (eq screen result))
+      (is (eq screen result) "wrapped/basic-result")
       ;; Four wrapped lines, three of which fit on the 3-row screen.
-      (is (= 3 count))
+      (is (= 3 count) "wrapped/basic-count")
       (is (string= (format nil "the   ~%quick ~%brown ")
-                   (screen-to-string screen)))))
+                   (screen-to-string screen))
+          "wrapped/basic-output")))
+  ;; WRAP-STRING supplies its ordinary lines without padding.  Preserve existing
+  ;; cells after a short write, applying STYLE only to the written cell.
+  (let* ((style (list :bold))
+         (screen (make-screen 6 1 :initial-cell #\.)))
+    (multiple-value-bind (result count)
+        (screen-write-wrapped screen 1 0 4 "x" :style style)
+      (setf (car style) :italic)
+      (is (eq screen result) "wrapped/short-line-result")
+      (is (= 1 count) "wrapped/short-line-count")
+      (is (string= ".x...." (screen-row-string screen 0))
+          "wrapped/short-line-preserves-existing-cells")
+      (cell-is (screen 1 0) #\x '(:bold))
+      (cell-is (screen 2 0) #\.)))
+  ;; Available space at the right edge clips the written text but does not clear
+  ;; an already-existing cell in the remaining visible space.
+  (let ((screen (make-screen 5 1 :initial-cell #\.)))
+    (multiple-value-bind (result count)
+        (screen-write-wrapped screen 3 0 4 "x")
+      (is (eq screen result) "wrapped/right-edge-result")
+      (is (= 1 count) "wrapped/right-edge-count")
+      (is (string= "...x." (screen-row-string screen 0))
+          "wrapped/right-edge-preserves-existing-cell")))
+  ;; Blank source paragraphs yield visible wrapped lines for COUNT, but their
+  ;; empty strings leave the corresponding screen row untouched, even with STYLE.
+  (let ((screen (make-screen 5 3 :initial-cell #\.)))
+    (multiple-value-bind (result count)
+        (screen-write-wrapped screen 0 0 5 (format nil "top~%~%end") :style '(:underline))
+      (is (eq screen result) "wrapped/blank-line-result")
+      (is (= 3 count) "wrapped/blank-line-count")
+      (is (string= (format nil "top..~%.....~%end..")
+                   (screen-to-string screen))
+          "wrapped/blank-line-preserves-existing-cells")
+      (cell-is (screen 0 0) #\t '(:underline))
+      (cell-is (screen 0 1) #\.)))
   ;; An X at or past the right edge is a silent no-op reporting COUNT 0.
   (let ((screen (make-screen 3 1 :initial-cell #\.)))
     (multiple-value-bind (result count)
         (screen-write-wrapped screen 5 0 3 "hi")
-      (is (eq screen result))
-      (is (= 0 count))
-      (is (string= "..." (screen-row-string screen 0)))))
+        (is (eq screen result) "wrapped/off-right-result")
+        (is (= 0 count) "wrapped/off-right-count")
+        (is (string= "..." (screen-row-string screen 0))
+            "wrapped/off-right-output")))
   ;; A negative X is likewise a no-op reporting COUNT 0.
   (let ((screen (make-screen 3 1 :initial-cell #\.)))
     (multiple-value-bind (result count)
         (screen-write-wrapped screen -1 0 3 "hi")
-      (is (eq screen result))
-      (is (= 0 count))
-      (is (string= "..." (screen-row-string screen 0)))))
-  ;; A negative Y is likewise a no-op reporting COUNT 0.
+        (is (eq screen result) "wrapped/negative-x-result")
+        (is (= 0 count) "wrapped/negative-x-count")
+        (is (string= "..." (screen-row-string screen 0))
+            "wrapped/negative-x-output")))
+  ;; A completely off-screen negative Y produces no output.
   (let ((screen (make-screen 3 1 :initial-cell #\.)))
     (multiple-value-bind (result count)
         (screen-write-wrapped screen 0 -1 3 "hi")
-      (is (eq screen result))
-      (is (= 0 count))
-      (is (string= "..." (screen-row-string screen 0)))))
+        (is (eq screen result) "wrapped/off-top-result")
+        (is (= 0 count) "wrapped/off-top-count")
+        (is (string= "..." (screen-row-string screen 0))
+            "wrapped/off-top-output")))
+  ;; Negative Y clips leading wrapped lines and counts only visible output.
+  (let ((screen (make-screen 5 2 :initial-cell #\.)))
+    (multiple-value-bind (result count)
+        (screen-write-wrapped screen 0 -1 5 "one two three")
+      (is (eq screen result) "wrapped/negative-y-result")
+      (is (= 2 count) "wrapped/negative-y-count")
+      (is (string= (format nil "two..~%three")
+                   (screen-to-string screen))
+          "wrapped/negative-y-output")))
+  ;; Reaching the final screen row does not scan a later source paragraph.
+  (let ((calls 0)
+        (original (symbol-function 'cl-tty-kit:string-width))
+        (screen (make-screen 3 1)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'cl-tty-kit:string-width)
+                 (lambda (&rest arguments)
+                   (incf calls)
+                   (apply original arguments)))
+           (multiple-value-bind (result count)
+               (screen-write-wrapped screen 0 0 1 (format nil "a b~%c d"))
+             (is (eq screen result) "wrapped/paragraph-short-circuit-result")
+             (is (= 1 count) "wrapped/paragraph-short-circuit-count")
+             (is (string= "a  " (screen-row-string screen 0))
+                 "wrapped/paragraph-short-circuit-output")
+             ;; "a" is buffered and "b" fills the only visible row; the
+             ;; following paragraph is never measured.
+             (is (= 2 calls) "wrapped/paragraph-short-circuit-measurement")))
+      (setf (symbol-function 'cl-tty-kit:string-width) original)))
+
+  ;; The writer stops at the screen edge before measuring later words.
+  (let ((calls 0)
+          (original (symbol-function 'cl-tty-kit:string-width))
+          (screen (make-screen 3 1)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'cl-tty-kit:string-width)
+                   (lambda (&rest arguments)
+                     (incf calls)
+                     (apply original arguments)))
+             (multiple-value-bind (result count)
+                 (screen-write-wrapped screen 0 0 1 "a b c d e")
+                (is (eq screen result) "wrapped/short-circuit-result")
+                (is (= 1 count) "wrapped/short-circuit-count")
+                (is (string= "a  " (screen-row-string screen 0))
+                    "wrapped/short-circuit-output")
+               ;; "a" is buffered and "b" triggers the first line; no later
+               ;; word is measured once the sole screen row has been filled.
+                (is (= 2 calls) "wrapped/short-circuit-measurement")))
+        (setf (symbol-function 'cl-tty-kit:string-width) original)))
+  (locally
+  (let ((calls 0)
+        (original (symbol-function 'cl-tty-kit::%width-prefix-end))
+        (screen (make-screen 3 1)))
+    (unwind-protect
+         (progn
+           (setf (symbol-function 'cl-tty-kit::%width-prefix-end)
+                 (lambda (&rest arguments)
+                   (incf calls)
+                   (apply original arguments)))
+           (multiple-value-bind (result count)
+               (screen-write-wrapped screen 0 0 3 "abcdefghijkl")
+             (is (eq screen result) "wrapped/long-word-short-circuit-result")
+             (is (= 1 count) "wrapped/long-word-short-circuit-count")
+             (is (string= "abc" (screen-row-string screen 0))
+                 "wrapped/long-word-short-circuit-output")
+             (is (= 2 calls)
+                 "wrapped/long-word-short-circuit-measurement")))
+      (setf (symbol-function 'cl-tty-kit::%width-prefix-end) original)))
   (let ((screen (make-screen 4 1)))
     (signals-non-type-error (screen-write-wrapped :not-a-screen 0 0 3 "text"))
     (signals-non-type-error (screen-write-wrapped screen :x 0 3 "text"))
-    (signals-non-type-error (screen-write-wrapped screen 0 :y 3 "text"))))
+    (signals-non-type-error (screen-write-wrapped screen 0 :y 3 "text")))))
 
 (defun %test-screen-to-string ()
   (let ((screen (%screen-rows "AB" "CD")))
     (is (string= (format nil "AB~%CD") (screen-to-string screen))))
   (is (string= "" (screen-to-string (make-screen 0 0))))
+  (is (string= (format nil "~%") (screen-to-string (make-screen 0 2))))
   (signals-non-type-error (screen-to-string :not-a-screen)))
 
 (defun %test-screen-write-aligned ()
@@ -256,6 +384,17 @@
   (let ((screen (make-screen 3 1)))
     (screen-write-aligned screen (make-rect :width 3 :height 1) "hello")
     (is (string= "hel" (screen-row-string screen 0))))
+  ;; A full-width glyph uses two terminal cells for alignment and clipping.
+  (dolist (case (list (list :left "表    ")
+                      (list :center " 表  ")
+                      (list :right "   表 ")))
+    (let ((screen (make-screen 5 1)))
+      (screen-write-aligned screen (make-rect :width 5 :height 1) "表"
+                            :align (first case))
+      (is (string= (second case) (screen-row-string screen 0)))))
+  (let ((screen (make-screen 1 1 :initial-cell #\.)))
+    (screen-write-aligned screen (make-rect :width 1 :height 1) "表")
+    (is (string= "." (screen-row-string screen 0))))
   ;; A zero-width or zero-height rect is a silent no-op.
   (let ((screen (make-screen 3 1 :initial-cell #\.)))
     (screen-write-aligned screen (make-rect :width 0 :height 1) "x")
@@ -270,8 +409,8 @@
   ;; Style is applied.
   (let ((screen (make-screen 4 1)))
     (screen-write-aligned screen (make-rect :width 4 :height 1) "x"
-                          :align :right :style '(:bold))
-    (cell-is (screen 3 0) #\x '(:bold)))
+                          :align :right :style (quote (:bold)))
+    (cell-is (screen 3 0) #\x (quote (:bold))))
   (let ((screen (make-screen 4 1))
         (rect (make-rect :width 4 :height 1)))
     (signals-non-type-error (screen-write-aligned :not-a-screen rect "x"))

@@ -1,71 +1,63 @@
 (in-package #:cl-tty-kit)
 
-(defmacro with-render-commands ((emit finish) &body body)
-  `(let ((commands '()))
-     (flet ((,emit (command)
-              (push command commands))
-            (,finish ()
-              (nreverse commands)))
-       ,@body)))
-
-(defun %render-command-parts (command)
-  (ecase (first command)
-    (:string
-     (list (second command)))
-    (:cursor
-     (list (ansi-move-cursor (second command)
-                             (third command))))
-    (:clear-line
-     (list (ansi-clear-line (second command))))
-    (:visibility
-     (list (if (second command)
-               (ansi-show-cursor)
-               (ansi-hide-cursor))))
-    (:cell
-     (%cell-render-parts (second command)))
-    (:newline
-     (list (string #\Newline)))))
-
-(defun %write-render-command (command stream)
-  (dolist (part (%render-command-parts command) stream)
-    (write-string part stream))
+(defun %write-screen (screen stream)
+  "Write a complete SCREEN repaint to STREAM without command consing."
+  (let ((cells (screen-cells screen))
+        (width (screen-width screen))
+        (height (screen-height screen)))
+    (declare (type simple-vector cells)
+             (type fixnum width height))
+    (%write-ansi-clear-screen stream)
+    (%write-ansi-move-cursor 1 1 stream)
+    (do ((y 0 (1+ y))
+         (row-start 0 (+ row-start width)))
+        ((>= y height))
+      (declare (type fixnum y row-start))
+      (let ((row-end (+ row-start width)))
+        (declare (type fixnum row-end))
+        (do ((index row-start (1+ index)))
+            ((>= index row-end))
+          (declare (type fixnum index))
+          (%write-cell (aref cells index) stream)))
+      (unless (= y (1- height))
+        (write-char #\Newline stream))))
   stream)
 
-(defun %write-render-commands (commands stream)
-  (dolist (command commands stream)
-    (%write-render-command command stream)))
+(defun %render-screen-output (screen stream)
+  (%with-style-sgr-sequence-cache
+    (if stream
+        (%write-screen screen stream)
+        (with-output-to-string (output)
+          (%write-screen screen output)))))
 
-(defun %render-commands-string (commands)
-  (with-output-to-string (stream)
-    (%write-render-commands commands stream)))
+(defun %write-cursor (cursor stream)
+  "Write CURSOR state to STREAM without command consing."
+  (%write-ansi-move-cursor
+    (1+ (cursor-y cursor))
+    (1+ (cursor-x cursor))
+    stream)
+  (%write-ansi-cursor-visibility (cursor-visible-p cursor) stream)
+  stream)
 
-(defun %render-commands-output (commands stream)
+(defun %render-cursor-output (cursor stream)
   (if stream
-      (%write-render-commands commands stream)
-      (%render-commands-string commands)))
+      (%write-cursor cursor stream)
+      (with-output-to-string (output)
+        (%write-cursor cursor output))))
 
-(defun %screen-last-row-p (screen y)
-  (= y (1- (screen-height screen))))
+(defun %write-frame (screen cursor stream)
+  (%write-screen screen stream)
+  (%write-cursor cursor stream))
 
-(defun %emit-screen-row (screen y emit)
-  (loop for x from 0 below (screen-width screen) do
-    (funcall emit `(:cell ,(screen-cell screen x y))))
-  (unless (%screen-last-row-p screen y)
-    (funcall emit '(:newline))))
-
-(defun %screen-render-commands (screen)
-  (with-render-commands (emit finish)
-    (emit `(:string ,(ansi-clear-screen)))
-    (emit '(:cursor 1 1))
-    (loop for y from 0 below (screen-height screen) do
-      (%emit-screen-row screen y #'emit))
-    (finish)))
-
-(defun %cursor-render-commands (cursor)
-  `((:cursor ,(1+ (cursor-y cursor)) ,(1+ (cursor-x cursor)))
-    (:visibility ,(cursor-visible-p cursor))))
+(defun %render-frame-output (screen cursor stream)
+  (%with-style-sgr-sequence-cache
+    (if stream
+        (%write-frame screen cursor stream)
+        (with-output-to-string (output)
+          (%write-frame screen cursor output)))))
 
 (defun %cursor-equal-p (left right)
-  (and (= (cursor-x left) (cursor-x right))
-       (= (cursor-y left) (cursor-y right))
-       (eq (cursor-visible-p left) (cursor-visible-p right))))
+  (and
+    (= (cursor-x left) (cursor-x right))
+    (= (cursor-y left) (cursor-y right))
+    (eq (cursor-visible-p left) (cursor-visible-p right))))

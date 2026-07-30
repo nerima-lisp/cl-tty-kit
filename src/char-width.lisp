@@ -1,6 +1,7 @@
 (in-package #:cl-tty-kit)
 
-(declaim (notinline sb-unicode:general-category))
+(declaim (notinline sb-unicode:general-category)
+         (inline %character-width))
 
 (defun %zero-width-general-category-p (category code)
   (or (eq category :mn)
@@ -93,6 +94,9 @@ since the ambiguous check runs only when this is true.")
     ((%wide-code-point-p code) 2)
     (t 1)))
 
+(defun %character-width (character)
+  (%code-point-width (char-code character)))
+
 (defun char-width (character)
   "Return the terminal column width of CHARACTER or a Unicode code point."
   (%code-point-width (%validate-code-point-designator character)))
@@ -104,7 +108,7 @@ can align text that mixes ASCII, CJK, combining marks, and emoji."
   (check-type string string)
   (%validate-string-bounds string start end)
   (loop for index from start below end
-        sum (char-width (char string index))))
+        sum (%character-width (char string index))))
 
 (defun string-graphemes (string)
   "Return STRING split into a list of grapheme-cluster strings.
@@ -125,10 +129,10 @@ per-code-point iteration."
 
 (defun grapheme-width (grapheme)
   "Return the terminal column width of the grapheme cluster GRAPHEME (a string).
-The width is that of the cluster's widest code point, so a base plus combining
-marks is the base's width and a wide emoji cluster is two columns. Honors
+The width is the maximum width of its code points, so a base plus combining
+marks is the base width and a wide emoji cluster is two columns. Honors
 *EAST-ASIAN-AMBIGUOUS-WIDE* through CHAR-WIDTH."
   (let ((width 0))
     (loop for char across grapheme
-          do (setf width (max width (char-width char))))
+          do (setf width (max width (%character-width char))))
     width))

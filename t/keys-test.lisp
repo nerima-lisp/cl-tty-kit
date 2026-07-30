@@ -211,7 +211,19 @@ behind every literal terminal escape sequence these tests construct."
       (decode-cursor-position-report (format nil "~C[1234567890123;1R" #\Esc))
     (is (null row))
     (is (null col))
-    (is (= 0 consumed))))
+    (is (= 0 consumed)))
+  ;; A non-ESC prefix is declined without consuming the apparent report body.
+  (multiple-value-bind (row col consumed)
+      (decode-cursor-position-report "x[3;5R")
+    (is (null row))
+    (is (null col))
+    (is (= 0 consumed)))
+  ;; CSI integer fields accept the configured maximum digit run, but no more.
+  (is (= 999999999999999999
+         (cl-tty-kit::%parse-csi-integer "999999999999999999" 0 18)))
+  (is (null (cl-tty-kit::%parse-csi-integer
+             "9999999999999999999" 0 19)))
+)
 
 (defun %test-color-report ()
   ;; 4-hex-digit components scaled to 8-bit, ESC\ terminator.

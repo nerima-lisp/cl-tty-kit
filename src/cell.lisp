@@ -1,16 +1,18 @@
 (in-package #:cl-tty-kit)
 
-(defstruct (cell (:constructor %make-cell (&key (char #\Space) style))
+(defstruct (cell (:constructor %make-cell (&key (char #\Space) raw-style))
                  (:copier nil))
   "A single screen cell with a character and optional style list."
-  (char #\Space :type character)
-  (style nil :type list))
+  (char #\Space :type character :read-only t)
+  (raw-style nil :type list :read-only t)
+  (style-sequence nil :type (or null string))
+  (style-sequence-ready-p nil :type boolean))
 
-(setf (documentation 'cell-char 'function)
-      "Return the character stored in CELL.")
+(setf (documentation 'cell-char 'function) "Return the character stored in CELL.")
 
-(setf (documentation 'cell-style 'function)
-      "Return the normalized style list stored in CELL.")
+(defun cell-style (cell)
+  "Return a defensive copy of the normalized style list stored in CELL."
+  (copy-tree (cell-raw-style cell)))
 
 (defun %assert-cell-character (char)
   (unless (characterp char)
@@ -25,46 +27,43 @@
 (defun %style-color (channel first &optional second third)
   (cond
     ((and (null second) (null third))
-     (unless (%valid-color-byte-p first)
-       (error "Invalid ~A color index ~S; expected an integer in [0, 255]."
-              channel
-              first))
-     (list channel first))
+      (unless (%valid-color-byte-p first)
+        (error
+          "Invalid ~A color index ~S; expected an integer in [0, 255]."
+          channel
+          first))
+      (list channel first))
     ((and second third)
-     (unless (every #'%valid-color-byte-p (list first second third))
-       (error "Invalid ~A RGB color ~S; expected integers in [0, 255]."
-              channel
-              (list first second third)))
-     (list channel first second third))
+      (unless (every #'%valid-color-byte-p (list first second third))
+        (error
+          "Invalid ~A RGB color ~S; expected integers in [0, 255]."
+          channel
+          (list first second third)))
+      (list channel first second third))
     (t
-     (error "~A color constructors accept either INDEX or RED GREEN BLUE."
-            channel))))
+      (error "~A color constructors accept either INDEX or RED GREEN BLUE." channel))))
 
 (defun style-fg (first &optional second third)
   "Return a validated foreground style entry."
   (%style-color :fg first second third))
 
-(setf (documentation 'style-fg 'function)
-      "Return a foreground style entry of the form (:FG INDEX) or (:FG R G B).")
+(setf (documentation 'style-fg 'function) "Return a foreground style entry of the form (:FG INDEX) or (:FG R G B).")
 
 (defun style-bg (first &optional second third)
   "Return a validated background style entry."
   (%style-color :bg first second third))
 
-(setf (documentation 'style-bg 'function)
-      "Return a background style entry of the form (:BG INDEX) or (:BG R G B).")
+(setf (documentation 'style-bg 'function) "Return a background style entry of the form (:BG INDEX) or (:BG R G B).")
 
 (defun style-underline-color (first &optional second third)
   "Return a validated underline-color style entry (SGR 58)."
   (%style-color :underline-color first second third))
 
-(setf (documentation 'style-underline-color 'function)
-      "Return an underline-color style entry, (:UNDERLINE-COLOR INDEX) or
+(setf (documentation 'style-underline-color 'function) "Return an underline-color style entry, (:UNDERLINE-COLOR INDEX) or
 (:UNDERLINE-COLOR R G B), coloring the underline independently of the text (SGR
 58) on terminals that support it.")
 
-(defparameter +named-colors+
-  '((:black . 0)
+(defparameter +named-colors+ '((:black . 0)
     (:red . 1)
     (:green . 2)
     (:yellow . 3)
@@ -90,14 +89,15 @@
 NAME is a keyword such as :RED, :BRIGHT-CYAN, or :GRAY. The result is an index
 suitable for STYLE-FG or STYLE-BG, so (STYLE-FG (NAMED-COLOR :BRIGHT-RED)) reads
 more clearly than the bare integer. An unknown NAME signals an error."
-  (or (cdr (assoc name +named-colors+))
-      (error "Unknown color name ~S; expected one of ~S."
-             name
-             (mapcar #'car +named-colors+))))
+  (or
+    (cdr (assoc name +named-colors+))
+    (error
+      "Unknown color name ~S; expected one of ~S."
+      name
+      (mapcar #'car +named-colors+))))
 
 (defun %color-style-item-p (item)
-  (and (consp item)
-       (member (first item) '(:fg :bg :underline-color) :test #'eq)))
+  (and (consp item) (member (first item) '(:fg :bg :underline-color) :test #'eq)))
 
 (defun %cell-style-items (style)
   (cond
@@ -115,39 +115,42 @@ more clearly than the bare integer. An unknown NAME signals an error."
           (payload (rest item)))
       (when (%proper-list-p payload)
         (cond
-          ((and (= (length payload) 1)
-                (%valid-color-byte-p (first payload)))
-           (list channel (first payload)))
-          ((and (= (length payload) 3)
-                (every #'%valid-color-byte-p payload))
-           (list* channel payload))
+          ((and (= (length payload) 1) (%valid-color-byte-p (first payload)))
+            (list channel (first payload)))
+          ((and (= (length payload) 3) (every #'%valid-color-byte-p payload))
+            (list channel (first payload) (second payload) (third payload)))
           (t nil))))))
 
 (defun %normalize-cell-style (style)
   (let* ((items (%cell-style-items style))
          (modifiers (normalize-modifiers items))
-        (foreground nil)
-        (background nil)
-        (underline nil))
+         (foreground nil)
+         (background nil)
+         (underline nil))
     (dolist (item items)
       (let ((color (%normalize-color-style-item item)))
         (when color
           (case (first color)
-            (:fg (setf foreground color))
-            (:bg (setf background color))
-            (:underline-color (setf underline color))))))
-    (append modifiers
-            (when foreground (list foreground))
-            (when background (list background))
-            (when underline (list underline)))))
+            (:fg
+              (setf foreground color))
+            (:bg
+              (setf background color))
+            (:underline-color
+              (setf underline color))))))
+    (append
+      modifiers
+      (when foreground
+        (list foreground))
+      (when background
+        (list background))
+      (when underline
+        (list underline)))))
 
 (defun make-style (&rest items)
   "Return a normalized style list from modifier keywords and color entries."
   (copy-list (%normalize-cell-style items)))
 
-(setf
- (documentation 'make-style 'function)
- "Return a normalized style list with deduplicated modifiers and the last valid fg/bg entries.")
+(setf (documentation 'make-style 'function) "Return a normalized style list with deduplicated modifiers and the last valid fg/bg entries.")
 
 (defun style-merge (base override)
   "Return a normalized style combining BASE with OVERRIDE, OVERRIDE winning.
@@ -155,14 +158,15 @@ Modifier keywords from both are unioned; OVERRIDE's foreground/background replac
 BASE's when present, otherwise BASE's are kept. Each argument is any style value
 accepted by MAKE-STYLE (a normalized list, a bare color entry, or NIL). Layering
 a highlight over a base style is (STYLE-MERGE base-style (MAKE-STYLE :REVERSE))."
-  (copy-list (%normalize-cell-style
-              (append (%normalize-cell-style base)
-                      (%normalize-cell-style override)))))
+  (copy-list
+    (%normalize-cell-style
+      (append (%normalize-cell-style base) (%normalize-cell-style override)))))
 
 (defun make-cell (&key (char #\Space) style)
-  "Create a CELL, normalizing any supplied style list."
-  (%make-cell :char (%assert-cell-character char)
-              :style (and style (copy-list (%normalize-cell-style style)))))
+  "Create a CELL, normalizing and isolating any supplied style list."
+  (%make-cell
+    :char (%assert-cell-character char)
+    :raw-style (and style (%normalize-cell-style style))))
 
 (defun %blank-cell ()
   (make-cell))
@@ -170,5 +174,4 @@ a highlight over a base style is (STYLE-MERGE base-style (MAKE-STYLE :REVERSE)).
 (defun copy-cell (cell)
   "Return a fresh copy of CELL."
   (let ((cell (%assert-cell cell)))
-    (make-cell :char (cell-char cell)
-               :style (cell-style cell))))
+    (make-cell :char (cell-char cell) :style (cell-raw-style cell))))

@@ -90,11 +90,6 @@
     (error (condition)
       (%signal-pty-operation-failed :spawn nil condition))))
 
-#-sbcl
-(defun make-pty (&key (program "/bin/sh") args environment directory)
-  (declare (ignore program args environment directory))
-  (unsupported :pty))
-
 (defmacro %with-pty-operation ((operation pty) &body body)
   `(handler-case
        (progn ,@body)
@@ -143,11 +138,6 @@ PTY-OPERATION-FAILED when the size cannot be set -- for example on a platform
         (error "Could not set the PTY window size."))
       pty)))
 
-#-sbcl
-(defun pty-resize (pty columns rows)
-  (declare (ignore pty columns rows))
-  (unsupported :pty))
-
 #+sbcl
 (defun pty-alive-p (pty)
   "Return true when PTY's child process is still running.
@@ -156,11 +146,6 @@ stream-only PTY, or after CLOSE-PTY has cleared it). Use this in a read loop to
 tell \"no data yet\" from \"the child exited\"."
   (let ((process (pty-process pty)))
     (and process (sb-ext:process-alive-p process) t)))
-
-#-sbcl
-(defun pty-alive-p (pty)
-  (declare (ignore pty))
-  (unsupported :pty))
 
 #+sbcl
 (defun pty-exit-code (pty)
@@ -171,11 +156,6 @@ failure status. This completes the lifecycle -- MAKE-PTY, PTY-ALIVE-P,
 PTY-EXIT-CODE, CLOSE-PTY."
   (let ((process (pty-process pty)))
     (and process (sb-ext:process-exit-code process))))
-
-#-sbcl
-(defun pty-exit-code (pty)
-  (declare (ignore pty))
-  (unsupported :pty))
 
 #+sbcl
 (defun %wait-for-process-exit (process &key (attempts 20) (sleep-seconds 0.01))
@@ -226,8 +206,3 @@ on."
         (setf (pty-process pty) nil
               (pty-stream pty) nil))))
   pty)
-
-#-sbcl
-(defun close-pty (pty)
-  (declare (ignore pty))
-  (unsupported :pty))

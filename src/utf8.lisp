@@ -2,11 +2,6 @@
 
 (declaim (ftype function %signal-invalid-utf8-sequence))
 
-(defparameter +utf8-leading-byte-rules+
-  '((#xC2 #xDF 2 #x1F :min-code-point #x80)
-    (#xE0 #xEF 3 #x0F :min-code-point #x800)
-    (#xF0 #xF4 4 #x07 :min-code-point #x10000)))
-
 (defun %utf8-continuation-octet-p (octet)
   (and (<= #x80 octet)
        (<= octet #xBF)))
@@ -24,27 +19,19 @@
   (or (code-char code)
       (error 'unsupported-code-point :code-point code)))
 
-(defun %utf8-leading-byte-rule (octet)
-  (find-if (lambda (rule)
-             (destructuring-bind (lower upper &rest _rest) rule
-               (declare (ignore _rest))
-                (<= lower octet upper)))
-            +utf8-leading-byte-rules+))
+(defun %utf8-sequence-length (first)
+  "Return the UTF-8 sequence length selected by FIRST, or NIL when invalid."
+  (cond
+    ((<= #xC2 first #xDF) 2)
+    ((<= #xE0 first #xEF) 3)
+    ((<= #xF0 first #xF4) 4)
+    (t nil)))
 
-(defun %utf8-read-continuation-octets (vector index count)
-  (loop for offset from 1 to count
-        for octet-index = (+ index offset)
-        for octet = (%utf8-octet-at vector octet-index)
-        unless (%utf8-continuation-octet-p octet)
-          do (%signal-invalid-utf8-sequence octet-index octet
-                                            :invalid-continuation-byte)
-        collect octet))
-
-(defun %utf8-assemble-code-point (first payload-mask continuation-octets)
-  (reduce (lambda (code octet)
-            (+ (ash code 6) (logand octet #x3F)))
-          continuation-octets
-          :initial-value (logand first payload-mask)))
+(defun %utf8-min-code-point (sequence-length)
+  (ecase sequence-length
+    (2 #x80)
+    (3 #x800)
+    (4 #x10000)))
 
 (defun %utf8-validate-code-point (index first code-point min-code-point)
   "Signal a structured error when CODE-POINT (already fully assembled from
@@ -60,37 +47,53 @@ covers it."
   (when (> code-point #x10FFFF)
     (%signal-invalid-utf8-sequence index first :code-point-too-large)))
 
-(defun %utf8-decode-multibyte (vector index length first rule)
-  (destructuring-bind (_lower _upper sequence-length payload-mask
-                       &key min-code-point)
-      rule
-    (declare (ignore _lower _upper))
+(defun %utf8-decode-multibyte (vector index length first)
+  "Decode one validated multibyte sequence without allocating continuation lists."
+  (let ((sequence-length (%utf8-sequence-length first)))
+    (unless sequence-length
+      (%signal-invalid-utf8-sequence index first :invalid-leading-byte))
     (when (> (+ index sequence-length) length)
       (%signal-invalid-utf8-sequence index first :truncated-sequence))
-    (let* ((continuation-count (1- sequence-length))
-           (continuation-octets
-             (%utf8-read-continuation-octets vector index continuation-count))
-           (code-point
-             (%utf8-assemble-code-point first payload-mask continuation-octets)))
-      (%utf8-validate-code-point index
-                                 first
-                                 code-point
-                                 min-code-point)
-      (values (%utf8-emit-code-point code-point)
-              (+ index sequence-length)))))
+    (flet ((continuation (offset)
+             (let* ((octet-index (+ index offset))
+                    (octet (%utf8-octet-at vector octet-index)))
+               (unless (%utf8-continuation-octet-p octet)
+                 (%signal-invalid-utf8-sequence octet-index octet
+                                                :invalid-continuation-byte))
+               octet)))
+      (let* ((second (continuation 1))
+             (code-point
+               (case sequence-length
+                 (2
+                  (logior (ash (logand first #x1F) 6)
+                          (logand second #x3F)))
+                 (3
+                  (let ((third (continuation 2)))
+                    (logior (ash (logand first #x0F) 12)
+                            (ash (logand second #x3F) 6)
+                            (logand third #x3F))))
+                 (4
+                  (let ((third (continuation 2))
+                        (fourth (continuation 3)))
+                    (logior (ash (logand first #x07) 18)
+                            (ash (logand second #x3F) 12)
+                            (ash (logand third #x3F) 6)
+                            (logand fourth #x3F)))))))
+        (%utf8-validate-code-point index
+                                   first
+                                   code-point
+                                   (%utf8-min-code-point sequence-length))
+        (values (%utf8-emit-code-point code-point)
+                (+ index sequence-length))))))
 
 (defun %utf8-decode-at (vector index length)
   (let ((first (%utf8-octet-at vector index)))
-    (cond
-      ((< first #x80)
-       (values (%utf8-emit-code-point first) (1+ index)))
-      (t
-       (let ((rule (%utf8-leading-byte-rule first)))
-         (unless rule
-           (%signal-invalid-utf8-sequence index first :invalid-leading-byte))
-         (%utf8-decode-multibyte vector index length first rule))))))
+    (if (< first #x80)
+        (values (%utf8-emit-code-point first) (1+ index))
+        (%utf8-decode-multibyte vector index length first))))
 
 (defun %utf8-write-decoded-octets (vector stream)
+  "Decode VECTOR to STREAM without constructing an intermediate string."
   (loop with index = 0
         with limit = (length vector)
         while (< index limit)
@@ -142,9 +145,10 @@ the caller decodes (and validates) them normally."
                 (return nil))
                ((%utf8-continuation-octet-p octet))
                (t
-                (let ((rule (%utf8-leading-byte-rule octet)))
+                (let ((sequence-length (%utf8-sequence-length octet)))
                   (return
-                    (when (and rule (< (- length index) (third rule)))
+                    (when (and sequence-length
+                               (< (- length index) sequence-length))
                       index)))))
           finally (return nil))))
 
@@ -153,7 +157,9 @@ the caller decodes (and validates) them normally."
 Return two values: the decoded string and a fresh octet vector holding any
 incomplete trailing multibyte sequence (empty when VECTOR ends on a boundary).
 Genuinely invalid octets in the prefix still signal INVALID-UTF8-SEQUENCE."
-  (let* ((tail (%utf8-incomplete-tail-start vector))
-         (boundary (or tail (length vector))))
-    (values (%utf8-octets-to-string (subseq vector 0 boundary))
-            (subseq vector boundary))))
+  (let ((tail (%utf8-incomplete-tail-start vector)))
+    (if tail
+        (values (%utf8-octets-to-string (subseq vector 0 tail))
+                (subseq vector tail))
+        (values (%utf8-octets-to-string vector)
+                (make-array 0 :element-type (array-element-type vector))))))

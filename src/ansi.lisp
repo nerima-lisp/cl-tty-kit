@@ -1,6 +1,47 @@
 (in-package #:cl-tty-kit)
 
-(defconstant +escape+ #\Esc)
+(progn
+  (defconstant +escape+ #\Esc)
+
+  (defconstant +ansi-reset-style-length+ 4)
+
+  (declaim
+    (inline
+      %write-ansi-clear-screen
+      %write-ansi-clear-line
+      %write-ansi-move-cursor
+      %write-ansi-cursor-visibility
+      %write-ansi-reset-style))
+
+  (defun %write-ansi-clear-screen (stream)
+    (write-char +escape+ stream)
+    (write-string "[2J" stream)
+    stream)
+
+  (defun %write-ansi-clear-line (stream)
+    (write-char +escape+ stream)
+    (write-string "[0K" stream)
+    stream)
+
+  (defun %write-ansi-move-cursor (row column stream)
+    (declare (type (integer 1 *) row column))
+    (write-char +escape+ stream)
+    (write-char #\[ stream)
+    (write row :stream stream :escape nil :base 10 :radix nil)
+    (write-char #\; stream)
+    (write column :stream stream :escape nil :base 10 :radix nil)
+    (write-char #\H stream)
+    stream)
+
+  (defun %write-ansi-cursor-visibility (visible-p stream)
+    (write-char +escape+ stream)
+    (write-string (if visible-p "[?25h" "[?25l") stream)
+    stream)
+
+  (defun %write-ansi-reset-style (stream)
+    (write-char +escape+ stream)
+    (write-string "[0m" stream)
+    stream))
 
 (defun %validate-csi-numeric-parameter (value)
   (unless (typep value '(integer 0 *))

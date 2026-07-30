@@ -6,6 +6,24 @@
   (is (string= (ansi-move-cursor 3 4) (format nil "~C[3;4H" #\Esc)))
   (is (string= (ansi-hide-cursor) (format nil "~C[?25l" #\Esc)))
   (is (string= (ansi-show-cursor) (format nil "~C[?25h" #\Esc)))
+  (%assert-render-stream-output
+      (stream (funcall (symbol-function 'cl-tty-kit::%write-ansi-clear-screen) stream))
+    (format nil "~C[2J" #\Esc))
+  (%assert-render-stream-output
+      (stream (funcall (symbol-function 'cl-tty-kit::%write-ansi-clear-line) stream))
+    (format nil "~C[0K" #\Esc))
+  (%assert-render-stream-output
+      (stream (funcall (symbol-function 'cl-tty-kit::%write-ansi-move-cursor) 3 4 stream))
+    (format nil "~C[3;4H" #\Esc))
+  (%assert-render-stream-output
+      (stream (funcall (symbol-function 'cl-tty-kit::%write-ansi-cursor-visibility) t stream))
+    (format nil "~C[?25h" #\Esc))
+  (%assert-render-stream-output
+      (stream (funcall (symbol-function 'cl-tty-kit::%write-ansi-cursor-visibility) nil stream))
+    (format nil "~C[?25l" #\Esc))
+  (%assert-render-stream-output
+      (stream (funcall (symbol-function 'cl-tty-kit::%write-ansi-reset-style) stream))
+    (format nil "~C[0m" #\Esc))
   (is (string= (ansi-enter-alternate-screen) (format nil "~C[?1049h" #\Esc)))
   (is (string= (ansi-exit-alternate-screen) (format nil "~C[?1049l" #\Esc)))
   (is (string= (ansi-enable-bracketed-paste) (format nil "~C[?2004h" #\Esc)))

@@ -127,6 +127,8 @@
           do (expect (<= (length (render-diff current previous))
                           (length (render-screen current)))))))
 
+
+
 (describe "render-diff stays within an allocation budget"
   ;; A regression guard, not a correctness check: a worst-case 80x24 full
   ;; repaint conses well under 400KB on this project's supported SBCL

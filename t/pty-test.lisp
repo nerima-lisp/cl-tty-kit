@@ -495,32 +495,8 @@ and this environment where a real binary is genuinely required."
       (is (= 3 (fd-write-octets 0 (make-array 3 :element-type '(unsigned-byte 8)
                                                 :initial-element 1))))
       (is (= 2 call-count))))
-  t)
-
-#-sbcl
-(defun test-pty-fd ()
-  (dolist (thunk (list (lambda () (pty-fd (cl-tty-kit::%make-pty)))
-                       (lambda () (pty-pid (cl-tty-kit::%make-pty)))
-                       (lambda () (fd-read-octets 0 nil))
-                       (lambda () (fd-write-octets 0 nil))))
-    (handler-case
-        (progn (funcall thunk) (is nil))
-      (unsupported-feature (condition)
-        (is (eq :pty (unsupported-feature-feature condition))))))
-  t)
-
-#-sbcl
-(defun test-pty ()
-  (handler-case
-      (progn
-        (make-pty)
-        (is nil))
-    (unsupported-feature (condition)
-      (is (eq :pty (unsupported-feature-feature condition)))))
-  (handler-case
-      (progn
-        (close-pty (cl-tty-kit::%make-pty :process nil :stream (make-string-input-stream "")))
-        (is nil))
-    (unsupported-feature (condition)
-      (is (eq :pty (unsupported-feature-feature condition)))))
-  t)
+  ;; A fractional read limit is rejected before attempting I/O.
+  (signals-pty-operation-failed (:fd-read nil "PTY operation FD-READ failed")
+    (fd-read-octets 0 (make-array 1 :element-type '(unsigned-byte 8)) 1.5))
+  t
+)

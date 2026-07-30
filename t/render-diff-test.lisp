@@ -2,16 +2,16 @@
 
 (defun %screen-from-rows (&rest rows)
   (let* ((height (length rows))
-         (width (if rows
-                    (length (first rows))
-                    0))
+         (width
+        (if rows (length (first rows))
+          0))
          (screen (make-screen width height)))
     (loop for row in rows
           for y from 0
           do (loop for char across row
-                   for x from 0
-                   unless (char= char #\Space)
-                     do (screen-put-cell screen x y char)))
+            for x from 0
+            unless (char= char #\Space)
+              do (screen-put-cell screen x y char)))
     screen))
 
 (defmacro %screen-with-styled-cells (row &rest cells)
@@ -19,11 +19,12 @@
 CELLS are literal specifications, so callers write them inline without quoting."
   (let ((screen (gensym "SCREEN")))
     `(let ((,screen (%screen-from-rows ,row)))
-       ,@(mapcar (lambda (cell)
-                   (destructuring-bind (x y char &key style) cell
-                     `(screen-put-cell ,screen ,x ,y ,char :style ,style)))
-                 cells)
-       ,screen)))
+      ,@(mapcar
+        (lambda (cell)
+          (destructuring-bind (x y char &key style) cell
+            `(screen-put-cell ,screen ,x ,y ,char :style ,style)))
+        cells)
+      ,screen)))
 
 (defun %assert-render-contains-parts (output parts)
   (dolist (part parts)
@@ -31,27 +32,21 @@ CELLS are literal specifications, so callers write them inline without quoting."
 
 (defun %assert-render-output (output expected)
   (cond
-    ((null expected)
-     (is (string= "" output)))
-    ((stringp expected)
-     (is (string= expected output)))
-    ((and (consp expected)
-          (eq (first expected) :contains))
-     (%assert-render-contains-parts output (rest expected)))
-    (t
-     (error "Unsupported render expectation: ~S" expected))))
+    ((null expected) (is (string= "" output)))
+    ((stringp expected) (is (string= expected output)))
+    ((and (consp expected) (eq (first expected) :contains))
+      (%assert-render-contains-parts output (rest expected)))
+    (t (error "Unsupported render expectation: ~S" expected))))
 
 (defun %assert-render-diff-output (new old expected)
-  (%assert-render-output (render-diff new old)
-                         (if (eq expected :full-redraw)
-                             (render-screen new)
-                             expected)))
+  (%assert-render-output
+    (render-diff new old)
+    (if (eq expected :full-redraw) (render-screen new)
+      expected)))
 
-(defun %assert-render-diff-clear-line-output (new old expected-clear-line-p
-                                               &optional required-style)
+(defun %assert-render-diff-clear-line-output (new old expected-clear-line-p &optional required-style)
   (let ((diff (render-diff new old)))
-    (is (eql expected-clear-line-p
-             (not (null (search (ansi-clear-line 0) diff)))))
+    (is (eql expected-clear-line-p (not (null (search (ansi-clear-line 0) diff)))))
     (when required-style
       (is (search required-style diff)))))
 
@@ -123,23 +118,27 @@ CELLS are literal specifications, so callers write them inline without quoting."
 
 (defun %test-render-diff-style-cases ()
   (do-test-case-bind
-      (style-case
-       `((,(%screen-from-rows "X")
+    (style-case
+      `((,(%screen-from-rows "X")
           ,(%screen-with-styled-cells "X" (0 0 #\X :style '(:bold)))
           (:contains ,(ansi-move-cursor 1 1) ,(ansi-bold) "X" ,(ansi-reset-style)))
-         (,(%screen-with-styled-cells "X" (0 0 #\X :style '((:fg 196) (:bg 17))))
+        (,(%screen-with-styled-cells "X" (0 0 #\X :style '((:fg 196) (:bg 17))))
           ,(%screen-with-styled-cells "X" (0 0 #\X :style '((:bg 17) (:fg 196))))
           nil)
-         (,(%screen-from-rows "X")
+        (,(%screen-from-rows "X")
           ,(%screen-with-styled-cells "X" (0 0 #\X :style '((:fg 196) (:bg 17))))
           (:contains ,(ansi-move-cursor 1 1) "38;5;196;48;5;17m" "X" ,(ansi-reset-style)))
-         (,(%screen-with-styled-cells "X" (0 0 #\X :style '(:no-such-modifier)))
+        (,(%screen-with-styled-cells "X" (0 0 #\X :style '(:no-such-modifier)))
           ,(%screen-from-rows "X")
           nil)
-         (,(%screen-from-rows "X")
+        (,(%screen-from-rows "X")
           ,(%screen-with-styled-cells "X" (0 0 #\X :style '(:blink)))
-          (:contains ,(ansi-move-cursor 1 1) ,(format nil "~C[5m" #\Esc) "X" ,(ansi-reset-style))))
-       (old new expected))
+          (:contains
+            ,(ansi-move-cursor 1 1)
+            ,(format nil "~C[5m" #\Esc)
+            "X"
+            ,(ansi-reset-style))))
+      (old new expected))
     (%assert-render-output (render-diff new old) expected)))
 
 (defun %test-render-cell-control-character-sanitization ()
@@ -161,75 +160,78 @@ CELLS are literal specifications, so callers write them inline without quoting."
 
 (defun %test-render-diff-layout-cases ()
   (do-test-case-bind
-      (diff-case
-        `((,(make-screen 2 1)
+    (diff-case
+      `((,(make-screen 2 1)
           ,(%screen-from-rows "AB")
           ,(%ansi-string (ansi-move-cursor 1 1) "AB"))
-         (,(make-screen 1 1)
-          ,(%screen-from-rows "OK")
-          :full-redraw)
-         (,(make-screen 2 2)
+        (,(make-screen 1 1) ,(%screen-from-rows "OK") :full-redraw)
+        (,(make-screen 2 2)
           ,(%screen-from-rows "A " " B")
-          ,(%ansi-string (ansi-move-cursor 1 1)
-                         "A"
-                         (ansi-move-cursor 2 2)
-                         "B"))
-         (,(make-screen 5 1)
+          ,(%ansi-string (ansi-move-cursor 1 1) "A" (ansi-move-cursor 2 2) "B"))
+        (,(make-screen 5 1)
           ,(%screen-from-rows "A   B")
-          ,(%ansi-string (ansi-move-cursor 1 1)
-                         "A"
-                         (ansi-move-cursor 1 5)
-                         "B")))
-       (old new expected))
+          ,(%ansi-string (ansi-move-cursor 1 1) "A" (ansi-move-cursor 1 5) "B")))
+      (old new expected))
     (%assert-render-diff-output new old expected)))
 
 (defun %test-render-diff-clear-line-cases ()
   (do-test-case-bind
-      (clear-case
-       `((,(%screen-from-rows "HELLO")
-          ,(%screen-from-rows "HE   ")
-          t nil)
-         (,(%screen-from-rows "ABC")
-          ,(%screen-from-rows "   ")
-          t nil)
-         (,(%screen-from-rows "ABC")
-          ,(%screen-with-styled-cells "A  "
-             (1 0 #\Space :style '(:underline))
-             (2 0 #\Space :style '(:underline)))
-          nil ,(format nil "~C[4m" #\Esc))
-         (,(%screen-from-rows "ABC")
-          ,(%screen-with-styled-cells "A  "
-             (1 0 #\Space :style '((:fg 196)))
-             (2 0 #\Space :style '((:fg 196))))
-          nil ,(format nil "~C[38;5;196m" #\Esc)))
-       (old new expect-clear-line-p required-style))
-    (%assert-render-diff-clear-line-output new old
-                                           expect-clear-line-p
-                                           required-style)))
+    (clear-case
+      `((,(%screen-from-rows "HELLO") ,(%screen-from-rows "HE   ") t nil)
+        (,(%screen-from-rows "ABC") ,(%screen-from-rows "   ") t nil)
+        (,(%screen-from-rows "ABC")
+          ,(%screen-with-styled-cells
+            "A  "
+            (1 0 #\Space :style '(:underline))
+            (2 0 #\Space :style '(:underline)))
+          nil
+          ,(format nil "~C[4m" #\Esc))
+        (,(%screen-from-rows "ABC")
+          ,(%screen-with-styled-cells
+            "A  "
+            (1 0 #\Space :style '((:fg 196)))
+            (2 0 #\Space :style '((:fg 196))))
+          nil
+          ,(format nil "~C[38;5;196m" #\Esc)))
+      (old new expect-clear-line-p required-style))
+    (%assert-render-diff-clear-line-output
+      new
+      old
+      expect-clear-line-p
+      required-style)))
 
 (defun %test-render-diff-stream-output-cases ()
   (let ((old (make-screen 10 4))
         (new (make-screen 10 4))
         (stream (make-string-output-stream)))
-    (loop for y from 0 below 4 do
-      (loop for x from 0 below 10 by 2 do
-        (screen-put-cell new x y #\X)))
-    (is (string= (render-screen new)
-                 (render-diff new old)))
-    (%assert-render-stream-output (stream (render-diff new old stream))
-                                  (render-screen new))))
+    (loop for y from 0 below 4
+          do (loop for x from 0 below 10 by 2
+            do (screen-put-cell new x y #\X)))
+    (is (string= (render-screen new) (render-diff new old)))
+    (%assert-render-stream-output
+      (stream (render-diff new old stream))
+      (render-screen new)))
+  (let ((old (make-screen 6 1))
+        (new (make-screen 6 1))
+        (stream (make-string-output-stream)))
+    (screen-put-cell new 2 0 #\X)
+    (%assert-render-stream-output
+      (stream (render-diff new old stream))
+      (render-diff new old))))
 
 (defun %test-render-diff-frame-output-cases ()
   (let ((old (make-screen 2 1))
         (new (%screen-from-rows "OK"))
         (cursor (make-cursor :x 0 :y 0))
         (previous-cursor (make-cursor :x 0 :y 0)))
-    (is (string= (%ansi-string (ansi-move-cursor 1 1)
-                               "OK"
-                               (ansi-move-cursor 1 1)
-                               (ansi-show-cursor))
-                 (render-frame-diff new old cursor
-                                    :previous-cursor previous-cursor))))
+    (is
+      (string=
+        (%ansi-string
+          (ansi-move-cursor 1 1)
+          "OK"
+          (ansi-move-cursor 1 1)
+          (ansi-show-cursor))
+        (render-frame-diff new old cursor :previous-cursor previous-cursor))))
   t)
 
 (defun test-render-diff ()
@@ -240,4 +242,43 @@ CELLS are literal specifications, so callers write them inline without quoting."
   (%test-render-diff-clear-line-cases)
   (%test-render-diff-stream-output-cases)
   (%test-render-diff-frame-output-cases)
-  t)
+  (let ((old (%screen-from-rows "ABC"))
+        (new
+        (%screen-with-styled-cells
+          "A  "
+          (1 0 #\Space :style (quote (:no-such-modifier)))
+          (2 0 #\Space :style (quote (:no-such-modifier))))))
+    (%assert-render-diff-clear-line-output new old t))
+  (dolist (coordinate (quote (0 8 9 98 99 998 999)))
+    (is
+      (=
+        (cl-tty-kit::%diff-cursor-length coordinate coordinate)
+        (length (ansi-move-cursor (1+ coordinate) (1+ coordinate))))))
+  (let ((screen (make-screen 2 3)))
+    (is (= (cl-tty-kit::%screen-render-length screen) (length (render-screen screen))))
+    (is (cl-tty-kit::%screen-render-length-exceeds-p screen 17))
+    (is (not (cl-tty-kit::%screen-render-length-exceeds-p screen 18))))
+  (let ((old (make-screen 80 24))
+      (new (make-screen 80 24)))
+  (screen-put-cell new 0 0 #\X)
+  (screen-put-cell new 79 23 #\Y)
+  (let ((plan (cl-tty-kit::%make-screen-diff-plan new)))
+    (let ((diff-length (cl-tty-kit::%plan-diff-length new old plan)))
+      (is (= diff-length (length (render-diff new old))))
+      (is (string= (cl-tty-kit::%render-diff-output new old nil plan)
+                   (render-diff new old))))
+    (is (plusp (fill-pointer (cl-tty-kit::diff-plan-operations plan))))
+    (is (zerop (cl-tty-kit::%plan-diff-length
+                new old plan (cl-tty-kit::screen-generation new))))
+    (is (zerop (fill-pointer (cl-tty-kit::diff-plan-operations plan))))))
+  (progn
+    (let ((old (make-screen 80 24))
+          (new (make-screen 80 24)))
+      (multiple-value-bind (estimated-length too-long-p) (cl-tty-kit::%diff-render-length new old (cl-tty-kit::%screen-render-length new))
+        (is (not too-long-p))
+        (is (= estimated-length (length (render-diff new old)))))
+      (screen-put-cell new 79 23 #\X)
+      (multiple-value-bind (estimated-length too-long-p) (cl-tty-kit::%diff-render-length new old (cl-tty-kit::%screen-render-length new))
+        (is (not too-long-p))
+        (is (= estimated-length (length (render-diff new old))))))
+    t))

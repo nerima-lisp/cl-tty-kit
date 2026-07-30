@@ -1,39 +1,21 @@
 (in-package #:cl-tty-kit)
 
-(defun %render-output (commands stream)
-  (%render-commands-output commands stream))
-
-(defmacro define-render-function (name lambda-list docstring command-form)
-  `(defun ,name ,lambda-list
-     ,docstring
-     (%render-output ,command-form stream)))
-
-(define-render-function render-screen
-    (screen &optional stream)
+(defun render-screen (screen &optional stream)
   "Render SCREEN as a complete ANSI string or write it to STREAM."
-  (%screen-render-commands screen))
+  (%render-screen-output screen stream))
 
-(define-render-function render-cursor
-    (cursor &optional stream)
-  "Render CURSOR state as ANSI output or write it to STREAM."
-  (%cursor-render-commands cursor))
+(defun render-cursor (cursor &optional stream)
+  "Render CURSOR as ANSI cursor control output."
+  (%render-cursor-output cursor stream))
 
-(define-render-function render-diff
-    (screen previous &optional stream)
+(defun render-diff (screen previous &optional stream)
   "Render only the changes between SCREEN and PREVIOUS."
-  (%preferred-diff-commands screen previous))
+  (%render-diff-output screen previous stream))
 
-(defun %frame-render-commands (screen cursor)
-  (nconc (%screen-render-commands screen)
-         (%cursor-render-commands cursor)))
+(defun render-frame (screen cursor &optional stream)
+  "Render SCREEN and CURSOR as a complete frame."
+  (%render-frame-output screen cursor stream))
 
-(define-render-function render-frame
-    (screen cursor &optional stream)
-  "Render SCREEN as a full frame and finish in CURSOR state."
-  (%frame-render-commands screen cursor))
-
-(define-render-function render-frame-diff
-    (screen previous cursor
-            &key previous-cursor stream)
+(defun render-frame-diff (screen previous cursor &key previous-cursor stream)
   "Render a diff frame from PREVIOUS to SCREEN and finish in CURSOR state."
-  (%frame-diff-render-commands screen previous cursor previous-cursor))
+  (%render-frame-diff-output screen previous cursor previous-cursor stream))

@@ -26,10 +26,6 @@
       (is (not (zerop (logand iflag unrelated-iflag-bit))))))
   t)
 
-#-sbcl
-(defun test-raw-mode-superset ()
-  t)
-
 (defmacro with-raw-mode-stubs ((enable-result) &body body)
   `(let ((body-ran nil)
          (disabled nil))

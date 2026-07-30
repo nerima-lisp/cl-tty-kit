@@ -24,22 +24,12 @@ FD-READ-OCTETS / FD-WRITE-OCTETS."
         (error "PTY stream has no accessible file descriptor."))
       fd)))
 
-#-sbcl
-(defun pty-fd (pty)
-  (declare (ignore pty))
-  (unsupported :pty))
-
 #+sbcl
 (defun pty-pid (pty)
   "Return the integer process id of PTY's child, or NIL when PTY has no process
 (for example a stream-only PTY, or after CLOSE-PTY has cleared it)."
   (let ((process (pty-process pty)))
     (and process (sb-ext:process-pid process))))
-
-#-sbcl
-(defun pty-pid (pty)
-  (declare (ignore pty))
-  (unsupported :pty))
 
 #+sbcl
 (deftype octet-vector ()
@@ -98,11 +88,6 @@ it with select(2)/poll(2)."
                 ((%fd-would-block-errno-p errno) nil)
                 (t (error "unix-read on fd ~D failed (errno ~A)." fd errno)))))))))
 
-#-sbcl
-(defun fd-read-octets (fd buffer &optional limit)
-  (declare (ignore fd buffer limit))
-  (unsupported :pty))
-
 #+sbcl
 (defun fd-write-octets (fd octets)
   "Write OCTETS, a (SIMPLE-ARRAY (UNSIGNED-BYTE 8)), verbatim to FD.
@@ -133,8 +118,3 @@ in PTY-OPERATION-FAILED."
              (return))
             (t (error "unix-write on fd ~D failed (errno ~A)." fd errno)))))
       offset)))
-
-#-sbcl
-(defun fd-write-octets (fd octets)
-  (declare (ignore fd octets))
-  (unsupported :pty))

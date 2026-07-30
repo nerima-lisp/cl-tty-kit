@@ -10,9 +10,6 @@
     (screen-put-cell screen 0 0 char :style style)
     (render-screen screen)))
 
-(defun %render-command-kinds (commands)
-  (mapcar #'first commands))
-
 (defparameter +render-style-cases+
   `((#\B (:bold) ,(ansi-bold) t)
     (#\I (:italic) ,(format nil "~C[3m" #\Esc) t)
@@ -54,22 +51,12 @@
   (is (string= (render-cursor cursor) expected)))
 
 (defun test-render-core ()
-  (let ((screen (make-screen 2 2)))
-    (screen-put-cell screen 0 0 #\H)
-    (screen-put-cell screen 1 0 #\i)
-    (screen-put-cell screen 0 1 #\!)
-    (is (equal '(:string :cursor :cell :cell :newline :cell :cell)
-               (%render-command-kinds
-                (cl-tty-kit::%screen-render-commands screen)))))
-  (let ((cursor (make-cursor :x 1 :y 2 :visible nil)))
-    (is (equal '((:cursor 3 2) (:visibility nil))
-               (cl-tty-kit::%cursor-render-commands cursor))))
   (do-test-case-bind (style-case +render-style-cases+
                                  (char style sgr expect-reset-p))
     (%assert-render-style-case char style sgr expect-reset-p))
-  (is (null (cl-tty-kit::%style-sgr-codes 42)))
-  (is (null (cl-tty-kit::%color-style-sgr-codes '(:foo 1))))
-  (is (null (cl-tty-kit::%color-style-sgr-codes '(:fg 1 2))))
+  (is (string= "" (style-ansi 42)))
+  (is (string= "" (style-ansi :foo)))
+  (is (string= "" (style-ansi (list :fg 1 2))))
   ;; STYLE-ANSI: public SGR emitter over normalized style lists.
   (is (string= "" (style-ansi)))
   (is (string= "" (style-ansi :no-such-modifier)))

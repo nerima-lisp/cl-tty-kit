@@ -31,39 +31,42 @@ kept whole -- it is excluded rather than half-included when it would overflow."
   (let ((consumed 0)
         (result start))
     (loop for index from start below end
-          for width = (char-width (char string index))
+          for width = (%character-width (char string index))
           while (<= (+ consumed width) budget)
           do (incf consumed width)
              (setf result (1+ index)))
     result))
 
 (defun %string-cell-width (string &key (start 0) (end (length string)))
-  "Return the number of grid columns SCREEN-WRITE-STRING would consume for
-STRING, counting each character as at least one column (a double-width glyph
-costs two, including its spacer cell)."
+
   (loop for index from start below end
-        sum (max 1 (char-width (char string index)))))
+        sum (max 1 (%character-width (char string index)))))
+
+
+
+
 
 (defun %cells-prefix-end (string budget)
   "Return the largest prefix length of STRING whose cell cost (per
 %STRING-CELL-WIDTH) stays within BUDGET, matching SCREEN-WRITE-STRING's bounds
-check exactly so a clipped run never overflows its region."
+check exactly so a clipped run never overflows its region. The second value is
+the cell cost of that prefix."
   (let ((consumed 0)
         (result 0))
     (loop for index from 0 below (length string)
-          for cost = (max 1 (char-width (char string index)))
+          for cost = (max 1 (%character-width (char string index)))
           while (<= (+ consumed cost) budget)
           do (incf consumed cost)
              (setf result (1+ index)))
-    result))
+    (values result consumed)))
 
 (defun truncate-string (string width &key (ellipsis ""))
   "Return STRING clipped so its terminal column width does not exceed WIDTH.
 When STRING already fits it is returned unchanged. Otherwise the longest prefix
 that leaves room for ELLIPSIS (measured in columns too) is kept and ELLIPSIS is
-  appended, so the result stays within WIDTH. A wide glyph straddling the limit is
-  dropped whole. When ELLIPSIS alone would not fit in WIDTH it is omitted and the
-  plain prefix is returned. A negative WIDTH is treated as zero."
+appended, so the result stays within WIDTH. A wide glyph straddling the limit is
+dropped whole. When ELLIPSIS alone would not fit in WIDTH it is omitted and the
+plain prefix is returned. A negative WIDTH is treated as zero."
   (%assert-layout-string "STRING" string)
   (%assert-layout-string "ELLIPSIS" ellipsis)
   (%assert-layout-width "WIDTH" width)
@@ -71,17 +74,16 @@ that leaves room for ELLIPSIS (measured in columns too) is kept and ELLIPSIS is
     (if (<= (string-width string) width)
         string
         (let* ((ellipsis-width (string-width ellipsis))
+               (ellipsis-length (length ellipsis))
                (use-ellipsis (<= ellipsis-width width))
                (budget (if use-ellipsis (- width ellipsis-width) width))
-               (prefix (subseq string 0 (%width-prefix-end string budget))))
-          (if use-ellipsis
-              (concatenate 'string prefix ellipsis)
-              prefix)))))
-
-(defun %repeat-char (char count)
-  (if (plusp count)
-      (make-string count :initial-element char)
-      ""))
+               (prefix-end (%width-prefix-end string budget)))
+          (if (and use-ellipsis (plusp ellipsis-length))
+              (let ((result (make-string (+ prefix-end ellipsis-length))))
+                (replace result string :end1 prefix-end :end2 prefix-end)
+                (replace result ellipsis :start1 prefix-end)
+                result)
+              (subseq string 0 prefix-end))))))
 
 (defun pad-string (string width &key (align :left) (pad #\Space))
   "Return STRING padded with PAD to exactly WIDTH terminal columns.
@@ -99,17 +101,14 @@ unchanged -- PAD-STRING never truncates. A negative WIDTH is treated as zero."
          (deficit (- width current)))
     (if (<= deficit 0)
         string
-        (ecase align
-          (:left
-           (concatenate 'string string (%repeat-char pad deficit)))
-          (:right
-           (concatenate 'string (%repeat-char pad deficit) string))
-          (:center
-           (let ((left (floor deficit 2)))
-             (concatenate 'string
-                          (%repeat-char pad left)
-                          string
-                          (%repeat-char pad (- deficit left)))))))))
+        (let* ((left-padding (ecase align
+                               (:left 0)
+                               (:right deficit)
+                               (:center (floor deficit 2))))
+               (result (make-string (+ (length string) deficit)
+                                    :initial-element pad)))
+          (replace result string :start1 left-padding)
+          result))))
 
 (defun %hard-split-word (word width)
   "Split WORD into a list of chunks each at most WIDTH columns wide.
@@ -137,53 +136,69 @@ its own becomes a lone over-width chunk rather than causing an endless loop."
                  (return)))
     (nreverse parts)))
 
-(defun %split-words (string)
-  (let ((words '())
-        (start 0)
-        (length (length string)))
-    (loop for position = (position #\Space string :start start)
-          do (let ((stop (or position length)))
-               (when (> stop start)
-                 (push (subseq string start stop) words)))
-             (if position
-                 (setf start (1+ position))
-                 (return)))
-    (nreverse words)))
+(defun %call-with-wrapped-paragraph-lines (paragraph width continuation
+                                             &key (start 0) (end (length paragraph)))
+  "Call CONTINUATION for each wrapped line in PARAGRAPH.
 
-(defun %wrap-paragraph (paragraph width)
-  (let ((lines '())
-        (current-chunks '())
+CONTINUATION returns true to continue or NIL to stop. Chunks retain source
+ranges while wrapping, so only the callback boundary materializes a line."
+  (let ((current-chunks (list))
         (current-width 0))
     (labels ((current-line ()
                (with-output-to-string (out)
                  (loop for chunk in (nreverse current-chunks)
                        for first = t then nil
                        do (unless first (write-char #\Space out))
-                          (write-string chunk out))))
-             (flush ()
-               (push (current-line) lines)
-               (setf current-chunks '() current-width 0))
-             (place (chunk chunk-width)
-               (setf current-chunks (list chunk)
+                          (write-string paragraph out
+                                        :start (car chunk)
+                                        :end (cdr chunk)))))
+             (emit-current-line ()
+               (unless (funcall continuation (current-line))
+                 (return-from %call-with-wrapped-paragraph-lines nil))
+               (setf current-chunks (list)
+                     current-width 0))
+             (place (chunk-start chunk-end chunk-width)
+               (setf current-chunks (list (cons chunk-start chunk-end))
                      current-width chunk-width))
-             (append-chunk (chunk chunk-width)
-               (push chunk current-chunks)
-               (setf current-width (+ current-width 1 chunk-width))))
-      (dolist (word (%split-words paragraph))
-        (dolist (chunk (if (> (string-width word) width)
-                           (%hard-split-word word width)
-                           (list word)))
-          (let ((chunk-width (string-width chunk)))
-            (cond
-              ((null current-chunks)
-               (place chunk chunk-width))
-              ((<= (+ current-width 1 chunk-width) width)
-               (append-chunk chunk chunk-width))
-              (t
-               (flush)
-               (place chunk chunk-width))))))
-      (push (if current-chunks (current-line) "") lines))
-    (nreverse lines)))
+             (append-chunk (chunk-start chunk-end chunk-width)
+               (push (cons chunk-start chunk-end) current-chunks)
+               (setf current-width (+ current-width 1 chunk-width)))
+             (add-chunk (chunk-start chunk-end chunk-width)
+               (cond
+                 ((null current-chunks)
+                  (place chunk-start chunk-end chunk-width))
+                 ((<= (+ current-width 1 chunk-width) width)
+                  (append-chunk chunk-start chunk-end chunk-width))
+                 (t
+                  (emit-current-line)
+                  (place chunk-start chunk-end chunk-width)))))
+      ;; Stream words so a consumer can stop before scanning later input.
+      (loop with cursor = start
+            while (< cursor end)
+            for word-end = (or (position #\Space paragraph
+                                         :start cursor
+                                         :end end)
+                               end)
+            do (when (> word-end cursor)
+                 (let ((word-width (string-width paragraph
+                                                 :start cursor
+                                                 :end word-end)))
+                   (if (> word-width width)
+                       (loop with index = cursor
+                             while (< index word-end)
+                             for next = (%width-prefix-end paragraph width
+                                                           :start index
+                                                           :end word-end)
+                             do (when (= next index)
+                                  (setf next (1+ index)))
+                                (add-chunk index next
+                                           (%string-cell-width paragraph
+                                                               :start index
+                                                               :end next))
+                                (setf index next))
+                       (add-chunk cursor word-end word-width))))
+               (setf cursor (1+ word-end)))
+      (funcall continuation (if current-chunks (current-line) "")))))
 
 (defun expand-tabs (string &key (tab-width 8))
   "Return STRING with each tab expanded to spaces up to the next TAB-WIDTH stop.
@@ -205,7 +220,7 @@ up the way a terminal renders them. TAB-WIDTH must be a positive integer."
                   (setf column 0))
                  (t
                   (write-char char out)
-                  (incf column (max 1 (char-width char)))))))))
+                  (incf column (max 1 (%character-width char)))))))))
 
 (defun chop-string (string width)
   "Return STRING cut into a list of pieces each at most WIDTH terminal columns.
@@ -263,6 +278,32 @@ STRING-WIDTH on the result to get the visible column count of styled text."
                      (write-char (char string index) out)
                      (incf index)))))))
 
+(defun %call-with-wrapped-lines (string width continuation)
+  "Call CONTINUATION for each line produced by validated STRING and WIDTH.
+
+Stop immediately when CONTINUATION returns NIL, avoiding work for lines a
+consumer will not observe."
+  (let ((start 0)
+        (end (length string)))
+    (loop for newline = (position #\Newline string :start start :end end)
+          for paragraph-end = (or newline end)
+          unless (%call-with-wrapped-paragraph-lines
+                  string width continuation :start start :end paragraph-end)
+            do (return nil)
+          do (if newline
+                 (setf start (1+ newline))
+                 (return t)))))
+
+(defun %wrap-string-unchecked (string width)
+  "Wrap validated STRING to validated positive WIDTH."
+  (let ((lines '()))
+    (%call-with-wrapped-lines
+     string width
+     (lambda (line)
+       (push line lines)
+       t))
+    (nreverse lines)))
+
 (defun wrap-string (string width)
   "Return a list of lines wrapping STRING to at most WIDTH terminal columns each.
 Words -- runs between spaces -- are kept whole and greedily packed; a single word
@@ -271,5 +312,4 @@ single separator, but embedded newlines are honored as forced breaks, so a blank
 line in the input yields an empty string in the result. WIDTH must be positive."
   (%assert-layout-string "STRING" string)
   (%assert-layout-width "WIDTH" width :positive t)
-  (loop for paragraph in (%split-on-char string #\Newline)
-        append (%wrap-paragraph paragraph width)))
+  (%wrap-string-unchecked string width))

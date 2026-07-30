@@ -206,7 +206,6 @@
     "MAKE-SCREEN"
     "SCREEN-WIDTH"
     "SCREEN-HEIGHT"
-    "SCREEN-CELLS"
     "SCREEN-CELL"
     "SCREEN-RESIZE"
     "SCREEN-CLEAR"
@@ -262,11 +261,11 @@
     "ANSI-REQUEST-DEVICE-ATTRIBUTES"))
 
 (defparameter +expected-development-commands+
-  '("sbcl --script run-tests.lisp"
-    "sbcl --script scripts/examples.lisp"
-    "sbcl --script scripts/source-registry-smoke.lisp"
-    "sbcl --script scripts/coverage.lisp"
-    "sbcl --script scripts/verify.lisp"))
+  (list "nix run .#test"
+        "nix run .#examples"
+        "nix run .#source-registry-smoke"
+        "nix run .#coverage"
+        "nix run .#verify"))
 
 (defparameter +expected-quick-start-fragments+
   '("(make-screen 20 4)"
