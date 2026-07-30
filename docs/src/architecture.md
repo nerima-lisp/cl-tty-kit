@@ -30,10 +30,17 @@ terminal.
 
 ## Notable boundaries
 
-`conditions.lisp` defines the public condition types and the `%assert`
-validation macro that the rest of the library signals through, so an invalid
+`conditions.lisp` defines the public condition types, the `%assert`
+validation macro that the rest of the library signals through (so an invalid
 argument produces a typed condition with the offending value rather than a
-generic error. See [Conditions](conditions.md).
+generic error), and two macros that declare a whole `%assert-*` validation
+helper in one form: `define-simple-assert` for a helper that validates as a
+pure side effect, and `define-validating-assert` for one that also returns
+its checked argument so the call composes as an expression. Most
+argument-validating helpers across `src/` are one of these two shapes; a
+helper with real control flow beyond that (composing several checks,
+dispatching on a `case`) stays a plain `defun`. See
+[Conditions](conditions.md).
 
 `char-width.lisp` expresses width as relations over the East Asian and
 combining-mark data tables in `char-width-data.lisp`, which keeps the tables

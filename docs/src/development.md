@@ -91,6 +91,17 @@ system, as described in [Installation](installation.md):
 - preserve the [`unsupported-feature`](conditions.md#unsupported-feature)
   contract for implementation-specific APIs
 - keep pure modules free from ambient I/O and timeout-free waits
+- write new tests against
+  [cl-weave](https://github.com/nerima-lisp/cl-weave)'s `describe`/`it`/`expect`
+  DSL, not the retired `is`/`is-equal`/`signals` macros in `t/suite.lisp` —
+  every file in `t/` shares one package, `cl-tty-kit/test`, which already has
+  `describe` (shadowed), `expect`, `it`, and `it-property` available. A
+  table-driven case (several inputs checked the same way) is a `dolist` over
+  the case data with an `it` registered per iteration — see any of the
+  `prolog-*-test.lisp` files — not `it-each`, whose case list must be a
+  literal known at macro-expansion time and so cannot take a `defparameter`
+  table. Property-based invariants (a law that must hold for all inputs, not
+  a worked example) belong in `t/properties-test.lisp` via `it-property`.
 
 ## Renderer performance regression checks
 
