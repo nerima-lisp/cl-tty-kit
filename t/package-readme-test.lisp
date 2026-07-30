@@ -77,12 +77,6 @@ mentioned on the page?\"."
 (defun %snippet-contains-p (snippet fragment)
   (not (null (search fragment snippet))))
 
-(defun %assert-fragments-present (snippet fragments message-template)
-  (dolist (fragment fragments)
-    (assert (%snippet-contains-p snippet fragment) ()
-            message-template
-            fragment)))
-
 (defun %some-snippet-contains-all-p (snippets fragments)
   (some (lambda (snippet)
           (every (lambda (fragment) (%snippet-contains-p snippet fragment))
@@ -97,20 +91,6 @@ mentioned on the page?\"."
                 unless (string= relative "examples/bootstrap.lisp")
                   collect relative)
           #'string<)))
-
-;;; --- API reference ---------------------------------------------------------
-
-(defun %assert-api-reference-documents-symbol (api-spans symbol-name)
-  (assert (member symbol-name api-spans :test #'string=) ()
-          "~A is exported from CL-TTY-KIT but is not mentioned in docs/src/api-reference.md"
-          symbol-name))
-
-(defun %test-api-reference-coverage (api-doc external-symbols)
-  (let ((api-spans (%inline-code-spans api-doc)))
-    (do-test-case-bind (symbol-case (mapcar #'list external-symbols) (symbol-name))
-      (%assert-api-reference-documents-symbol api-spans symbol-name))))
-
-;;; --- Examples --------------------------------------------------------------
 
 (defun %split-markdown-row (row)
   "Split a `| a | b |` table row into its trimmed cell strings."
@@ -145,99 +125,54 @@ the plain summary registered in scripts/example-files.lisp."
                                  entries)))))))))
     (sort (nreverse entries) #'string< :key #'car)))
 
-(defun %example-cases (example-files)
-  (mapcar (lambda (example)
-            (list example (cl-user::example-summary example)))
-          example-files))
+(describe "API reference coverage (docs/src/api-reference.md)"
+  (let* ((pkg (find-package :cl-tty-kit))
+         (external-symbols (%package-external-symbol-names pkg))
+         (api-spans (%inline-code-spans (%doc-string "docs/src/api-reference.md"))))
+    (dolist (symbol-name external-symbols)
+      (it (format nil "~A is documented" symbol-name)
+        (expect (member symbol-name api-spans :test #'string=))))))
 
-(defun %assert-example-documented (doc-entries example summary)
-  (let ((entry (assoc example doc-entries :test #'string=)))
-    (assert entry ()
-            "~A should be listed in docs/src/examples.md"
-            example)
-    (assert (string= (cdr entry) summary) ()
-            "~A's summary in docs/src/examples.md should be ~S but was ~S"
-            example
-            summary
-            (cdr entry))))
-
-(defun %test-example-registration (examples-doc registered-example-files filesystem-example-files)
-  (assert (equal registered-example-files filesystem-example-files) ()
-          "scripts/example-files.lisp should register every runnable example exactly once.~%Registered: ~S~%Filesystem: ~S"
-          registered-example-files
-          filesystem-example-files)
-  (let ((doc-entries (%examples-doc-entries examples-doc)))
+(describe "example registration (examples/ vs scripts/example-files.lisp vs docs/src/examples.md)"
+  (let* ((examples-doc (%doc-string "docs/src/examples.md"))
+         (registered-example-files (sort (copy-list (cl-user::example-script-files)) #'string<))
+         (filesystem-example-files (%filesystem-example-script-files))
+         (doc-entries (%examples-doc-entries examples-doc)))
+    (it "scripts/example-files.lisp registers every runnable example exactly once"
+      (expect registered-example-files :to-equal filesystem-example-files))
     ;; Counting as well as looking each one up catches the reverse drift: an
     ;; example deleted from examples/ but left behind in the table.
-    (assert (= (length doc-entries) (length registered-example-files)) ()
-            "docs/src/examples.md lists ~D examples but ~D are registered.~%Listed: ~S"
-            (length doc-entries)
-            (length registered-example-files)
-            (mapcar #'car doc-entries))
-    (do-test-case-bind (example-case (%example-cases registered-example-files)
-                                     (example summary))
-      (%assert-example-documented doc-entries example summary))))
+    (it "docs/src/examples.md lists exactly as many examples as are registered"
+      (expect (length doc-entries) :to-be (length registered-example-files)))
+    (dolist (example registered-example-files)
+      (let ((summary (cl-user::example-summary example)))
+        (it (format nil "~A is documented with a matching summary" example)
+          (let ((entry (assoc example doc-entries :test #'string=)))
+            (expect entry)
+            (expect (cdr entry) :to-equal summary)))))))
 
-;;; --- Command documentation -------------------------------------------------
+(describe "development command docs (docs/src/development.md)"
+  (let ((development-doc (%doc-string "docs/src/development.md")))
+    (dolist (command +expected-development-commands+)
+      (it (format nil "~A is documented" command)
+        (expect (%snippet-contains-p development-doc command))))))
 
-(defun %assert-command-documented (development-doc command)
-  (assert (%snippet-contains-p development-doc command) ()
-          "~A should be documented in docs/src/development.md"
-          command))
+(describe "README.md Quick Start"
+  (let* ((readme (%doc-string "README.md"))
+         (quick-start-snippets (%section-block-bodies readme "## Quick Start" "lisp")))
+    ;; The README is the entry point, so it gets exactly one runnable example.
+    ;; More than one means it is drifting back into being the manual.
+    (it "contains exactly one Lisp snippet"
+      (expect (length quick-start-snippets) :to-be 1))
+    (it "the snippet includes every expected fragment"
+      (dolist (fragment +expected-quick-start-fragments+)
+        (expect (%snippet-contains-p (first quick-start-snippets) fragment))))))
 
-(defun %test-development-command-docs (development-doc)
-  (do-test-case-bind (command-case (mapcar #'list +expected-development-commands+) (command))
-    (%assert-command-documented development-doc command)))
-
-;;; --- Prose snippets --------------------------------------------------------
-
-(defun %test-readme-quick-start (quick-start-snippets)
-  ;; The README is the entry point, so it gets exactly one runnable example.
-  ;; More than one means it is drifting back into being the manual.
-  (assert (= 1 (length quick-start-snippets)) ()
-          "README.md should contain exactly one Quick Start Lisp snippet, found ~D"
-          (length quick-start-snippets))
-  (%assert-fragments-present
-   (first quick-start-snippets)
-   +expected-quick-start-fragments+
-   "README.md Quick Start snippet should include ~S"))
-
-(defun %test-input-decoding-snippets (input-decoding-doc)
+(describe "docs/src/input-decoding.md examples"
   ;; Matched against any Lisp block on the page rather than a fixed position,
   ;; so reordering or adding examples does not break the check.
-  (let ((snippets (%language-block-bodies input-decoding-doc "lisp")))
-    (assert (%some-snippet-contains-all-p snippets +expected-streaming-fragments+) ()
-            "docs/src/input-decoding.md should show the streaming decoder example ~S"
-            +expected-streaming-fragments+)
-    (assert (%some-snippet-contains-all-p snippets +expected-paste-fragments+) ()
-            "docs/src/input-decoding.md should show the bracketed-paste example ~S"
-            +expected-paste-fragments+)))
-
-;;; --- Entry point -----------------------------------------------------------
-
-(defun test-package ()
-  (test-utils)
-  (test-char-width-api)
-  (let* ((pkg (find-package :cl-tty-kit))
-         (system-metadata (%system-definition-metadata-plist :cl-tty-kit))
-         (readme (%doc-string "README.md"))
-         (api-doc (%doc-string "docs/src/api-reference.md"))
-         (examples-doc (%doc-string "docs/src/examples.md"))
-         (development-doc (%doc-string "docs/src/development.md"))
-         (input-decoding-doc (%doc-string "docs/src/input-decoding.md"))
-         (quick-start-snippets (%section-block-bodies readme "## Quick Start" "lisp"))
-         (external-symbols (%package-external-symbol-names pkg))
-         (registered-example-files (sort (copy-list (cl-user::example-script-files))
-                                         #'string<))
-         (filesystem-example-files (%filesystem-example-script-files)))
-    (%test-package-metadata system-metadata)
-    (%test-package-exports pkg external-symbols)
-    (%test-api-reference-coverage api-doc external-symbols)
-    (%test-example-registration examples-doc
-                                registered-example-files
-                                filesystem-example-files)
-    (%test-development-command-docs development-doc)
-    (%test-readme-quick-start quick-start-snippets)
-    (%test-input-decoding-snippets input-decoding-doc)
-    (%assert-non-empty-public-documentation pkg)
-    t))
+  (let ((snippets (%language-block-bodies (%doc-string "docs/src/input-decoding.md") "lisp")))
+    (it "shows the streaming decoder example"
+      (expect (%some-snippet-contains-all-p snippets +expected-streaming-fragments+)))
+    (it "shows the bracketed-paste example"
+      (expect (%some-snippet-contains-all-p snippets +expected-paste-fragments+)))))

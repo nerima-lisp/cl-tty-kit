@@ -37,84 +37,76 @@
       (push (symbol-name symbol) symbols))
     (sort symbols #'string<)))
 
-(defun %expected-system-metadata-cases ()
-  (mapcar (lambda (entry)
-            (list (car entry) (cdr entry)))
-          +expected-system-metadata+))
+(defun %non-empty-doc-p (symbol kind)
+  (let ((doc (documentation symbol kind)))
+    (and (stringp doc) (plusp (length doc)))))
 
-(defun %assert-system-metadata-case (system-metadata key expected)
-  ;; EQUALP rather than STRING=: :source-control is the structured
-  ;; (:git "https://...") form the org standard requires, so not every
-  ;; metadata value is a string any more.
-  (assert (equalp (getf system-metadata key) expected) ()
-          "ASDF metadata ~S should be ~S but was ~S"
-          key
-          expected
-          (getf system-metadata key)))
+(describe "internal utility functions"
+  (it "string-empty-p"
+    (expect (cl-tty-kit::string-empty-p "x") :to-be-falsy)
+    (expect (cl-tty-kit::string-empty-p "") :to-be-truthy)
+    (expect (cl-tty-kit::string-empty-p nil) :to-be-truthy)
+    (expect (cl-tty-kit::string-empty-p 42) :to-be-falsy))
+  (it "ensure-list*"
+    (expect (cl-tty-kit::ensure-list* :x) :to-equal '(:x))
+    (expect (cl-tty-kit::ensure-list* '(:x :y)) :to-equal '(:x :y)))
+  (it "clamp"
+    (expect (cl-tty-kit::clamp 3 0 9) :to-be 3)
+    (expect (cl-tty-kit::clamp -1 0 9) :to-be 0)
+    (expect (cl-tty-kit::clamp 10 0 9) :to-be 9)
+    (expect (cl-tty-kit::clamp 5 9 3) :to-be 9))
+  (it "normalize-modifiers"
+    (expect (cl-tty-kit::normalize-modifiers '(:shift :alt :control :shift :bogus 1))
+            :to-equal '(:alt :bogus :control :shift)))
+  (it "modifiers-from-csi-number"
+    (expect (cl-tty-kit::modifiers-from-csi-number 2) :to-equal '(:shift))
+    (expect (cl-tty-kit::modifiers-from-csi-number 3) :to-equal '(:alt))
+    (expect (cl-tty-kit::modifiers-from-csi-number 5) :to-equal '(:control))
+    (expect (cl-tty-kit::modifiers-from-csi-number 8) :to-equal '(:alt :control :shift))))
 
-(defun %assert-external-symbols (pkg symbol-names)
-  (dolist (symbol-name symbol-names)
-    (multiple-value-bind (symbol status) (find-symbol symbol-name pkg)
-      (assert symbol () "~A should be present" symbol-name)
-      (assert (eq :external status) () "~A should be external" symbol-name))))
+(describe "char-width and string-width, public API smoke test"
+  (it "covers combining marks, wide glyphs, and substring ranges"
+    (let ((combining-string (coerce (list #\e (code-char #x0301)) 'string)))
+      (expect (char-width #\A) :to-be 1)
+      (expect (char-width #\Newline) :to-be 0)
+      (expect (char-width (code-char #x0301)) :to-be 0)
+      (expect (char-width #x65E5) :to-be 2)
+      (expect (char-width (code-char #x1F600)) :to-be 2)
+      (expect (string-width "ab") :to-be 2)
+      (expect (string-width "a日b") :to-be 4)
+      (expect (string-width combining-string) :to-be 1)
+      (expect (string-width "ab日" :start 1 :end 3) :to-be 3))))
 
-(defun %assert-non-empty-public-documentation (pkg)
-  (labels ((non-empty-doc-p (symbol kind)
-             (let ((doc (documentation symbol kind)))
-               (and (stringp doc)
-                    (> (length doc) 0)))))
-    (do-external-symbols (symbol pkg)
-      (when (fboundp symbol)
-        (assert (non-empty-doc-p symbol 'function) ()
-                "~A should have function documentation" symbol))
-      (when (find-class symbol nil)
-        (assert (non-empty-doc-p symbol 'type) ()
-                "~A should have type documentation" symbol)))))
+(describe "ASDF system metadata (cl-tty-kit.asd)"
+  (let ((system-metadata (%system-definition-metadata-plist :cl-tty-kit)))
+    (dolist (entry +expected-system-metadata+)
+      (destructuring-bind (key . expected) entry
+        (it (format nil "~(~A~) matches +expected-system-metadata+" key)
+          (expect (getf system-metadata key) :to-equal expected))))))
 
-(defun test-utils ()
-  (assert (null (cl-tty-kit::string-empty-p "x")))
-  (assert (cl-tty-kit::string-empty-p ""))
-  (assert (cl-tty-kit::string-empty-p nil))
-  (assert (null (cl-tty-kit::string-empty-p 42)))
-  (assert (equal '(:x) (cl-tty-kit::ensure-list* :x)))
-  (assert (equal '(:x :y) (cl-tty-kit::ensure-list* '(:x :y))))
-  (assert (= 3 (cl-tty-kit::clamp 3 0 9)))
-  (assert (= 0 (cl-tty-kit::clamp -1 0 9)))
-  (assert (= 9 (cl-tty-kit::clamp 10 0 9)))
-  (assert (= 9 (cl-tty-kit::clamp 5 9 3)))
-  (assert (equal '(:alt :bogus :control :shift)
-                 (cl-tty-kit::normalize-modifiers '(:shift :alt :control :shift :bogus 1))))
-  (assert (equal '(:shift) (cl-tty-kit::modifiers-from-csi-number 2)))
-  (assert (equal '(:alt) (cl-tty-kit::modifiers-from-csi-number 3)))
-  (assert (equal '(:control) (cl-tty-kit::modifiers-from-csi-number 5)))
-  (assert (equal '(:alt :control :shift) (cl-tty-kit::modifiers-from-csi-number 8)))
-  t)
+(describe "package exports (cl-tty-kit)"
+  (let ((pkg (find-package :cl-tty-kit)))
+    (dolist (symbol-name +expected-external-symbols+)
+      (it (format nil "~A is exported" symbol-name)
+        (multiple-value-bind (symbol status) (find-symbol symbol-name pkg)
+          (expect symbol)
+          (expect status :to-be :external))))
+    ;; Equality, not just containment. The export set used to be pinned by
+    ;; README.md's API Overview, which the README could no longer carry once it
+    ;; was capped at 150 lines. +expected-external-symbols+ takes over that role,
+    ;; so adding or removing an export still has to be a deliberate edit to test
+    ;; data rather than something that happens silently.
+    (it "the export set matches +expected-external-symbols+ exactly"
+      (expect (%package-external-symbol-names pkg)
+              :to-equal (sort (copy-list +expected-external-symbols+) #'string<)))))
 
-(defun test-char-width-api ()
-  (let ((combining-string (coerce (list #\e (code-char #x0301)) 'string)))
-    (assert (= 1 (char-width #\A)))
-    (assert (= 0 (char-width #\Newline)))
-    (assert (= 0 (char-width (code-char #x0301))))
-    (assert (= 2 (char-width #x65E5)))
-    (assert (= 2 (char-width (code-char #x1F600))))
-    (assert (= 2 (string-width "ab")))
-    (assert (= 4 (string-width "a日b")))
-    (assert (= 1 (string-width combining-string)))
-    (assert (= 3 (string-width "ab日" :start 1 :end 3))))
-  t)
-
-(defun %test-package-metadata (system-metadata)
-  (do-test-case-bind (entry-case (%expected-system-metadata-cases) (key expected))
-    (%assert-system-metadata-case system-metadata key expected)))
-
-(defun %test-package-exports (pkg external-symbols)
-  (%assert-external-symbols pkg +expected-external-symbols+)
-  ;; Equality, not just containment. The export set used to be pinned by
-  ;; README.md's API Overview, which the README could no longer carry once it
-  ;; was capped at 150 lines. +expected-external-symbols+ takes over that role,
-  ;; so adding or removing an export still has to be a deliberate edit to test
-  ;; data rather than something that happens silently.
-  (assert (equal external-symbols (sort (copy-list +expected-external-symbols+) #'string<)) ()
-          "Package exports should match +expected-external-symbols+ exactly.~%Only in package: ~S~%Only in expected: ~S"
-          (set-difference external-symbols +expected-external-symbols+ :test #'string=)
-          (set-difference +expected-external-symbols+ external-symbols :test #'string=)))
+(describe "public API documentation"
+  (let ((pkg (find-package :cl-tty-kit)))
+    (it "every fbound external symbol has non-empty function documentation"
+      (do-external-symbols (symbol pkg)
+        (when (fboundp symbol)
+          (expect (%non-empty-doc-p symbol 'function)))))
+    (it "every external symbol naming a class has non-empty type documentation"
+      (do-external-symbols (symbol pkg)
+        (when (find-class symbol nil)
+          (expect (%non-empty-doc-p symbol 'type)))))))

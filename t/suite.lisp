@@ -134,8 +134,7 @@ migrated onto EXPECT. Once every %ASSERT-RENDER-STREAM-OUTPUT caller
 
 (defun run-tests ()
   (setf *test-failures* nil)
-  (let ((tests (quote (("package" . cl-tty-kit/test::test-package)
-                       ("keys" . cl-tty-kit/test::test-keys)
+  (let ((tests (quote (("keys" . cl-tty-kit/test::test-keys)
                        ("input" . cl-tty-kit/test::test-input)
                        ("pty" . cl-tty-kit/test::test-pty)
                        ("pty-fd" . cl-tty-kit/test::test-pty-fd)
