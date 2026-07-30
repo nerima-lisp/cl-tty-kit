@@ -112,7 +112,6 @@ macro is the shared assertion for that contract across the test suite."
   (setf *test-failures* nil)
   (let ((tests (quote (("ansi" . cl-tty-kit/test::test-ansi)
                        ("package" . cl-tty-kit/test::test-package)
-                       ("conditions" . cl-tty-kit/test::test-conditions)
                        ("prolog-unification" . cl-tty-kit/test::test-prolog-unification)
                        ("prolog-queries" . cl-tty-kit/test::test-prolog-queries)
                        ("prolog-primitives" . cl-tty-kit/test::test-prolog-primitives)
@@ -142,13 +141,15 @@ macro is the shared assertion for that contract across the test suite."
   (finish-output)
   (when *test-failures*
     (error "Some tests failed: ~S" (nreverse *test-failures*)))
-  ;; Resolve property tests at runtime so this file need not be compiled after
-  ;; t/properties-test.lisp.
-  (run-test "properties"
+  ;; Every cl-weave-migrated file (t/conditions-test.lisp, t/properties-test.lisp,
+  ;; ...) registers its DESCRIBE/IT suites into cl-weave's global registry as it
+  ;; loads; RUN-ALL then runs the whole union in one pass. Calling it once here
+  ;; -- rather than once per migrated file -- is what keeps that union a single
+  ;; run instead of re-running every already-migrated suite again per file.
+  (run-test "cl-weave"
             (lambda ()
-              (unless (uiop:symbol-call (quote #:cl-tty-kit/property-tests)
-                                        (quote #:run-tests))
-                (error "Property-based suite reported a failing invariant."))))
+              (unless (uiop:symbol-call (quote #:cl-weave) (quote #:run-all) :reporter :spec)
+                (error "A cl-weave-migrated suite reported a failing case."))))
   (dolist (test (quote (("render-core" . test-render-core)
                         ("render-diff" . test-render-diff)
                         ("render-examples" . test-render-examples))))

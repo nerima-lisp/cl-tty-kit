@@ -2,8 +2,7 @@
   (:use #:cl #:cl-tty-kit)
   (:shadowing-import-from #:cl-weave #:describe)
   (:import-from #:cl-weave
-                #:expect #:it #:it-property #:run-all)
-  (:export #:run-tests))
+                #:expect #:it #:it-property))
 
 (in-package #:cl-tty-kit/property-tests)
 
@@ -143,7 +142,3 @@
           (screen-put-cell current x y (code-char (+ 33 (mod (+ x y) 90))))))
       (expect (lambda () (render-diff current previous))
               :to-allocate-under (* 2 1024 1024)))))
-
-(defun run-tests ()
-  "Run every property block registered above and return true iff all passed."
-  (run-all :reporter :spec))
