@@ -83,3 +83,5 @@ system-index.txt
 
 # Local tool state (Serena semantic index and caches).
 /.serena/
+
+.worktrees/

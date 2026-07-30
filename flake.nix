@@ -18,19 +18,19 @@
   # this project keeps no vendored copy of either: these two flake inputs
   # are the only source of both, put on CL_SOURCE_REGISTRY by every
   # app/check/devShell below.
-  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.0.1";
+  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.1.0";
   inputs.cl-prolog.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-prolog.inputs.cl-weave.follows = "cl-weave";
   inputs.cl-prolog.inputs.paredit-cli.follows = "paredit-cli";
 
-  inputs.cl-weave.url = "github:nerima-lisp/cl-weave/v1.0.0";
+  inputs.cl-weave.url = "github:nerima-lisp/cl-weave/v1.1.0";
   inputs.cl-weave.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-weave.inputs.paredit-cli.follows = "paredit-cli";
 
   # paredit-cli provides structural S-expression tooling for this repo's
   # Lisp sources: a dev-shell binary for agent-driven refactors and a
   # structural-parse lint gate reused in `checks`.
-  inputs.paredit-cli.url = "github:nerima-lisp/paredit-cli/v1.0.0";
+  inputs.paredit-cli.url = "github:nerima-lisp/paredit-cli/v1.2.1";
   inputs.paredit-cli.inputs.nixpkgs.follows = "nixpkgs";
 
   # contrib/cl-parser-kit-csi-grammar.lisp's dependency: an opt-in second,
@@ -132,8 +132,18 @@
       scriptApp = pkgs: name: script: description: {
         type = "app";
         program = "${pkgs.writeShellScript name ''
-          export CL_SOURCE_REGISTRY="${clSourceRegistryFor}''${CL_SOURCE_REGISTRY:-}"
-          exec ${pkgs.sbcl}/bin/sbcl --script ${script} "$@"
+          runtime_dir="$(${pkgs.coreutils}/bin/mktemp -d)"
+          export HOME="$runtime_dir/home"
+          export XDG_CACHE_HOME="$runtime_dir/cache"
+          export XDG_CONFIG_HOME="$runtime_dir/config"
+          mkdir -p "$HOME" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME"
+          export CL_SOURCE_REGISTRY="$PWD//:${clSourceRegistryFor}"
+          export PATH="${pkgs.sbcl}/bin:$PATH"
+
+          status=0
+          ${pkgs.coreutils}/bin/timeout --kill-after=30s 600 ${pkgs.sbcl}/bin/sbcl --script ${script} "$@" || status=$?
+          rm -rf "$runtime_dir"
+          exit "$status"
         ''}";
         meta = { inherit description; };
       };
@@ -161,7 +171,8 @@
           nativeBuildInputs = [ pkgs.python3Packages.mkdocs-material ];
           buildPhase = ''
             runHook preBuild
-            mkdocs build --strict --config-file mkdocs.yml --site-dir "$out"
+            ${pkgs.coreutils}/bin/timeout --kill-after=30s 300 \
+              mkdocs build --strict --config-file mkdocs.yml --site-dir "$out"
             runHook postBuild
           '';
           dontInstall = true;
@@ -206,7 +217,7 @@
                 export XDG_CACHE_HOME="$TMPDIR/cache"
                 mkdir -p "$HOME" "$XDG_CACHE_HOME"
                 export CL_SOURCE_REGISTRY="${clSourceRegistryFor}$PWD//:"
-                timeout 300 sbcl --script scripts/coverage.lisp
+                  ${pkgs.coreutils}/bin/timeout --kill-after=30s 420 sbcl --script scripts/coverage.lisp
                 mkdir -p "$out"
                 cp -R coverage/. "$out/"
               '';
@@ -236,7 +247,7 @@
             export XDG_CACHE_HOME="$TMPDIR/cache"
             mkdir -p "$HOME" "$XDG_CACHE_HOME"
             export CL_SOURCE_REGISTRY="${clSourceRegistryFor}$PWD//:"
-            timeout 600 sbcl --script run-tests.lisp
+            ${pkgs.coreutils}/bin/timeout --kill-after=30s 600 sbcl --script run-tests.lisp
             touch $out
           '';
 
@@ -301,6 +312,15 @@
           coverage =
             scriptApp pkgs "cl-tty-kit-coverage" "scripts/coverage.lisp"
               "Regenerate the sb-cover report under coverage/";
+          benchmark-renderer =
+            scriptApp pkgs "cl-tty-kit-benchmark-renderer" "scripts/benchmark-renderer.lisp"
+              "Measure the sparse render-diff hot path";
+          examples =
+            scriptApp pkgs "cl-tty-kit-examples" "scripts/examples.lisp"
+              "Run every documented example as a smoke test";
+          source-registry-smoke =
+            scriptApp pkgs "cl-tty-kit-source-registry-smoke" "scripts/source-registry-smoke.lisp"
+              "Verify clean-process ASDF source-registry discovery";
           default = scriptApp pkgs "cl-tty-kit-test" "run-tests.lisp" "Run the cl-tty-kit test suite";
         }
       );

@@ -22,7 +22,8 @@
     (funcall (symbol-function symbol))))
 
 (let* ((root (uiop:ensure-directory-pathname (uiop:getcwd)))
-       (system-file (merge-pathnames #P"cl-tty-kit.asd" root)))
+       (system-file (merge-pathnames #P"cl-tty-kit.asd" root))
+       (preserved-entry (merge-pathnames #P"preserved/" root)))
   (unless (probe-file system-file)
     (error "Run this script from the project root so cl-tty-kit.asd is visible."))
   (asdf/source-registry:initialize-source-registry
@@ -31,8 +32,11 @@
     (error "Fresh source registry did not discover cl-tty-kit."))
   (unless (asdf:find-system :cl-tty-kit/test)
     (error "Fresh source registry did not discover cl-tty-kit/test."))
+  (pushnew preserved-entry asdf:*central-registry* :test #'equal)
   (format t "~&[LOAD] cl-tty-kit via project bootstrap~%")
   (load (merge-pathnames #P"scripts/bootstrap.lisp" root))
+  (unless (member preserved-entry asdf:*central-registry* :test #'equal)
+    (error "Project bootstrap replaced the caller's ASDF central registry."))
   (with-smoke-timeout ("source-registry smoke test")
     (call-exported-function "CL-TTY-KIT/BOOTSTRAP" "LOAD-TEST-SYSTEM")
     (format t "~&[TEST] cl-tty-kit via project bootstrap~%")

@@ -49,14 +49,9 @@
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
   :version "1.0.2"
-  ;; SB-POSIX is only used by the SBCL-specific raw-mode layer (which requires
-  ;; it itself under #+sbcl). Gating the dependency on the feature keeps ASDF
-  ;; from failing dependency resolution with a confusing "system sb-posix not
-  ;; found" on non-SBCL hosts; instead src/package.lisp reports a clear
-  ;; SBCL-required error. See the README "Compatibility" section. This is the
-  ;; toolkit's complete dependency set -- see the source-registry note above
-  ;; for why CL-PROLOG belongs to :CL-TTY-KIT/TEST instead.
-  :depends-on (#+sbcl #:sb-posix)
+  ;; SB-POSIX is bundled with SBCL and loaded directly by the SBCL-only
+  ;; raw-mode implementation. Keeping it out of :DEPENDS-ON avoids an ASDF
+  ;; source-registry scan merely to locate an already installed contrib.
   :serial t
   :components ((:file "src/package")
                (:file "src/conditions")
@@ -94,6 +89,7 @@
                (:file "src/render-style")
                (:file "src/sgr-parse")
                (:file "src/render-commands")
+               (:file "src/render-diff-plan")
                (:file "src/render-diff")
                (:file "src/render")
                (:file "src/renderer")

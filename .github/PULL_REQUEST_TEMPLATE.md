@@ -15,7 +15,7 @@
 Run from the project root:
 
 ```bash
-sbcl --script scripts/verify.lisp
+nix run .#verify
 git diff --check
 ```
 

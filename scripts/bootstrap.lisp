@@ -1,37 +1,35 @@
 (require :asdf)
 
-(defpackage #:cl-tty-kit/bootstrap
-  (:use #:cl)
-  (:export #:project-root
-           #:project-pathname
-           #:load-project-file
-           #:load-core-system
-           #:load-support-files
-           #:load-test-system
-           #:load-example-file
-           #:run-example-file))
+(defpackage #:cl-tty-kit/bootstrap (:use #:cl)
+  (:export
+    #:project-root
+    #:project-pathname
+    #:load-project-file
+    #:load-core-system
+    #:load-support-files
+    #:load-test-system
+    #:load-example-file
+    #:run-example-file
+    #:call-exported-function))
 
 (in-package #:cl-tty-kit/bootstrap)
 
-(defparameter *project-root*
-  (uiop:ensure-directory-pathname
-   (truename
-    (merge-pathnames #P"../"
-                     (uiop:pathname-directory-pathname *load-truename*)))))
+(defparameter *project-root* (uiop:ensure-directory-pathname
+    (truename
+      (merge-pathnames #P"../" (uiop:pathname-directory-pathname *load-truename*)))))
 
-;; ASDF has no reason to know where this project lives unless something tells
-;; it, so callers used to have to export CL_SOURCE_REGISTRY before running any
-;; script. Register the project tree here instead, so `sbcl --script
-;; scripts/verify.lisp` (and test.lisp, coverage.lisp) work from a plain
-;; checkout with no environment setup.
-(asdf/source-registry:initialize-source-registry
- `(:source-registry (:tree ,(namestring *project-root*)) :inherit-configuration))
+;; Register the local definition directly so ASDF need not scan every source
+;; registry before a project script can load the core system.
+(progn
+  (pushnew *project-root* asdf:*central-registry* :test #'equal)
+  (load (merge-pathnames #P"cl-tty-kit.asd" *project-root*)))
 
-(defparameter *support-source-files*
-  '("scripts/example-files.lisp"))
+(defparameter *support-source-files* '("scripts/example-files.lisp"))
 
 (defparameter *core-loaded-p* nil)
+
 (defparameter *support-loaded-p* nil)
+
 (defparameter *test-loaded-p* nil)
 
 (defun project-root ()
@@ -42,6 +40,18 @@
 
 (defun load-project-file (relative-pathname)
   (load (project-pathname relative-pathname)))
+
+(defun call-exported-function (package-name symbol-name &rest arguments)
+  (let* ((package
+        (or
+          (find-package package-name)
+          (error "Package ~A is not available." package-name)))
+         (symbol
+        (multiple-value-bind (symbol status) (find-symbol symbol-name package)
+          (unless (eq status :external)
+            (error "Symbol ~A is not exported from ~A." symbol-name package-name))
+          symbol)))
+    (apply (symbol-function symbol) arguments)))
 
 (defun load-core-system (&key force)
   (when force
