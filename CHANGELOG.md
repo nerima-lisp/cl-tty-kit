@@ -17,6 +17,97 @@ release with empty notes. Keep `## [Unreleased]` at the top at all times.
 
 ## [Unreleased]
 
+### Fixed
+
+- three regressions left behind by the prior `a8950bd` renderer-modernization
+  commit had `nix flake check` red on `main`: `t/format-test.lisp`'s sixel
+  band-separator test embedded a literal `~` (the sixel run-length character
+  for an all-red band) directly in a `FORMAT` control string, where `FORMAT`
+  parsed `~-` as a directive instead of data, dropping the run entirely;
+  `src/pty-fd.lisp`'s `FD-READ-OCTETS` validated the post-`MIN` read count
+  instead of the caller-supplied `LIMIT`, so a fractional `LIMIT` larger than
+  the buffer skipped validation and reached a real syscall instead of
+  signaling `PTY-OPERATION-FAILED`; and a wide-glyph alignment test in
+  `t/screen-test.lisp` expected a 4-character row for a 5-cell-wide screen
+  when the correct centered layout is 5 characters
+- `t/render-test.lisp`'s `TEST-RENDER` was calling `TEST-RENDER-EXAMPLES`,
+  `TEST-RENDER-CORE`, and `TEST-RENDER-DIFF` a second time on every test run
+  -- `t/suite.lisp`'s `RUN-TESTS` already dispatched all three individually
+  right after. Deleted the file, its ASDF component, and the dispatch entry
+
+### Changed
+
+- migrated the entire `t/` test suite (29 files) from a hand-rolled
+  `is`/`is-equal`/`signals` assertion framework onto
+  [`cl-weave`](https://github.com/nerima-lisp/cl-weave)'s `describe`/`it`/`expect`
+  DSL, which `cl-tty-kit.asd` already depended on but only
+  `t/properties-test.lisp` had actually used. Every file now shares one
+  package, `cl-tty-kit/test` (see `t/package.lisp`), and `t/suite.lisp`'s
+  `RUN-TESTS` now dispatches to `cl-weave:run-all` once for the whole
+  migrated suite rather than one hand-written `run-test` call per legacy
+  function. Table-driven cases (`DO-TEST-CASE-BIND` over a `DEFPARAMETER`
+  data table) become `DOLIST`+`IT`, registering one independently-named,
+  independently-reported test per data row, rather than `IT-EACH` -- whose
+  case list must be a literal known at macro-expansion time and so cannot
+  take a runtime data table. Caught a real bug in the process: three
+  `t/renderer-test.lisp` cases originally used `LET` (parallel bindings,
+  left-to-right init-form evaluation) to compute an expected `RENDER-DIFF`
+  snapshot *before* the mutating `RENDERER-RENDER` call the same `LET`'s
+  second binding performs; passing both directly as `EXPECT`'s operands
+  reverses that evaluation order, silently diffing the screen against its
+  own just-updated front buffer. Fixed by restoring the `LET`/`LET*` that
+  computes the expected value first, in all three affected cases
+- introduce `DEFINE-SIMPLE-ASSERT` and `DEFINE-VALIDATING-ASSERT`
+  (`src/conditions.lisp`), collapsing 42 of the 52 `%ASSERT-*`
+  argument-validation helpers project-wide. Every one of them reduced to one
+  of two shapes: a `DEFUN` whose entire body is one `%ASSERT` call (pure
+  side-effect validation), or the same shape followed by returning the
+  now-checked argument (so the call composes as an expression). Applied via
+  `paredit query replace` across 9 files; a bulk rewrite against the second
+  shape's pattern caught a real bug before it was written -- `src/screen.lisp`'s
+  `%ASSERT-STRING-BOUNDS` has a *second* validation call sitting in the
+  naive rewrite's captured "return value" position, which would have been
+  silently deleted. Left as a plain `DEFUN`, along with nine other helpers
+  with real control flow (a `CASE` dispatch, a composed multi-check,
+  `%ASSERT-OCTET-VECTOR`'s mismatched return argument) that don't reduce to
+  either macro shape -- matching this project's own documented policy
+  (`docs/src/quality-gates.md`) against converting a function to a macro
+  "for consistency"
+
+### Added
+
+- adopt [`cl-nix-forge`](https://github.com/nerima-lisp/cl-nix-forge) (the
+  org's "crane for Common Lisp/ASDF") as a `flake.nix` input, using its
+  `fromAsdSystem` directly in place of this flake's own hand-rolled regex
+  over `cl-tty-kit.asd`'s `:version` line. A full migration of the
+  package/checks/devShell onto `cl-nix-forge`'s heavier primitives
+  (`lispDerivation`, `mkScriptCheck`, ...) is not pursued: this project is a
+  single dependency-free ASDF system with no CFFI/native dependencies and no
+  multi-implementation test matrix, so most of what those primitives add
+  over plain `sbcl.buildASDFSystem` doesn't apply here, and the default
+  source-filter (`mkLispSource`, an `.asd`/`.lisp` allowlist) would need
+  explicit `include` entries for `README.md` and `docs/src/*.md`, which
+  `t/package-readme-test.lisp` reads at test time
+- bump the `paredit-cli` flake input v1.2.1 -> v1.3.0 (query/fix/migrate
+  namespaces, deeper Emacs Lisp and five-dialect scope analysis)
+- a regression test closing a branch-coverage gap in
+  `%SNAPSHOT-RENDERER-SCREEN` (`src/renderer.lisp`): every existing
+  `RENDERER-RESIZE` case changed width, so the height-mismatch half of its
+  dimension check was never independently exercised
+
+### Documentation
+
+- re-evaluated `cl-log-kit`, `cl-process-kit`, and `cl-boundary-kit` for
+  adoption; none fit (recorded in `docs/src/roadmap.md`, including the
+  discovery that `cl-process-kit/pty` now depends on `cl-tty-kit` itself --
+  for `TERMINAL-SIZE`'s default rows/cols -- so adopting `cl-process-kit`
+  the other way around would create a dependency cycle)
+- `docs/src/architecture.md` names `DEFINE-SIMPLE-ASSERT`/
+  `DEFINE-VALIDATING-ASSERT` alongside `%ASSERT`; `docs/src/development.md`'s
+  testing expectations now point new tests at cl-weave's DSL instead of the
+  retired `IS`/`IS-EQUAL`/`SIGNALS` macros and explain the `IT-EACH` literal-data
+  restriction above
+
 ## [1.0.2] - 2026-07-26
 
 ### Fixed
