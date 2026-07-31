@@ -22,25 +22,16 @@ jobs:
   # scheduling and lose cache sharing between them.
   #
   # Add a second job ONLY for work the Nix sandbox cannot do: network access,
-  # a real PTY/TTY, artifact upload, or a different runner OS. `coverage` and
-  # `contrib` below are this repository's two such cases.
-  #
-  # The matrix is the "different runner OS" case, not extra granularity:
-  # flake.nix declares aarch64-darwin, and --all-systems only *evaluates* a
-  # foreign system, it never builds it. Without a macOS runner nothing in CI
-  # ever compiles the SBCL raw-mode/PTY layer on Darwin, which is precisely
-  # where this toolkit's platform-specific code lives.
+  # a real PTY/TTY, or artifact upload. `coverage` and `contrib` below are this
+  # repository's two such cases. "A different runner OS" is no longer one of
+  # them: as of the 2026-08-01 revision flake.nix declares x86_64-linux alone,
+  # so a macOS runner would have no output to check. The two-leg matrix that
+  # used to carry an aarch64-darwin/macos-latest entry is deleted rather than
+  # left at one element — a one-element matrix signals an intent to add more,
+  # and there is none. See PACKAGE_STANDARD.md "CI の粒度".
   check:
-    name: nix flake check (${{ matrix.system }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - system: x86_64-linux
-            runner: ubuntu-latest
-          - system: aarch64-darwin
-            runner: macos-latest
-    runs-on: ${{ matrix.runner }}
+    name: nix flake check
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       # persist-credentials: false — this job runs untrusted PR code via
@@ -59,10 +50,10 @@ jobs:
       # (checks.formatting), the structural paredit lint (checks.paredit-lint)
       # and the mkdocs --strict build (checks.docs).
       #
-      # No --all-systems. The claim that it only evaluates foreign systems is
-      # wrong: it realises their derivations too, so the darwin runner tried to
-      # build aarch64-linux and failed with "platform mismatch". Each matrix
-      # leg checks its own system, which is what the two legs are for.
+      # No --all-systems. `systems` is a single element, so it would not widen
+      # the check; and it does not merely evaluate a foreign system, it realises
+      # its derivations, which is how the old darwin leg failed with "platform
+      # mismatch". See PACKAGE_STANDARD.md "systems".
       - name: Check flake
         run: nix flake check --print-build-logs
 

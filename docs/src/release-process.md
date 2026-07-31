@@ -62,12 +62,11 @@ Before tagging a release:
    git diff --check
    ```
 
-4. Review `CHANGELOG.md`: promote the `[Unreleased]` section to a dated
-   version heading in the Keep a Changelog form `## [0.5.0] - 2026-07-24`,
-   and leave a fresh empty `## [Unreleased]` section on top for the next
-   cycle. The bracketed form is not cosmetic — `release.yml` extracts the
-   section matching the pushed tag as the GitHub Release body, and fails the
-   release outright if no section matches.
+4. Draft the release notes. There is no `CHANGELOG.md` in this repository: the
+   GitHub Release description is the only canonical history. Read
+   `git log <previous-tag>..HEAD` and select the entries by "does a user of
+   this package have to change their own code" — see "Release notes" below.
+   The text is pasted in after the release job goes green.
 5. Bump `:version` in `cl-tty-kit.asd` to match the release being cut.
 6. Confirm that the [API Reference](api-reference.md) still matches the
    exported symbols and that [Examples](examples.md) still lists every file
@@ -75,11 +74,10 @@ Before tagging a release:
    review them by hand too.
 7. Smoke-test the examples on a clean SBCL environment if possible.
 8. If `flake.lock` moved (the `cl-prolog`/`cl-weave`/`paredit-cli`/`nixpkgs`
-   inputs), confirm `nix flake check --all-systems` still passes against the
-   new pins before tagging — see [Contrib](contrib.md). `--all-systems` is not
-   optional here: without it Nix only evaluates outputs for the machine you are
-   on, so a `nixpkgs` bump that drops a platform `flake.nix` still advertises
-   passes silently.
+   inputs), confirm `nix flake check` still passes against the new pins before
+   tagging — see [Contrib](contrib.md). `--all-systems` is not used: `systems`
+   is `[ "x86_64-linux" ]` alone, so there is no second platform for it to
+   reach.
 
 ## Cutting the tag
 
@@ -90,12 +88,21 @@ git tag -a v0.5.0 -m "cl-tty-kit 0.5.0"
 git push origin v0.5.0
 ```
 
-Pushing the tag is the whole release. `.github/workflows/release.yml` takes
+Pushing the tag is most of the release. `.github/workflows/release.yml` takes
 over from there: it refuses to proceed if the tag disagrees with
-`cl-tty-kit.asd`'s `:version`, re-runs `nix flake check --all-systems`
-against the tagged tree, extracts the matching `CHANGELOG.md` section, and
-publishes the GitHub Release with that section as the body. Creating the
-release by hand is no longer part of the process.
+`cl-tty-kit.asd`'s `:version`, re-runs `nix flake check` against the tagged
+tree, and creates the GitHub Release as an empty **draft**.
+
+The draft is deliberate — the workflow writes no release body at all. Fill in
+the notes drafted in step 4 and publish:
+
+```bash
+gh release edit v0.5.0 --notes-file <file> --draft=false
+```
+
+A draft appears neither under "Latest release" nor in the default output of
+`gh release list`, so a release whose notes were forgotten never reaches
+downstream.
 
 ## Release notes
 
@@ -108,9 +115,10 @@ Release notes should call out:
 
 ## Contract updates
 
-When a public contract changes, update the [API Reference](api-reference.md),
-`CHANGELOG.md`, and the test suite in the same patch so the new surface is
-explicit and executable.
+When a public contract changes, update the [API Reference](api-reference.md)
+and the test suite in the same patch so the new surface is explicit and
+executable. The user-visible half of the change is written up in the next
+release's notes.
 
 ## Publishing documentation
 

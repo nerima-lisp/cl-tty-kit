@@ -1,3 +1,11 @@
+;;; This form comes FIRST, before any other form. ASDF binds *package* to
+;;; ASDF-USER only for a file it loads itself; read any other way — a REPL
+;;; `load`, an editor evaluating the buffer, flake.nix parsing :version — the
+;;; file is read in whatever package happens to be current, and an unqualified
+;;; symbol then fails to read at all. Saying it makes the file self-contained.
+;;; See PACKAGE_STANDARD.md "asd の書き方".
+(in-package #:asdf-user)
+
 ;; nerima-lisp/cl-prolog and nerima-lisp/cl-weave (see docs/src/logic-engine.md
 ;; and t/sgr-prolog-oracle-test.lisp) are both used only by :CL-TTY-KIT/TEST below --
 ;; cl-prolog as a differential-testing oracle cross-checking the hand-written
@@ -45,10 +53,10 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
+  :version "1.0.3"
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
-  :version "1.0.3"
   ;; SB-POSIX is bundled with SBCL and loaded directly by the SBCL-only
   ;; raw-mode implementation. Keeping it out of :DEPENDS-ON avoids an ASDF
   ;; source-registry scan merely to locate an already installed contrib.
@@ -95,6 +103,10 @@
                (:file "src/renderer")
                (:file "src/pty")
                (:file "src/pty-fd"))
+  ;; Mandatory. Without it `asdf:test-system "cl-tty-kit"` reaches only the
+  ;; :perform below; the delegation states, in the one place ASDF looks, that
+  ;; the test system is what test-op is about. See PACKAGE_STANDARD.md.
+  :in-order-to ((test-op (test-op "cl-tty-kit/test")))
   :perform (asdf:test-op (op system)
              (declare (ignore op system))
              (asdf:load-system :cl-tty-kit/test)

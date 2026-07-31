@@ -53,26 +53,26 @@ Expected outcomes:
 - coverage output is regenerated and inspected for meaningful gaps
 - the working tree contains no whitespace or merge-marker defects
 
-### The local gate is weaker than CI on macOS
+### The local gate can be weaker than CI
 
-!!! warning "A green local run on a Mac is not a green CI run"
-    Nix ships with `sandbox = false` on macOS (`nix config show sandbox`), so
-    `nix flake check` run locally on a Mac builds `checks.*.test` with the
-    host filesystem visible. CI's `x86_64-linux` runner sandboxes it, where
-    the only absolute paths that exist are `/bin/sh` and the Nix store.
+!!! warning "Development happens on Linux"
+    As of the 2026-08-01 org revision `flake.nix` declares `x86_64-linux`
+    alone, so `nix develop` and `nix build` have no outputs on macOS at all.
+    A Mac is no longer a supported development machine for this repository.
 
-A test that reaches for any other absolute path — `/bin/sleep`,
-`/usr/bin/env`, a system config file — therefore passes locally on a Mac and
-fails only in CI. This is not hypothetical: `t/pty-test.lisp`'s SIGTERM case
-spawned `/bin/sleep` and did exactly that.
+Even on Linux, a local `nix flake check` can be weaker than CI wherever the
+sandbox is disabled (`nix config show sandbox`): with the host filesystem
+visible, a test that reaches for an absolute path outside `/bin/sh` and the
+Nix store passes locally and fails only in CI. This is not hypothetical:
+`t/pty-test.lisp`'s SIGTERM case spawned `/bin/sleep` and did exactly that.
 
 Spawn external programs through `/bin/sh` and let `PATH` resolve the rest
 (`:program "/bin/sh" :args '("-c" "exec sleep 5")`), and before trusting a
-local green run on macOS for anything touching the filesystem or a
-subprocess, reproduce CI's environment:
+local green run for anything touching the filesystem or a subprocess,
+reproduce CI's environment:
 
 ```bash
-nix build --option sandbox true .#checks.aarch64-darwin.default
+nix build --option sandbox true .#checks.x86_64-linux.default
 ```
 
 ## Macro usage and file organization
@@ -140,7 +140,8 @@ Before merging or releasing:
 - the [API Reference](api-reference.md) matches the exported symbols, which
   `t/package-readme-test.lisp` checks mechanically
 - [Examples](examples.md) lists every runnable file under `examples/`
-- `CHANGELOG.md` records externally visible changes under `[Unreleased]`
+- externally visible changes are captured in the GitHub Release description
+  when the release is cut — there is no `CHANGELOG.md`
 - [Development](development.md) and [Release Process](release-process.md)
   still describe the current workflow
 
@@ -158,9 +159,9 @@ Reject or rework a patch when it does any of the following:
 ## What CI actually runs
 
 The gate above is what `.github/workflows/ci.yml` enforces on every push and
-pull request. The `check` job runs `nix flake check --all-systems` across an
-`x86_64-linux` / `aarch64-darwin` matrix, which evaluates every platform in
-`flake.nix`'s `systems` list rather than only the runner's own, and covers
+pull request. The `check` job runs `nix flake check` on `ubuntu-latest`.
+`flake.nix` declares `x86_64-linux` alone, so there is no second platform to
+widen to and no `--all-systems`; the run covers
 four checks: `default` (the hermetic test suite), `paredit-lint` (the
 structural-parse gate), `formatting` (treefmt/nixfmt), and `docs`
 (`mkdocs build --strict`).
@@ -186,10 +187,9 @@ release is production ready when every one of these holds simultaneously:
 - **Reproducible build**: `nix build` produces the hermetic package from a
   flake-pinned source registry, with no reliance on host ASDF configuration
   or caches (see the verification gate above)
-- **CI matrix, not just local**: `.github/workflows/ci.yml` runs the same
-  `nix flake check --all-systems` across `x86_64-linux` and `aarch64-darwin`
-  on every push, not only whichever platform a contributor develops on (see
-  "The local gate is weaker than CI on macOS" above)
+- **CI, not just local**: `.github/workflows/ci.yml` runs the same
+  `nix flake check` on every push, so the declared platform is gated by a
+  machine nobody can forget to run
 - **Bounded execution**: every entry point (test, example, coverage,
   benchmark, verify) runs under an explicit OS-level timeout, so a hang is a
   failed run, not a stuck CI job -- see "Non-functional requirements" above
@@ -197,7 +197,7 @@ release is production ready when every one of these holds simultaneously:
   reject shims and dual code paths on sight, so the tree carries no
   deprecated surface waiting to be a future incident
 - **Documented contract**: the documentation gate above keeps the API
-  reference, examples list, and CHANGELOG mechanically or procedurally tied
+  reference, examples list, and release notes mechanically or procedurally tied
   to the actual exported surface, so "production ready" also means
   "explainable to a new integrator without reading the source"
 - **Security and support policy**: the org-wide

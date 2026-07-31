@@ -65,19 +65,15 @@
       cl-nix-forge,
     }:
     let
-      # x86_64-darwin is deliberately absent: nixpkgs 26.11 (which
-      # nixos-unstable now tracks) dropped support for it outright, so every
-      # output for that platform fails to evaluate, not merely to build.
-      # Listing it would make `nix flake check --all-systems` a guaranteed
-      # error and advertise a platform this flake cannot serve.
-      # x86_64-linux is verified by CI, aarch64-darwin by the macOS runner in
-      # the same matrix. aarch64-linux is not declared: nothing runs it, and
-      # advertising it made `nix flake check --all-systems` try to realise
-      # aarch64-linux derivations on a darwin runner, which fails with
-      # "platform mismatch". See ADR-0078.
+      # x86_64-linux and nothing else. The only platform this project is gated
+      # on is the CI runner, and a flake should not advertise a platform it
+      # never builds. aarch64-darwin was declared until the 2026-08-01 revision
+      # and was covered by a macOS leg of the ci.yml matrix; that runner is gone
+      # along with the promise. x86_64-darwin was already absent (nixpkgs 26.11
+      # dropped it outright) and so was aarch64-linux (nothing ran it).
+      # Development happens on Linux. See PACKAGE_STANDARD.md "systems".
       systems = [
         "x86_64-linux"
-        "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
       pkgsFor = system: nixpkgs.legacyPackages.${system};
