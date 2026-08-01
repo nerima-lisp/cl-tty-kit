@@ -12,12 +12,13 @@
   # same reason everywhere: without it each input drags in its own nixpkgs,
   # inflating flake.lock and rebuilding identical derivations.
 
-  # cl-tty-kit itself is dependency-free; cl-prolog and cl-weave are both
-  # :cl-tty-kit/test-only dependencies (see cl-tty-kit.asd :depends-on and
-  # cl-tty-kit/test :depends-on). Neither is distributed by Quicklisp, and
-  # this project keeps no vendored copy of either: these two flake inputs
-  # are the only source of both, put on CL_SOURCE_REGISTRY by every
-  # app/check/devShell below.
+  # cl-tty-kit.asd names one real (non-test) sibling dependency,
+  # cl-codec-kit (declared further below, near cl-parser-kit); cl-prolog and
+  # cl-weave are both :cl-tty-kit/test-only dependencies (see cl-tty-kit.asd
+  # :depends-on and cl-tty-kit/test :depends-on). None of the three is
+  # distributed by Quicklisp, and this project keeps no vendored copy of any:
+  # these flake inputs are the only source of all three, put on
+  # CL_SOURCE_REGISTRY by every app/check/devShell below.
   inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.1.0";
   inputs.cl-prolog.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-prolog.inputs.cl-weave.follows = "cl-weave";
@@ -26,6 +27,15 @@
   inputs.cl-weave.url = "github:nerima-lisp/cl-weave/v1.1.0";
   inputs.cl-weave.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-weave.inputs.paredit-cli.follows = "paredit-cli";
+
+  # cl-codec-kit: cl-tty-kit.asd's one REAL (non-test) sibling dependency --
+  # src/utf8.lisp delegates its UTF-8 codec to it. Built directly from
+  # source via buildASDFSystem below (see cl-codec-kit-lib), not through its
+  # own flake outputs, so `flake = false` and no `inputs.nixpkgs.follows`:
+  # only the source tree is needed, not cl-codec-kit's own transitive flake
+  # graph (cl-nix-forge, its own cl-weave, treefmt-nix).
+  inputs.cl-codec-kit.url = "github:nerima-lisp/cl-codec-kit/v0.1.0";
+  inputs.cl-codec-kit.flake = false;
 
   # paredit-cli provides structural S-expression tooling for this repo's
   # Lisp sources: a dev-shell binary for agent-driven refactors and a
@@ -59,6 +69,7 @@
       nixpkgs,
       cl-prolog,
       cl-weave,
+      cl-codec-kit,
       paredit-cli,
       cl-parser-kit,
       treefmt-nix,
@@ -99,15 +110,30 @@
 
       sourceFor = pkgs: pkgs.lib.cleanSource ./.;
 
-      # cl-prolog, cl-weave, and cl-parser-kit as raw ASDF-loadable source
-      # trees (not the `packages` outputs above, which are shaped for
-      # `lispLibs` composition rather than for CL_SOURCE_REGISTRY directly).
-      # This -- not any vendored copy -- is the only place any
-      # app/check/devShell below gets any of the three from. cl-parser-kit
-      # is only a contrib/ dependency, but sharing one registry string with
-      # cl-prolog/cl-weave keeps every entry point able to load contrib/
-      # interactively without a separate CL_SOURCE_REGISTRY variant to track.
-      clSourceRegistryFor = "${cl-prolog}//:${cl-weave}//:${cl-parser-kit}//:";
+      # cl-codec-kit, cl-prolog, cl-weave, and cl-parser-kit as raw
+      # ASDF-loadable source trees (not the `packages` outputs above, which
+      # are shaped for `lispLibs` composition rather than for
+      # CL_SOURCE_REGISTRY directly). This -- not any vendored copy -- is the
+      # only place any app/check/devShell below gets any of the four from.
+      # cl-codec-kit is the one REAL (non-test) dependency here, needed at
+      # every script entry point exactly as much as at build time; cl-prolog
+      # and cl-weave are test-only; cl-parser-kit is only a contrib/
+      # dependency, but sharing one registry string keeps every entry point
+      # able to load contrib/ interactively without a separate
+      # CL_SOURCE_REGISTRY variant to track.
+      clSourceRegistryFor = "${cl-codec-kit}//:${cl-prolog}//:${cl-weave}//:${cl-parser-kit}//:";
+
+      # cl-codec-kit as a buildASDFSystem lib for cl-tty-kit's own :depends-on
+      # (see cl-tty-kit.asd). Built directly from the flake = false source
+      # input above rather than through cl-codec-kit's own flake outputs.
+      cl-codec-kit-lib =
+        pkgs:
+        pkgs.sbcl.buildASDFSystem {
+          pname = "cl-codec-kit";
+          version = "0.1.0";
+          src = cl-codec-kit;
+          systems = [ "cl-codec-kit" ];
+        };
 
       # Runs a repository script against the current working directory (so
       # local edits are picked up without rebuilding a Nix package), with
@@ -186,13 +212,16 @@
           src = sourceFor pkgs;
         in
         {
-          # No lispLibs: :cl-tty-kit itself is dependency-free (see
-          # cl-tty-kit.asd) -- cl-prolog is only a :cl-tty-kit/test dependency.
+          # lispLibs carries cl-codec-kit, :cl-tty-kit's one real (non-test)
+          # :depends-on entry (see cl-tty-kit.asd) -- cl-prolog and cl-weave
+          # remain :cl-tty-kit/test-only dependencies, resolved instead
+          # through CL_SOURCE_REGISTRY (clSourceRegistryFor) everywhere else.
           cl-tty-kit = pkgs.sbcl.buildASDFSystem {
             pname = "cl-tty-kit";
             version = projectVersion;
             inherit src;
             systems = [ "cl-tty-kit" ];
+            lispLibs = [ (cl-codec-kit-lib pkgs) ];
           };
           default = self.packages.${system}.cl-tty-kit;
 

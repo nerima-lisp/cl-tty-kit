@@ -57,9 +57,13 @@
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
-  ;; SB-POSIX is bundled with SBCL and loaded directly by the SBCL-only
-  ;; raw-mode implementation. Keeping it out of :DEPENDS-ON avoids an ASDF
-  ;; source-registry scan merely to locate an already installed contrib.
+  ;; cl-codec-kit: src/utf8.lisp delegates its UTF-8 codec to it instead of
+  ;; hand-rolling the decode/encode algorithms itself, so this is no longer
+  ;; the dependency-free package it once was. SB-POSIX is still bundled with
+  ;; SBCL and loaded directly by the SBCL-only raw-mode implementation, so it
+  ;; stays out of :DEPENDS-ON to avoid an ASDF source-registry scan merely to
+  ;; locate an already installed contrib.
+  :depends-on ("cl-codec-kit")
   :serial t
   :components ((:file "src/package")
                (:file "src/conditions")

@@ -1,110 +1,68 @@
 (in-package #:cl-tty-kit)
 
-(declaim (ftype function %signal-invalid-utf8-sequence))
+;;; UTF-8 decoding delegates to CL-CODEC-KIT; this file is now a translating
+;;; adapter, not an implementation. Two things CL-CODEC-KIT does not itself
+;;; provide are kept here because this library's own public contract
+;;; (INVALID-UTF8-SEQUENCE, tested by t/utf8-test.lisp) predates it and must
+;;; not change shape for existing callers:
+;;;
+;;;   1. %VALIDATE-OCTET-VECTOR rejects a non-(INTEGER 0 255) element with
+;;;      :NON-OCTET before decoding -- CL-CODEC-KIT assumes its input already
+;;;      satisfies that type and has no such guard of its own.
+;;;   2. %TRANSLATE-CODEC-ERROR re-signals a CL-CODEC-KIT decode error as
+;;;      INVALID-UTF8-SEQUENCE. Every CL-CODEC-KIT:DECODE-ERROR's POSITION
+;;;      names where the failing character *starts* (see
+;;;      cl-codec-kit/src/conditions.lisp), which already matches this
+;;;      library's own POSITION for every reason except
+;;;      :INVALID-CONTINUATION-BYTE -- INVALID-UTF8-SEQUENCE has always
+;;;      pinned that one case to the specific offending byte's own index
+;;;      instead, so %CONTINUATION-BYTE-OFFSET re-derives it.
 
-(defun %utf8-continuation-octet-p (octet)
-  (and (<= #x80 octet)
-       (<= octet #xBF)))
+(defun %validate-octet-vector (octets)
+  (loop for i from 0 below (length octets)
+        for element = (aref octets i)
+        unless (typep element '(integer 0 255))
+          do (%signal-invalid-utf8-sequence i element :non-octet)))
 
-(defun %utf8-octet-at (vector index)
-  (let ((octet (aref vector index)))
-    (unless (typep octet '(integer 0 255))
-      (%signal-invalid-utf8-sequence index octet :non-octet))
-    octet))
+(defun %continuation-byte-offset (octets sequence-start)
+  "Return the index of the first byte after SEQUENCE-START that is not a
+valid UTF-8 continuation byte (80-BF)."
+  (loop for i from (1+ sequence-start) below (length octets)
+        unless (<= #x80 (aref octets i) #xBF)
+          return i
+        finally (return (length octets))))
 
-(defun %string-to-utf8-octets (string)
-  (sb-ext:string-to-octets string :external-format :utf-8))
+(defun %translate-codec-error (condition octets)
+  (let ((position (cl-codec-kit:decode-error-position condition)))
+    (etypecase condition
+      (cl-codec-kit:invalid-continuation-byte
+       (let ((offset (%continuation-byte-offset octets position)))
+         (%signal-invalid-utf8-sequence offset (aref octets offset) :invalid-continuation-byte)))
+      (cl-codec-kit:invalid-leading-byte
+       (%signal-invalid-utf8-sequence position (aref octets position) :invalid-leading-byte))
+      (cl-codec-kit:overlong-sequence
+       (%signal-invalid-utf8-sequence position (aref octets position) :overlong-sequence))
+      (cl-codec-kit:surrogate-code-point
+       (%signal-invalid-utf8-sequence position (aref octets position) :surrogate-half))
+      (cl-codec-kit:code-point-too-large
+       (%signal-invalid-utf8-sequence position (aref octets position) :code-point-too-large))
+      (cl-codec-kit:truncated-sequence
+       (%signal-invalid-utf8-sequence position (aref octets position) :truncated-sequence)))))
 
-(defun %utf8-emit-code-point (code)
-  (or (code-char code)
-      (error 'unsupported-code-point :code-point code)))
+(defun %utf8-octets-to-string (octets)
+  (%validate-octet-vector octets)
+  (handler-case (cl-codec-kit:octets-to-string octets :encoding :utf-8)
+    (cl-codec-kit:decode-error (c) (%translate-codec-error c octets))))
 
-(defun %utf8-sequence-length (first)
-  "Return the UTF-8 sequence length selected by FIRST, or NIL when invalid."
-  (cond
-    ((<= #xC2 first #xDF) 2)
-    ((<= #xE0 first #xEF) 3)
-    ((<= #xF0 first #xF4) 4)
-    (t nil)))
-
-(defun %utf8-min-code-point (sequence-length)
-  (ecase sequence-length
-    (2 #x80)
-    (3 #x800)
-    (4 #x10000)))
-
-(defun %utf8-validate-code-point (index first code-point min-code-point)
-  "Signal a structured error when CODE-POINT (already fully assembled from
-FIRST and its continuation octets) violates a UTF-8 or Unicode invariant.
-There is no separate F4-leading-byte overflow check: for a 4-byte sequence
-whose leading byte is F4, any second octet above #x8F already assembles a
-CODE-POINT above #x10FFFF, so the general upper-bound check below already
-covers it."
-  (when (< code-point min-code-point)
-    (%signal-invalid-utf8-sequence index first :overlong-sequence))
-  (when (<= #xD800 code-point #xDFFF)
-    (%signal-invalid-utf8-sequence index first :surrogate-half))
-  (when (> code-point #x10FFFF)
-    (%signal-invalid-utf8-sequence index first :code-point-too-large)))
-
-(defun %utf8-decode-multibyte (vector index length first)
-  "Decode one validated multibyte sequence without allocating continuation lists."
-  (let ((sequence-length (%utf8-sequence-length first)))
-    (unless sequence-length
-      (%signal-invalid-utf8-sequence index first :invalid-leading-byte))
-    (when (> (+ index sequence-length) length)
-      (%signal-invalid-utf8-sequence index first :truncated-sequence))
-    (flet ((continuation (offset)
-             (let* ((octet-index (+ index offset))
-                    (octet (%utf8-octet-at vector octet-index)))
-               (unless (%utf8-continuation-octet-p octet)
-                 (%signal-invalid-utf8-sequence octet-index octet
-                                                :invalid-continuation-byte))
-               octet)))
-      (let* ((second (continuation 1))
-             (code-point
-               (case sequence-length
-                 (2
-                  (logior (ash (logand first #x1F) 6)
-                          (logand second #x3F)))
-                 (3
-                  (let ((third (continuation 2)))
-                    (logior (ash (logand first #x0F) 12)
-                            (ash (logand second #x3F) 6)
-                            (logand third #x3F))))
-                 (4
-                  (let ((third (continuation 2))
-                        (fourth (continuation 3)))
-                    (logior (ash (logand first #x07) 18)
-                            (ash (logand second #x3F) 12)
-                            (ash (logand third #x3F) 6)
-                            (logand fourth #x3F)))))))
-        (%utf8-validate-code-point index
-                                   first
-                                   code-point
-                                   (%utf8-min-code-point sequence-length))
-        (values (%utf8-emit-code-point code-point)
-                (+ index sequence-length))))))
-
-(defun %utf8-decode-at (vector index length)
-  (let ((first (%utf8-octet-at vector index)))
-    (if (< first #x80)
-        (values (%utf8-emit-code-point first) (1+ index))
-        (%utf8-decode-multibyte vector index length first))))
-
-(defun %utf8-write-decoded-octets (vector stream)
-  "Decode VECTOR to STREAM without constructing an intermediate string."
-  (loop with index = 0
-        with limit = (length vector)
-        while (< index limit)
-        do (multiple-value-bind (char next-index)
-               (%utf8-decode-at vector index limit)
-             (write-char char stream)
-             (setf index next-index))))
-
-(defun %utf8-octets-to-string (vector)
-  (with-output-to-string (stream)
-    (%utf8-write-decoded-octets vector stream)))
+(defun %utf8-decode-prefix (octets)
+  "Decode the complete UTF-8 prefix of octet VECTOR.
+Return two values: the decoded string and a fresh octet vector holding any
+incomplete trailing multibyte sequence (empty when VECTOR ends on a
+boundary). Genuinely invalid octets in the prefix still signal
+INVALID-UTF8-SEQUENCE."
+  (%validate-octet-vector octets)
+  (handler-case (cl-codec-kit:decode-prefix octets :encoding :utf-8)
+    (cl-codec-kit:decode-error (c) (%translate-codec-error c octets))))
 
 (defun %octet-input-p (input)
   "Return true when INPUT should be decoded as UTF-8 octets, not characters.
@@ -131,35 +89,3 @@ declined it."
      (coerce input 'string))
     (t
      (error "Unsupported input type: ~S" (type-of input)))))
-
-(defun %utf8-incomplete-tail-start (vector)
-  "Return the start index of an incomplete trailing UTF-8 multibyte sequence in
-VECTOR, or NIL when VECTOR ends on a character boundary. Only a genuinely
-truncated final sequence is reported; complete or invalid bytes end the scan so
-the caller decodes (and validates) them normally."
-  (let ((length (length vector)))
-    (loop for index from (1- length) downto (max 0 (- length 3))
-          for octet = (%utf8-octet-at vector index)
-          do (cond
-               ((< octet #x80)
-                (return nil))
-               ((%utf8-continuation-octet-p octet))
-               (t
-                (let ((sequence-length (%utf8-sequence-length octet)))
-                  (return
-                    (when (and sequence-length
-                               (< (- length index) sequence-length))
-                      index)))))
-          finally (return nil))))
-
-(defun %utf8-decode-prefix (vector)
-  "Decode the complete UTF-8 prefix of octet VECTOR.
-Return two values: the decoded string and a fresh octet vector holding any
-incomplete trailing multibyte sequence (empty when VECTOR ends on a boundary).
-Genuinely invalid octets in the prefix still signal INVALID-UTF8-SEQUENCE."
-  (let ((tail (%utf8-incomplete-tail-start vector)))
-    (if tail
-        (values (%utf8-octets-to-string (subseq vector 0 tail))
-                (subseq vector tail))
-        (values (%utf8-octets-to-string vector)
-                (make-array 0 :element-type (array-element-type vector))))))

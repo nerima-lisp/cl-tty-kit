@@ -25,16 +25,6 @@
   (it "decodes a 4-byte sequence"
     (expect (cl-tty-kit::%utf8-octets-to-string (%u8 #xF0 #x9F #x98 #x80)) :to-equal "😀")))
 
-(describe "encoding a string to UTF-8 octets"
-  (it "encodes plain ASCII"
-    (expect (cl-tty-kit::%string-to-utf8-octets "abc") :to-equalp (%u8 97 98 99)))
-  (it "encodes a 2-byte sequence"
-    (expect (cl-tty-kit::%string-to-utf8-octets "¢") :to-equalp (%u8 #xC2 #xA2)))
-  (it "encodes a 3-byte sequence"
-    (expect (cl-tty-kit::%string-to-utf8-octets "あ") :to-equalp (%u8 #xE3 #x81 #x82)))
-  (it "encodes a 4-byte sequence"
-    (expect (cl-tty-kit::%string-to-utf8-octets "😀") :to-equalp (%u8 #xF0 #x9F #x98 #x80))))
-
 (describe "rejecting malformed UTF-8"
   (it "rejects a non-octet element outright"
     (expect-invalid-utf8 #(256) :non-octet :octet 256))
