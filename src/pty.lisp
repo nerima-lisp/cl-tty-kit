@@ -134,8 +134,13 @@ PTY-OPERATION-FAILED when the size cannot be set -- for example on a platform
     (%validate-pty-size columns rows)
     (let* ((stream (%pty-stream-or-error pty))
            (fd (%stream-fd stream)))
-      (unless (and fd (%set-terminal-size fd columns rows))
-        (error "Could not set the PTY window size."))
+      (unless fd
+        (error "PTY stream has no accessible file descriptor."))
+      ;; SET-TERMINAL-SIZE rather than %SET-TERMINAL-SIZE: its
+      ;; TERMINAL-SIZE-SET-FAILED report names the fd, the requested size, and
+      ;; the reason, and %WITH-PTY-OPERATION keeps it as the :RESIZE failure's
+      ;; PTY-OPERATION-FAILED-REASON instead of discarding it.
+      (set-terminal-size columns rows fd)
       pty)))
 
 #+sbcl

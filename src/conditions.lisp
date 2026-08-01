@@ -124,6 +124,18 @@ single declarative spelling."
   (raw-mode-operation-failed-fd condition)
   (raw-mode-operation-failed-reason condition))
 
+(define-formatted-tty-kit-condition terminal-size-set-failed (tty-kit-error)
+  ((fd :initarg :fd :reader terminal-size-set-failed-fd)
+   (columns :initarg :columns :reader terminal-size-set-failed-columns)
+   (rows :initarg :rows :reader terminal-size-set-failed-rows)
+   (reason :initarg :reason :reader terminal-size-set-failed-reason))
+  "Raised when a terminal's window size cannot be set via ioctl TIOCSWINSZ."
+  "Could not set the window size on FD ~D to ~D columns by ~D rows: ~A."
+  (terminal-size-set-failed-fd condition)
+  (terminal-size-set-failed-columns condition)
+  (terminal-size-set-failed-rows condition)
+  (terminal-size-set-failed-reason condition))
+
 (define-formatted-tty-kit-condition pty-operation-failed (tty-kit-error)
   ((operation :initarg :operation :reader pty-operation-failed-operation)
    (pty :initarg :pty :reader pty-operation-failed-pty)
@@ -170,6 +182,17 @@ single declarative spelling."
             "Return the file descriptor whose raw-mode operation failed.")
            (raw-mode-operation-failed-reason
             "Return the underlying condition that caused the raw-mode failure.")
+           (terminal-size-set-failed-fd
+            "Return the file descriptor whose window size could not be set.")
+           (terminal-size-set-failed-columns
+            "Return the column count that was requested but not applied.")
+           (terminal-size-set-failed-rows
+            "Return the row count that was requested but not applied.")
+           (terminal-size-set-failed-reason
+            "Return why the window size could not be set: the keyword
+:UNSUPPORTED-PLATFORM when the host's TIOCSWINSZ constant is unknown, a string
+describing the failed ioctl, or the condition signaled at the alien-call
+boundary.")
            (pty-operation-failed-operation
             "Return the PTY operation keyword that failed.")
            (pty-operation-failed-pty

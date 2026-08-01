@@ -8,7 +8,7 @@
     (:homepage . "https://github.com/nerima-lisp/cl-tty-kit")
     (:bug-tracker . "https://github.com/nerima-lisp/cl-tty-kit/issues")
     (:source-control . (:git "https://github.com/nerima-lisp/cl-tty-kit.git"))
-    (:version . "1.0.3")))
+    (:version . "1.1.0")))
 
 (defparameter +expected-external-symbols+
   '("CHAR-WIDTH"
@@ -39,6 +39,11 @@
     "RAW-MODE-OPERATION-FAILED-OPERATION"
     "RAW-MODE-OPERATION-FAILED-FD"
     "RAW-MODE-OPERATION-FAILED-REASON"
+    "TERMINAL-SIZE-SET-FAILED"
+    "TERMINAL-SIZE-SET-FAILED-FD"
+    "TERMINAL-SIZE-SET-FAILED-COLUMNS"
+    "TERMINAL-SIZE-SET-FAILED-ROWS"
+    "TERMINAL-SIZE-SET-FAILED-REASON"
     "PTY-OPERATION-FAILED"
     "PTY-OPERATION-FAILED-OPERATION"
     "PTY-OPERATION-FAILED-PTY"
@@ -48,6 +53,7 @@
     "WITH-RAW-MODE"
     "WITH-TERMINAL-SESSION"
     "TERMINAL-SIZE"
+    "SET-TERMINAL-SIZE"
     "ANSI-BELL"
     "ANSI-RESET-TERMINAL"
     "ANSI-BEGIN-SYNCHRONIZED-UPDATE"
@@ -191,6 +197,14 @@
     "RECT-INTERSECT"
     "RECT-UNION"
     "LAYOUT-SPLIT"
+    "ENTITY"
+    "MAKE-ENTITY"
+    "ENTITY-X"
+    "ENTITY-Y"
+    "ENTITY-DX"
+    "ENTITY-DY"
+    "ENTITY-ON-EXIT"
+    "ENTITY-TICK"
     "CELL"
     "MAKE-CELL"
     "CELL-CHAR"
@@ -218,6 +232,7 @@
     "SCREEN-SCROLL"
     "SCREEN-BLIT"
     "SCREEN-CROP"
+    "SPRITE-BLIT"
     "SCREEN-WRITE-LINES"
     "SCREEN-WRITE-WRAPPED"
     "SCREEN-WRITE-ALIGNED"
@@ -244,6 +259,8 @@
     "RENDERER-RENDER"
     "RENDERER-CLEAR"
     "RENDERER-RESIZE"
+    "TICK-LOOP-RUN"
+    "TICK-LOOP-RUN-REALTIME"
     "PTY"
     "MAKE-PTY"
     "PTY-PROCESS"

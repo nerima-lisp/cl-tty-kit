@@ -138,6 +138,7 @@ nav:
       - Screen and Rendering: guide/screen-and-rendering.md
       - Layout and Rects: guide/layout.md
       - Widgets: guide/widgets.md
+      - Animation: guide/animation.md
       - Input Decoding: guide/input-decoding.md
       - Mouse Input: guide/mouse-input.md
       - ANSI Helpers: guide/ansi-helpers.md

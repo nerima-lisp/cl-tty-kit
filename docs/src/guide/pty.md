@@ -117,7 +117,10 @@ size. Forward this whenever your own window resizes:
 
 It signals `pty-operation-failed` when the size cannot be set — for example on a
 platform whose ioctl constant is unknown, or a stream without an accessible
-descriptor.
+descriptor. `pty-resize` is a thin convenience over
+[`set-terminal-size`](terminal-session.md), which does the same thing given a
+bare fd; when the ioctl itself fails, the `terminal-size-set-failed` it raises
+becomes the `pty-operation-failed-reason`.
 
 ## Failure reporting: pty-operation-failed
 

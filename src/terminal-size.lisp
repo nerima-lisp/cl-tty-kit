@@ -9,6 +9,12 @@
 ;;; the size as unavailable (NIL) rather than signaling, so callers can fall back
 ;;; to a default (e.g. 80x24) or a cursor-position probe.
 ;;;
+;;; SET-TERMINAL-SIZE is the write direction, ioctl(TIOCSWINSZ). It signals
+;;; TERMINAL-SIZE-SET-FAILED instead of reporting NIL, because the two directions
+;;; are asymmetric: a missing size has a sensible fallback, whereas a size that
+;;; was never applied leaves the child process believing a window it does not
+;;; have, and no fallback repairs that.
+;;;
 ;;; SB-UNIX:UNIX-IOCTL (rather than a hand-rolled DEFINE-ALIEN-ROUTINE) is used
 ;;; deliberately: ioctl is variadic, and on the arm64 ABI variadic arguments pass
 ;;; on the stack while a fixed-prototype alien call passes them in registers,
@@ -66,23 +72,62 @@ to standard input (0)."
         (error () (values nil nil)))))
 
 #+sbcl
+(define-simple-assert %assert-terminal-dimension (name value)
+  (and (integerp value) (plusp value))
+  "Terminal ~A must be a positive integer, got ~S." name value)
+
+#+sbcl
 (defun %set-terminal-size (fd columns rows)
   "Set the window size on FD to COLUMNS by ROWS via ioctl TIOCSWINSZ.
-Returns true on success, NIL when the platform constant is unknown or the ioctl
-fails."
+Returns (VALUES T NIL) on success and (VALUES NIL REASON) on failure, where
+REASON is :UNSUPPORTED-PLATFORM when the host's TIOCSWINSZ constant is unknown,
+a string naming the errno when the ioctl itself failed, or the condition raised
+at the alien-call boundary. The pixel dimensions are set to zero, which is what
+a terminal reports when it measures its window in cells only.
+
+Callers wanting the failure to be an error should use SET-TERMINAL-SIZE, which
+turns REASON into a TERMINAL-SIZE-SET-FAILED condition."
   (setf fd (%assert-terminal-fd fd))
   (if (null +tiocswinsz+)
-      nil
+      (values nil :unsupported-platform)
       (handler-case
           (sb-alien:with-alien ((winsize (sb-alien:struct %winsize)))
             (setf (sb-alien:slot winsize 'rows) rows
                   (sb-alien:slot winsize 'columns) columns
                   (sb-alien:slot winsize 'x-pixels) 0
                   (sb-alien:slot winsize 'y-pixels) 0)
-            (and (sb-unix:unix-ioctl fd +tiocswinsz+
-                                     (sb-alien:alien-sap (sb-alien:addr winsize)))
-                 t))
-        (error () nil))))
+            (multiple-value-bind (successp errno)
+                (sb-unix:unix-ioctl fd +tiocswinsz+
+                                    (sb-alien:alien-sap (sb-alien:addr winsize)))
+              (if successp
+                  (values t nil)
+                  (values nil (format nil "ioctl TIOCSWINSZ failed (errno ~A)"
+                                      errno)))))
+        (error (condition) (values nil condition)))))
+
+#+sbcl
+(defun set-terminal-size (columns rows &optional (fd 0))
+  "Set the terminal window size on FD to COLUMNS by ROWS, returning
+(VALUES COLUMNS ROWS) so the result reads back like TERMINAL-SIZE's.
+FD defaults to standard input (0), and COLUMNS precedes ROWS, both matching
+TERMINAL-SIZE. COLUMNS and ROWS must be positive integers and FD a non-negative
+integer; anything else is a programmer error and is rejected before any ioctl is
+attempted.
+
+This is the write direction of TERMINAL-SIZE: it issues ioctl TIOCSWINSZ, which
+is how a terminal -- or a multiplexer owning the master side of a PTY -- tells a
+child process that its window changed. The child normally receives SIGWINCH.
+Unlike TERMINAL-SIZE, a failure signals TERMINAL-SIZE-SET-FAILED (carrying FD,
+COLUMNS, ROWS, and a REASON) rather than returning NIL: an unset size cannot be
+substituted for the way an unknown size can."
+  (%assert-terminal-dimension "columns" columns)
+  (%assert-terminal-dimension "rows" rows)
+  (setf fd (%assert-terminal-fd fd))
+  (multiple-value-bind (successp reason) (%set-terminal-size fd columns rows)
+    (unless successp
+      (error 'terminal-size-set-failed
+             :fd fd :columns columns :rows rows :reason reason))
+    (values columns rows)))
 
 #+sbcl
 (defun %stream-fd (stream)

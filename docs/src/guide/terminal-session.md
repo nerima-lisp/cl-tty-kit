@@ -2,13 +2,14 @@
 
 This page covers the OS-facing layer that puts the terminal into the right state
 for a full-screen application and reliably restores it afterward: raw mode, the
-window-size query, and the `with-terminal-session` lifecycle helper.
+window-size query and update, and the `with-terminal-session` lifecycle helper.
 
 !!! warning "SBCL only"
-    Raw mode, `terminal-size`, and `with-terminal-session`'s raw-mode path are
-    SBCL-specific — they use `sb-posix` for `termios` control and SBCL's `ioctl`
-    wrapper. `cl-tty-kit` requires SBCL throughout, so these are available on
-    every build that loads. See [Compatibility](../reference/compatibility.md).
+    Raw mode, `terminal-size`, `set-terminal-size`, and `with-terminal-session`'s
+    raw-mode path are SBCL-specific — they use `sb-posix` for `termios` control
+    and SBCL's `ioctl` wrapper. `cl-tty-kit` requires SBCL throughout, so these
+    are available on every build that loads. See
+    [Compatibility](../reference/compatibility.md).
 
 ## Raw mode
 
@@ -89,6 +90,43 @@ back to a default (commonly 80×24) or a cursor-position probe:
 ```
 
 To react to live resizes, re-query on `SIGWINCH`.
+
+## set-terminal-size
+
+`set-terminal-size` is the write direction of the same ioctl pair — it issues
+`ioctl(TIOCSWINSZ)`, which is how a terminal, or a multiplexer owning the master
+side of a PTY, tells a child process that its window changed. The child normally
+receives `SIGWINCH`. Arguments mirror `terminal-size`: columns first, then rows,
+then an optional fd defaulting to 0. It returns `(values columns rows)`, so the
+result reads back in the same shape the getter reports:
+
+```lisp
+(set-terminal-size 100 30 master-fd)   ; => 100, 30
+(terminal-size master-fd)              ; => 100, 30
+```
+
+Reach for it when you own the master side of a PTY and are propagating your own
+window size down to the child. If you already hold a `pty` object,
+[`pty-resize`](pty.md) is the same operation with the fd extraction done for you.
+
+!!! warning "It signals; the getter does not"
+    `terminal-size` reports an unknown size as `(values nil nil)` because a
+    caller can substitute a default. `set-terminal-size` instead signals
+    [`terminal-size-set-failed`](../reference/conditions.md), carrying the `fd`,
+    the requested `columns`/`rows`, and a `reason` — because a size that was
+    never applied leaves the child believing in a window it does not have, and
+    no fallback repairs that. `columns` and `rows` must be positive integers and
+    `fd` a non-negative integer; those are rejected before any ioctl is issued.
+
+!!! note "Why SBCL's ioctl wrapper, not a hand-declared alien routine"
+    Both directions go through `sb-unix:unix-ioctl` rather than a
+    `define-alien-routine` (or an equivalent generic FFI `foreign-funcall`)
+    declaration of `ioctl`. `ioctl` is variadic, and on the arm64 ABI variadic
+    arguments are passed on the stack while a fixed-prototype alien call passes
+    them in registers — so the kernel reads the `winsize` pointer from the wrong
+    place and the call fails with `EFAULT`. SBCL's own wrapper marshals it
+    correctly. This is why the operation lives here rather than being
+    reimplemented by each caller.
 
 ## with-terminal-session
 
@@ -176,6 +214,6 @@ handy in tests and examples.
   `render-diff` output you emit inside a session.
 - [ANSI Helpers](ansi-helpers.md) — the individual escape builders
   `with-terminal-session` composes.
-- [Conditions](../reference/conditions.md) — `raw-mode-operation-failed` and the condition
-  hierarchy.
+- [Conditions](../reference/conditions.md) — `raw-mode-operation-failed`,
+  `terminal-size-set-failed`, and the condition hierarchy.
 - [Compatibility](../reference/compatibility.md) — the SBCL-only rationale.

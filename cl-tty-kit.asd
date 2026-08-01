@@ -53,7 +53,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "1.0.3"
+  :version "1.1.0"
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
@@ -72,6 +72,7 @@
                (:file "src/color")
                (:file "src/format")
                (:file "src/rect")
+               (:file "src/entity")
                (:file "src/ansi")
                (:file "src/ansi-control")
                (:file "src/ansi-osc")
@@ -91,6 +92,7 @@
                (:file "src/cell")
                (:file "src/screen")
                (:file "src/screen-regions")
+               (:file "src/sprite")
                (:file "src/box")
                (:file "src/screen-text")
                (:file "src/cursor")
@@ -101,6 +103,7 @@
                (:file "src/render-diff")
                (:file "src/render")
                (:file "src/renderer")
+               (:file "src/tick-loop")
                (:file "src/pty")
                (:file "src/pty-fd"))
   ;; Mandatory. Without it `asdf:test-system "cl-tty-kit"` reaches only the
@@ -117,7 +120,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "1.0.3"
+  :version "1.1.0"
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
@@ -140,6 +143,7 @@
                (:file "t/color-test")
                (:file "t/format-test")
                (:file "t/rect-test")
+               (:file "t/entity-test")
                (:file "t/keys-test")
                (:file "t/helpers-input-data")
                (:file "t/input-test")
@@ -151,10 +155,12 @@
                (:file "t/screen-test")
                (:file "t/screen-mutation-test")
                (:file "t/box-test")
+               (:file "t/sprite-test")
                (:file "t/render-examples-test")
                (:file "t/render-core-test")
                (:file "t/sgr-prolog-oracle-test")
                (:file "t/render-diff-test")
                (:file "t/renderer-test")
+               (:file "t/tick-loop-test")
                (:file "t/cursor-test")
                (:file "t/properties-test")))

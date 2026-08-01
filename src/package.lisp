@@ -37,6 +37,11 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:raw-mode-operation-failed-operation
    #:raw-mode-operation-failed-fd
    #:raw-mode-operation-failed-reason
+   #:terminal-size-set-failed
+   #:terminal-size-set-failed-fd
+   #:terminal-size-set-failed-columns
+   #:terminal-size-set-failed-rows
+   #:terminal-size-set-failed-reason
    #:pty-operation-failed
    #:pty-operation-failed-operation
    #:pty-operation-failed-pty
@@ -48,6 +53,7 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    ;; terminal session
    #:with-terminal-session
    #:terminal-size
+   #:set-terminal-size
    ;; ansi
    #:ansi-move-cursor
    #:ansi-clear-screen
@@ -200,6 +206,15 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:rect-intersect
    #:rect-union
    #:layout-split
+   ;; entity
+   #:entity
+   #:make-entity
+   #:entity-x
+   #:entity-y
+   #:entity-dx
+   #:entity-dy
+   #:entity-on-exit
+   #:entity-tick
    ;; screen and cells
    #:cell
    #:make-cell
@@ -230,6 +245,7 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:screen-scroll
    #:screen-blit
    #:screen-crop
+   #:sprite-blit
    #:screen-write-lines
    #:screen-write-wrapped
    #:screen-write-aligned
@@ -260,6 +276,9 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:renderer-render
    #:renderer-clear
    #:renderer-resize
+   ;; tick loop
+   #:tick-loop-run
+   #:tick-loop-run-realtime
    ;; pty
    #:pty
    #:make-pty

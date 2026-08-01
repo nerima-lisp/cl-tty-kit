@@ -25,6 +25,7 @@ error
     ├── screen-dimensions-invalid
     ├── cursor-parameter-invalid
     ├── raw-mode-operation-failed
+    ├── terminal-size-set-failed
     └── pty-operation-failed
 ```
 
@@ -134,6 +135,28 @@ Raised when switching a terminal file descriptor into or out of raw mode fails.
 Signaled via `%signal-raw-mode-operation-failed` from the SBCL raw-mode layer
 (`src/raw-mode-sbcl.lisp`) when the underlying `tcgetattr`/`tcsetattr` fails —
 `:enable` on entry, `:disable` on restore.
+
+## `terminal-size-set-failed`
+
+Raised when a terminal's window size cannot be set via `ioctl(TIOCSWINSZ)`.
+
+| Slot | Reader | Value |
+| --- | --- | --- |
+| fd | `terminal-size-set-failed-fd` | the file descriptor |
+| columns | `terminal-size-set-failed-columns` | requested column count |
+| rows | `terminal-size-set-failed-rows` | requested row count |
+| reason | `terminal-size-set-failed-reason` | `:unsupported-platform`, a string naming the failed ioctl's errno, or the condition raised at the alien-call boundary |
+
+Signaled by `set-terminal-size` (`src/terminal-size.lisp`), and reachable
+indirectly through `pty-resize`, which wraps it as the `:resize`
+`pty-operation-failed-reason`. This is the one place the two directions of the
+window-size ioctl differ: `terminal-size` returns `(values nil nil)` when it
+cannot read a size, because a caller can substitute a default, while a size that
+was never *applied* leaves the child process believing in a window it does not
+have — so the write direction signals.
+
+Invalid arguments are a separate matter and are rejected before any ioctl:
+`columns` and `rows` must be positive integers and `fd` a non-negative integer.
 
 ## `pty-operation-failed`
 

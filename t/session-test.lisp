@@ -90,6 +90,71 @@ case below.")
       (expect (cl-tty-kit::%stream-fd (make-synonym-stream '*terminal-size-synonym-target*))
               :to-be (cl-tty-kit::%stream-fd *standard-output*)))))
 
+#+sbcl
+(describe "set-terminal-size"
+  (it "round-trips through a PTY: what it sets is what TERMINAL-SIZE reads back"
+    ;; The master side of a real PTY is the only descriptor both directions of
+    ;; the ioctl agree on that resizing disturbs nothing outside the test --
+    ;; unlike fd 0, which under an interactive run is the developer's own
+    ;; terminal. The two calls swap COLUMNS and ROWS, so an argument order
+    ;; inverted anywhere along set -> ioctl -> get would read back transposed.
+    (let ((pty (make-pty :program "/bin/sh")))
+      (unwind-protect
+           (let ((fd (cl-tty-kit::%stream-fd (pty-stream pty))))
+             (expect (integerp fd))
+             (expect (multiple-value-list (set-terminal-size 93 41 fd))
+                     :to-equal '(93 41))
+             (expect (multiple-value-list (terminal-size fd)) :to-equal '(93 41))
+             (expect (multiple-value-list (set-terminal-size 41 93 fd))
+                     :to-equal '(41 93))
+             (expect (multiple-value-list (terminal-size fd)) :to-equal '(41 93)))
+        (close-pty pty))))
+  (it "rejects a non-positive size or an invalid descriptor as a programmer error"
+    ;; Rejected before any ioctl is attempted, so none of these touches fd 0.
+    (expect-non-type-error (set-terminal-size 0 24))
+    (expect-non-type-error (set-terminal-size 80 0))
+    (expect-non-type-error (set-terminal-size -1 24))
+    (expect-non-type-error (set-terminal-size 1.5 24))
+    (expect-non-type-error (set-terminal-size 80 24 -1))
+    (expect-non-type-error (set-terminal-size 80 24 "fd")))
+  (it "signals TERMINAL-SIZE-SET-FAILED with the fd and requested size for a non-terminal fd"
+    ;; A regular file is a valid descriptor that is definitively not a
+    ;; terminal, so the ioctl reaches the kernel and comes back ENOTTY.
+    (with-open-file (stream (cl-tty-kit/bootstrap:project-pathname "README.md")
+                            :direction :input)
+      (let ((fd (cl-tty-kit::%stream-fd stream)))
+        (expect (integerp fd))
+        (expect (lambda () (set-terminal-size 80 24 fd))
+                :to-throw
+                (lambda (condition)
+                  (and (typep condition 'terminal-size-set-failed)
+                       (typep condition 'tty-kit-error)
+                       (eql fd (terminal-size-set-failed-fd condition))
+                       (= 80 (terminal-size-set-failed-columns condition))
+                       (= 24 (terminal-size-set-failed-rows condition))
+                       (search "errno"
+                               (format nil "~A"
+                                       (terminal-size-set-failed-reason condition)))
+                       (search "Could not set the window size"
+                               (format nil "~A" condition)))))
+        ;; The private helper reports the same failure as a second value rather
+        ;; than signaling; SET-TERMINAL-SIZE is what turns it into a condition.
+        (multiple-value-bind (successp reason)
+            (cl-tty-kit::%set-terminal-size fd 80 24)
+          (expect successp :to-be-falsy)
+          (expect (search "errno" (format nil "~A" reason)))))))
+  (it "reports :UNSUPPORTED-PLATFORM when the host's TIOCSWINSZ constant is unknown"
+    ;; +TIOCSWINSZ+ is an ordinary special variable, so rebinding it to NIL is
+    ;; how the unrecognized-platform path is reached on a platform that is in
+    ;; fact recognized. No ioctl is issued, so fd 0 is untouched.
+    (let ((cl-tty-kit::+tiocswinsz+ nil))
+      (expect (lambda () (set-terminal-size 80 24))
+              :to-throw
+              (lambda (condition)
+                (and (typep condition 'terminal-size-set-failed)
+                     (eq :unsupported-platform
+                         (terminal-size-set-failed-reason condition))))))))
+
 (describe "with-terminal-session"
   (it "wraps the body in the default alternate-screen/hide-cursor bracket and returns its value"
     (let (body-ran)

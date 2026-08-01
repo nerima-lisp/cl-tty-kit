@@ -102,6 +102,21 @@
               :to-equal
               "Raw mode operation TCSETATTR failed for FD 12: EPERM."))))
 
+(describe "terminal-size-set-failed"
+  (it "reports the fd, the requested size, and the reason"
+    (let ((condition (make-condition 'terminal-size-set-failed
+                                     :fd 7 :columns 120 :rows 40
+                                     :reason :unsupported-platform)))
+      (expect (terminal-size-set-failed-fd condition) :to-be 7)
+      (expect (terminal-size-set-failed-columns condition) :to-be 120)
+      (expect (terminal-size-set-failed-rows condition) :to-be 40)
+      (expect (terminal-size-set-failed-reason condition) :to-be :unsupported-platform)
+      (expect (format nil "~A" condition)
+              :to-equal
+              (concatenate 'string
+                           "Could not set the window size on FD 7 to 120 columns"
+                           " by 40 rows: UNSUPPORTED-PLATFORM.")))))
+
 (describe "pty-operation-failed"
   (it "reports the operation, the PTY, and the failure reason"
     (let* ((pty (cl-tty-kit::%make-pty :process nil :stream nil))

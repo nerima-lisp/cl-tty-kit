@@ -24,6 +24,7 @@ because the full name is what you type and what you search for.
 | `unsupported-feature` | `unsupported-feature-feature` |
 | `invalid-utf8-sequence` | `invalid-utf8-sequence-position`, `invalid-utf8-sequence-octet`, `invalid-utf8-sequence-reason` |
 | `raw-mode-operation-failed` | `raw-mode-operation-failed-operation`, `raw-mode-operation-failed-fd`, `raw-mode-operation-failed-reason` |
+| `terminal-size-set-failed` | `terminal-size-set-failed-fd`, `terminal-size-set-failed-columns`, `terminal-size-set-failed-rows`, `terminal-size-set-failed-reason` |
 | `pty-operation-failed` | `pty-operation-failed-operation`, `pty-operation-failed-pty`, `pty-operation-failed-reason` |
 | `screen-index-out-of-bounds` | `screen-index-out-of-bounds-screen`, `screen-index-out-of-bounds-x`, `screen-index-out-of-bounds-y`, `screen-index-out-of-bounds-width`, `screen-index-out-of-bounds-height` |
 | `screen-dimensions-invalid` | `screen-dimensions-invalid-width`, `screen-dimensions-invalid-height` |
@@ -39,10 +40,10 @@ SBCL-specific terminal mode control. See
 
 ## Terminal session
 
-Lifecycle helper and runtime size query. See
+Lifecycle helper, runtime size query, and the matching size update. See
 [Terminal Session and Raw Mode](../guide/terminal-session.md).
 
-`with-terminal-session`, `terminal-size`.
+`with-terminal-session`, `terminal-size`, `set-terminal-size`.
 
 ## ANSI helpers
 
@@ -122,6 +123,14 @@ Layout geometry and the constraint-based splitter. See
 | Struct / accessors | `rect`, `make-rect`, `rect-x`, `rect-y`, `rect-width`, `rect-height`, `rect-right`, `rect-bottom` |
 | Operations | `rect-inset`, `rect-split-horizontal`, `rect-split-vertical`, `rect-contains-p`, `rect-empty-p`, `rect-area`, `rect-intersect`, `rect-union`, `layout-split` |
 
+## Entity
+
+A minimal position/velocity struct with an off-bounds lifecycle callback. See
+[Animation](../guide/animation.md).
+
+`entity`, `make-entity`, `entity-x`, `entity-y`, `entity-dx`, `entity-dy`,
+`entity-on-exit`, `entity-tick`.
+
 ## Screen and cells
 
 The pure screen/cell model, style construction, and text placement. See
@@ -132,7 +141,7 @@ The pure screen/cell model, style construction, and text placement. See
 | Cells / styles | `cell`, `make-cell`, `cell-char`, `cell-style`, `make-style`, `style-fg`, `style-bg`, `style-underline-color`, `style-ansi`, `style-merge`, `named-color`, `copy-cell`, `cell-blank-p` |
 | Screen struct | `screen`, `make-screen`, `screen-width`, `screen-height`, `screen-cell`, `screen-resize`, `screen-clear` |
 | Writing / filling | `screen-put-cell`, `screen-fill-rect`, `screen-fill`, `screen-write-string`, `screen-write-lines`, `screen-write-wrapped`, `screen-write-aligned` |
-| Region ops | `screen-copy`, `screen-blit`, `screen-crop`, `screen-scroll` |
+| Region ops | `screen-copy`, `screen-blit`, `screen-crop`, `screen-scroll`, `sprite-blit` |
 | Inspection | `screen-row-string`, `screen-to-string` |
 
 ## Box drawing
@@ -164,6 +173,13 @@ Wraps the diff-render loop with an internal previous-frame buffer. See
 
 `renderer`, `make-renderer`, `renderer-screen`, `renderer-width`,
 `renderer-height`, `renderer-render`, `renderer-clear`, `renderer-resize`.
+
+## Tick loop
+
+Bounded and real-time drivers sharing one per-tick step. See
+[Animation](../guide/animation.md).
+
+`tick-loop-run`, `tick-loop-run-realtime`.
 
 ## PTY
 

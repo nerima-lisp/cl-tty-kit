@@ -445,6 +445,8 @@ change.
   that carve the regions you draw into.
 - [Widgets](widgets.md) — progress bars, sparklines, tables, and images to fill
   those regions.
+- [Animation](animation.md) — `sprite-blit`'s transparent compositing on top of
+  `screen-blit`, plus the tick-loop driver and `entity` helper.
 - [Text Layout and Unicode Width](text-layout.md) — `char-width`, wrapping, and
   truncation behind `screen-write-string`.
 - [Color](color.md) — building the RGB and indexed colors that feed `style-fg`

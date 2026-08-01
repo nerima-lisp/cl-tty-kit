@@ -1,0 +1,65 @@
+(in-package #:cl-tty-kit/test)
+
+(describe "sprite-blit"
+  (it "composites a rectangular sprite at an offset, leaving surrounding cells untouched"
+    (let ((screen (make-screen 6 4 :initial-cell #\.)))
+      (expect (sprite-blit screen (format nil "AB~%CD") 1 1) :to-be screen)
+      (expect (screen-to-string screen)
+              :to-equal (format nil "......~%.AB...~%.CD...~%......"))))
+  (it "treats the default transparent marker (space) as pass-through"
+    (let ((screen (make-screen 5 1 :initial-cell #\.)))
+      (sprite-blit screen " X " 0 0)
+      (expect (screen-row-string screen 0) :to-equal ".X...")))
+  (it "treats a caller-chosen :transparent character as pass-through"
+    (let ((screen (make-screen 5 1 :initial-cell #\.)))
+      (sprite-blit screen "-X-" 0 0 :transparent #\-)
+      (expect (screen-row-string screen 0) :to-equal ".X...")))
+  (it "does not treat a real space as transparent when :transparent overrides it"
+    (let ((screen (make-screen 3 1 :initial-cell #\.)))
+      (sprite-blit screen " X " 0 0 :transparent #\-)
+      (expect (screen-row-string screen 0) :to-equal " X ")))
+  (it "treats missing columns on a ragged (shorter) line as transparent"
+    (let ((screen (make-screen 4 2 :initial-cell #\.)))
+      (sprite-blit screen (format nil "AB~%C") 0 0)
+      (expect (screen-to-string screen) :to-equal (format nil "AB..~%C..."))))
+  (it "applies :style to non-transparent cells only"
+    (let ((screen (make-screen 3 1)))
+      (sprite-blit screen "X Y" 0 0 :style '(:bold))
+      (expect-cell (screen 0 0) #\X '(:bold))
+      (expect-cell (screen 1 0) #\Space)
+      (expect-cell (screen 2 0) #\Y '(:bold))))
+  (it "is a no-op for an empty string"
+    (let ((screen (make-screen 3 1 :initial-cell #\.)))
+      (sprite-blit screen "" 0 0)
+      (expect (screen-row-string screen 0) :to-equal "...")))
+  (it "is a no-op for text consisting only of blank lines"
+    (let ((screen (make-screen 3 2 :initial-cell #\.)))
+      (sprite-blit screen (format nil "~%") 0 0)
+      (expect (screen-to-string screen) :to-equal (format nil "...~%..."))))
+  (it "clips the left edge for a negative x"
+    (let ((screen (make-screen 3 1 :initial-cell #\.)))
+      (sprite-blit screen "AB" -1 0)
+      (expect (screen-row-string screen 0) :to-equal "B..")))
+  (it "clips the top edge for a negative y"
+    (let ((screen (make-screen 1 3 :initial-cell #\.)))
+      (sprite-blit screen (format nil "A~%B") 0 -1)
+      (expect (screen-to-string screen) :to-equal (format nil "B~%.~%."))))
+  (it "clips the right edge when the sprite runs past the screen width"
+    (let ((screen (make-screen 3 1 :initial-cell #\.)))
+      (sprite-blit screen "ABCDE" 1 0)
+      (expect (screen-row-string screen 0) :to-equal ".AB")))
+  (it "clips the bottom edge when the sprite runs past the screen height"
+    (let ((screen (make-screen 1 3 :initial-cell #\.)))
+      (sprite-blit screen (format nil "A~%B~%C~%D") 0 1)
+      (expect (screen-to-string screen) :to-equal (format nil ".~%A~%B"))))
+  (it "is a no-op when placed entirely off-screen"
+    (let ((screen (make-screen 3 3 :initial-cell #\.)))
+      (sprite-blit screen "XY" 9 9)
+      (expect (screen-to-string screen) :to-equal (format nil "...~%...~%..."))))
+  (it "signals a non-type-error for malformed arguments"
+    (let ((screen (make-screen 3 3)))
+      (expect-non-type-error (sprite-blit :not-a-screen "x" 0 0))
+      (expect-non-type-error (sprite-blit screen :not-a-string 0 0))
+      (expect-non-type-error (sprite-blit screen "x" :bad 0))
+      (expect-non-type-error (sprite-blit screen "x" 0 :bad))
+      (expect-non-type-error (sprite-blit screen "x" 0 0 :transparent "bad")))))
