@@ -50,8 +50,13 @@
 
 (progn
   (defun source-file-covered-p (path project-prefix)
-    "Return true only for implementation files in this project."
-    (and (search project-prefix path) (search "/src/" path) (probe-file path)))
+    "Return true only for implementation files in this project.
+Excludes cl-codec-kit explicitly (in addition to the PROJECT-PREFIX check) --
+it is a real :DEPENDS-ON as of the UTF-8 delegation in src/utf8.lisp, and its
+own encodings this project's tests never call (UTF-16/32, UCS-2, ASCII,
+ISO-8859-1) should not count against this project's own coverage floor."
+    (and (search project-prefix path) (search "/src/" path) (probe-file path)
+         (not (search "cl-codec-kit" path))))
 
   (defun coverage-row-numbers (row)
   (loop with position = 0
