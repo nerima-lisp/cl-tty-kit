@@ -3,7 +3,7 @@
 `cl-tty-kit`'s embedded logic engine is
 [`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog) itself,
 not reimplemented. It is a `:cl-tty-kit/test` dependency, not a `:cl-tty-kit`
-one (see [Installation](installation.md)): the core toolkit ships hand-written
+one (see [Getting Started](../getting-started.md)): the core toolkit ships hand-written
 imperative decoders on its hot paths, and the test suite states part of that
 same classification logic as *relations* over ordinary Lisp data, using the
 engine to cross-check the two independently rather than to decide anything at
@@ -179,7 +179,7 @@ engine usage: the plain facts are the *data* (the grammar), the query is the
 - [nerima-lisp/cl-prolog](https://github.com/nerima-lisp/cl-prolog) — the
   engine's own documentation: the full Rule DSL, builtin goal vocabulary,
   querying semantics, and how to extend it with `define-foreign-predicate`
-- [API Reference](api-reference.md) — full public symbol map for the core toolkit
+- [API Reference](../reference/api.md) — full public symbol map for the core toolkit
 - [Text Layout and Unicode Width](text-layout.md) — width classification the engine can specify
 - [ANSI Helpers](ansi-helpers.md) — SGR emission that the oracle above cross-checks
 - `contrib/cl-tty-kit-cl-prolog-csi-grammar` — a DCG grammar for the ECMA-48

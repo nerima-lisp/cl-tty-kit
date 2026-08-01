@@ -16,13 +16,13 @@ org. This page covers only what is specific to this repository.
 
 - read the root `README.md` to confirm the change fits the project's scope
 - keep platform-specific behavior isolated behind the pure/OS-facing split
-  described in [Compatibility](compatibility.md)
+  described in [Compatibility](../reference/compatibility.md)
 - prefer small, composable public functions over broad abstractions
 
 ## Nix entry points
 
 Nix is the supported way to get `cl-prolog`/`cl-weave` onto
-`CL_SOURCE_REGISTRY` (see [Installation](installation.md#nix)); everything
+`CL_SOURCE_REGISTRY` (see [Getting Started](../getting-started.md#install-with-nix)); everything
 below assumes either `nix develop` or one of these wrappers.
 
 ```bash
@@ -45,7 +45,7 @@ nix run .#test
 ```
 
 Run the example smoke test as well — every file in `examples/` is loaded and
-its runner executed (see [Examples](examples.md)):
+its runner executed (see [Examples](../guide/examples.md)):
 
 ```bash
 nix run .#examples
@@ -76,7 +76,7 @@ checks, and the fresh source-registry packaging smoke in one pass. The
 canonical test package is `cl-tty-kit/test`, and the tests live in `t/`.
 
 If you want to work from a REPL, load the bootstrap first and then the core
-system, as described in [Installation](installation.md):
+system, as described in [Getting Started](../getting-started.md):
 
 ```lisp
 (load "scripts/bootstrap.lisp")
@@ -88,7 +88,7 @@ system, as described in [Installation](installation.md):
 - add regression coverage for new public behavior
 - keep tests deterministic and fast
 - make SBCL-specific behavior explicit in both code and tests
-- preserve the [`unsupported-feature`](conditions.md#unsupported-feature)
+- preserve the [`unsupported-feature`](../reference/conditions.md#unsupported-feature)
   contract for implementation-specific APIs
 - keep pure modules free from ambient I/O and timeout-free waits
 - write new tests against

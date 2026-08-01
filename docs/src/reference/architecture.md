@@ -45,12 +45,12 @@ dispatching on a `case`) stays a plain `defun`. See
 `char-width.lisp` expresses width as relations over the East Asian and
 combining-mark data tables in `char-width-data.lisp`, which keeps the tables
 reviewable as data and the policy (including the East Asian ambiguous-width
-switch) reviewable as code. See [Text Layout](text-layout.md).
+switch) reviewable as code. See [Text Layout](../guide/text-layout.md).
 
 The ANSI layer is split three ways because the sequence families have
 different shapes: `ansi.lisp` builds the core SGR and cursor strings,
 `ansi-control.lisp` the scroll/mode control sequences, and `ansi-osc.lisp`
-the OSC string-terminated ones. See [ANSI Helpers](ansi-helpers.md).
+the OSC string-terminated ones. See [ANSI Helpers](../guide/ansi-helpers.md).
 
 Rendering separates the *decision* from the *emission*:
 `render-commands.lisp` and `render-diff.lisp` decide which cells changed and
@@ -58,7 +58,7 @@ what to do about it, and `render-style.lisp` turns a normalized style into
 bytes. That is what lets `t/properties-test.lisp` assert the property that matters
 — a diff's visible result matches a full repaint, and is never longer than
 one — instead of pinning a byte-for-byte transcript. See
-[Screen and Rendering](screen-and-rendering.md).
+[Screen and Rendering](../guide/screen-and-rendering.md).
 
 `render-diff-plan.lisp` owns the reusable packed diff operation plan and
 changed-cell snapshot application, while `render-diff.lisp` owns ANSI
@@ -66,10 +66,10 @@ emission and strategy.
 
 `pty.lisp` wraps the SBCL process and stream; `pty-fd.lisp` sits alongside it
 as a byte-transparent layer over the bare master file descriptor, for callers
-running their own `select(2)` loop over many descriptors. See [PTY](pty.md).
+running their own `select(2)` loop over many descriptors. See [PTY](../guide/pty.md).
 
 ## See also
 
-- [Feature Audit](feature-audit.md) — what exists, what was deferred, and why
-- [API Reference](api-reference.md) — every exported symbol, by subsystem
-- [Quality Gates](quality-gates.md) — the file-organization policy this split follows
+- [feature audit note](https://github.com/nerima-lisp/cl-tty-kit/blob/main/docs/notes/feature-audit.md) — what exists, what was deferred, and why
+- [API Reference](api.md) — every exported symbol, by subsystem
+- [Quality Gates](../project/quality-gates.md) — the file-organization policy this split follows

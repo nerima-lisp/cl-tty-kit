@@ -6,7 +6,7 @@ reader functions) so callers can inspect *what* failed programmatically, not jus
 read a formatted message.
 
 !!! note "Design principle: signal, don't silently degrade"
-    A repository quality gate (see [Quality Gates](quality-gates.md)) requires that
+    A repository quality gate (see [Quality Gates](../project/quality-gates.md)) requires that
     *unsupported implementation paths must signal `unsupported-feature` instead
     of silently degrading*. When a runtime feature cannot be provided, the
     library raises a specific condition rather than returning a plausible-looking
@@ -154,7 +154,7 @@ stream, even when shutdown itself fails.
 
 ## See also
 
-- [API Reference](api-reference.md) — the full condition symbol list in context
-- [Terminal Session and Raw Mode](terminal-session.md) — where raw-mode errors arise
-- [PTY](pty.md) — PTY lifecycle and the failures it can raise
-- [Input Decoding](input-decoding.md) — where UTF-8 and code-point errors arise
+- [API Reference](api.md) — the full condition symbol list in context
+- [Terminal Session and Raw Mode](../guide/terminal-session.md) — where raw-mode errors arise
+- [PTY](../guide/pty.md) — PTY lifecycle and the failures it can raise
+- [Input Decoding](../guide/input-decoding.md) — where UTF-8 and code-point errors arise

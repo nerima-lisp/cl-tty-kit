@@ -14,7 +14,7 @@ boundaries.
 - event bus or general application runtime
 - broad utility helpers unrelated to TTY work
 
-See [Compatibility](compatibility.md) for the parallel, narrower deferral of
+See [Compatibility](../reference/compatibility.md) for the parallel, narrower deferral of
 multi-implementation (non-SBCL) support.
 
 ## Possible future improvements
@@ -38,7 +38,7 @@ testing seam, not a PTY-shaped runner.
 
 ## Deferred capabilities from the feature audit
 
-[Feature Audit](feature-audit.md) is the comprehensive enumeration of the
+The [feature audit note](https://github.com/nerima-lisp/cl-tty-kit/blob/main/docs/notes/feature-audit.md) is the comprehensive enumeration of the
 terminal-toolkit capability space, marking each item DONE / GAP / DEFERRED
 across three research passes (domain knowledge, a diff against
 crossterm/ratatui, notcurses, tcell/termbox2, and Python's
@@ -48,7 +48,7 @@ deferred, with rationale:
 
 - **Wide-cell skip flag** — a design alternative to the spacer-cell model
   already used for double-width glyphs, not a capability gap.
-- **Kitty graphics protocol** — `format-sixel` (see [Widgets](widgets.md))
+- **Kitty graphics protocol** — `format-sixel` (see [Widgets](../guide/widgets.md))
   already covers bitmap output on the widely supported format; a second
   image mechanism would duplicate it.
 - **Non-SBCL portability** — would require shipping the Unicode tables the

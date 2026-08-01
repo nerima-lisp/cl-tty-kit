@@ -210,4 +210,4 @@ column, while a CJK ideograph is *one* code point spanning *two* columns.
 - [Widgets](widgets.md) — aligned columns and tables built on width-aware
   padding.
 - [Color](color.md) — coloring the text you have laid out.
-- [API Reference](api-reference.md) — the full exported symbol list.
+- [API Reference](../reference/api.md) — the full exported symbol list.

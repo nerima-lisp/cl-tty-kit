@@ -9,7 +9,7 @@ you thread through `screen-draw-box`, `screen-write-*`, and `screen-fill-rect`.
 !!! note "Package"
 
     All symbols are exported from `cl-tty-kit`. See
-    [Installation](installation.md) for loading the system, and
+    [Getting Started](../getting-started.md) for loading the system, and
     [Screen and Rendering](screen-and-rendering.md) for the drawing functions
     these rects feed.
 
@@ -271,4 +271,4 @@ or `(:min 5)` reflows the whole dashboard without touching any drawing code.
   regions you lay out.
 - [Text Layout and Unicode Width](text-layout.md) — the display-width model
   behind alignment inside a rect.
-- [API Reference](api-reference.md) — the complete exported symbol list.
+- [API Reference](../reference/api.md) — the complete exported symbol list.

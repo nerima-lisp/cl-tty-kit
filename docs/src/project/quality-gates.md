@@ -10,9 +10,9 @@ must satisfy before it is treated as release-ready.
 - pure subsystems stay pure: screen state, cursor state, rendering, UTF-8,
   and input decoding must not gain ambient I/O requirements
 - implementation-specific behavior stays isolated to SBCL-only modules such
-  as raw mode and PTY handling (see [Compatibility](compatibility.md))
+  as raw mode and PTY handling (see [Compatibility](../reference/compatibility.md))
 - unsupported implementation paths must signal
-  [`unsupported-feature`](conditions.md#unsupported-feature) instead of
+  [`unsupported-feature`](../reference/conditions.md#unsupported-feature) instead of
   silently degrading
 
 ## Non-functional requirements
@@ -92,7 +92,7 @@ function instead.
 Files split by concern, not by line count. A long file whose forms serve one
 cohesive purpose (a single data table, a single parser, a single solver) is
 not a splitting candidate merely for being long — the ANSI/screen/PTY module
-boundaries throughout this site (see [API Reference](api-reference.md)) are
+boundaries throughout this site (see [API Reference](../reference/api.md)) are
 what a genuine concern boundary looks like. Coverage percentage follows the
 same principle as line count:
 files dominated by top-level data definitions (`defparameter` tables,
@@ -137,9 +137,9 @@ original take the identical source paths by construction.
 
 Before merging or releasing:
 
-- the [API Reference](api-reference.md) matches the exported symbols, which
+- the [API Reference](../reference/api.md) matches the exported symbols, which
   `t/package-readme-test.lisp` checks mechanically
-- [Examples](examples.md) lists every runnable file under `examples/`
+- [Examples](../guide/examples.md) lists every runnable file under `examples/`
 - externally visible changes are captured in the GitHub Release description
   when the release is cut — there is no `CHANGELOG.md`
 - [Development](development.md) and [Release Process](release-process.md)
@@ -168,7 +168,7 @@ structural-parse gate), `formatting` (treefmt/nixfmt), and `docs`
 
 Two jobs sit alongside it, each for work the Nix sandbox cannot do. The
 `coverage` job uploads the report as a build artifact. The `contrib` job
-exercises the opt-in integrations under `contrib/` (see [Contrib](contrib.md))
+exercises the opt-in integrations under `contrib/` (see [Contrib](../guide/contrib.md))
 and needs network access for Quicklisp; it is `continue-on-error` so that
 Quicklisp flakiness never blocks a core merge.
 

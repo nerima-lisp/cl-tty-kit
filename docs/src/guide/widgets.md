@@ -13,7 +13,7 @@ trivial to test.
 !!! note "Package"
 
     All symbols are exported from `cl-tty-kit`. See
-    [Installation](installation.md) for loading the system.
+    [Getting Started](../getting-started.md) for loading the system.
 
 ## Progress bars
 
@@ -232,4 +232,4 @@ implement the protocol.
   `truncate-string`, and `string-width`, the measurement primitives under
   `format-columns` and `format-table`.
 - [Color](color.md) — palette and RGB conversions for coloring widgets.
-- [API Reference](api-reference.md) — the complete exported symbol list.
+- [API Reference](../reference/api.md) — the complete exported symbol list.

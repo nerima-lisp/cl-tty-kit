@@ -281,4 +281,4 @@ Width](text-layout.md)) when you only need the plain text.
   measurement of styled text
 - [Terminal Session and Raw Mode](terminal-session.md) — scoping these modes over an
   app lifetime
-- [API Reference](api-reference.md) — the complete exported symbol list
+- [API Reference](../reference/api.md) — the complete exported symbol list

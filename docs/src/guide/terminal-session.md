@@ -8,7 +8,7 @@ window-size query, and the `with-terminal-session` lifecycle helper.
     Raw mode, `terminal-size`, and `with-terminal-session`'s raw-mode path are
     SBCL-specific — they use `sb-posix` for `termios` control and SBCL's `ioctl`
     wrapper. `cl-tty-kit` requires SBCL throughout, so these are available on
-    every build that loads. See [Compatibility](compatibility.md).
+    every build that loads. See [Compatibility](../reference/compatibility.md).
 
 ## Raw mode
 
@@ -53,7 +53,7 @@ restores it:
 ### Failure reporting
 
 If a `termios` operation fails, both functions signal
-[`raw-mode-operation-failed`](conditions.md) carrying the `operation`
+[`raw-mode-operation-failed`](../reference/conditions.md) carrying the `operation`
 (`:enable` or `:disable`), the `fd`, and the underlying `reason` condition — so
 a caller can report precisely what failed on which descriptor.
 
@@ -176,6 +176,6 @@ handy in tests and examples.
   `render-diff` output you emit inside a session.
 - [ANSI Helpers](ansi-helpers.md) — the individual escape builders
   `with-terminal-session` composes.
-- [Conditions](conditions.md) — `raw-mode-operation-failed` and the condition
+- [Conditions](../reference/conditions.md) — `raw-mode-operation-failed` and the condition
   hierarchy.
-- [Compatibility](compatibility.md) — the SBCL-only rationale.
+- [Compatibility](../reference/compatibility.md) — the SBCL-only rationale.

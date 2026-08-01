@@ -116,7 +116,7 @@
       # copy on disk.
       # `meta.description` is what `nix flake show` renders and what
       # `nix flake check` warns about when absent; these four apps are this
-      # project's documented entry points (README, docs/src/installation.md,
+      # project's documented entry points (README, docs/src/getting-started.md,
       # RELEASING.md), so they carry one.
       # `script` is a path relative to the repository root, so the test entry
       # point can live at the root (run-tests.lisp, per the org standard)

@@ -60,7 +60,7 @@ sets compare `equal` regardless of the order they arrived in.
 
 `decode-input` decodes a whole buffer and returns a list of events. It accepts a
 string or an octet vector; octet vectors are decoded as UTF-8, and malformed UTF-8
-signals `invalid-utf8-sequence` (see [Conditions](conditions.md)).
+signals `invalid-utf8-sequence` (see [Conditions](../reference/conditions.md)).
 
 `examples/key-decoding.lisp` decodes a buffer that exercises most of the surface at
 once:
@@ -343,5 +343,5 @@ modes a live loop needs.
   enhancements, and focus reporting
 - [Screen and Rendering](screen-and-rendering.md) — rendering state transitions
 - [Terminal Session and Raw Mode](terminal-session.md) — scoping input modes
-- [Conditions](conditions.md) — `invalid-utf8-sequence` and other signaled errors
-- [API Reference](api-reference.md) — the complete exported symbol list
+- [Conditions](../reference/conditions.md) — `invalid-utf8-sequence` and other signaled errors
+- [API Reference](../reference/api.md) — the complete exported symbol list

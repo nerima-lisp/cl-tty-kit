@@ -16,7 +16,7 @@ Two layers sit side by side:
     PTY support is part of the OS-facing, SBCL-specific layer and uses
     `sb-ext:run-program`. `cl-tty-kit` requires SBCL throughout, so `make-pty`
     and `close-pty` are available on every build that loads. See
-    [Compatibility](compatibility.md).
+    [Compatibility](../reference/compatibility.md).
 
 !!! danger "make-pty does not sanitize PROGRAM, ARGS, or ENVIRONMENT"
     `make-pty` spawns with `sb-ext:run-program :search t`, so `PROGRAM` is
@@ -122,7 +122,7 @@ descriptor.
 ## Failure reporting: pty-operation-failed
 
 All the stream operations signal a single structured condition,
-[`pty-operation-failed`](conditions.md), carrying:
+[`pty-operation-failed`](../reference/conditions.md), carrying:
 
 - `pty-operation-failed-operation` — `:spawn`, `:read`, `:write`, `:resize`,
   `:close`, or an fd-layer operation;
@@ -208,6 +208,6 @@ A hard OS error in either function is wrapped in `pty-operation-failed`.
 
 - [Terminal Session and Raw Mode](terminal-session.md) — putting your own
   terminal into raw mode before relaying bytes to a child PTY.
-- [Conditions](conditions.md) — the `pty-operation-failed` accessors.
-- [Compatibility](compatibility.md) — the SBCL-only rationale.
-- [API Reference](api-reference.md) — the full exported symbol list.
+- [Conditions](../reference/conditions.md) — the `pty-operation-failed` accessors.
+- [Compatibility](../reference/compatibility.md) — the SBCL-only rationale.
+- [API Reference](../reference/api.md) — the full exported symbol list.

@@ -4,7 +4,7 @@
 on top of the core toolkit. **Nothing here is part of the core `cl-tty-kit`
 build or CI** — `:cl-tty-kit` has no ASDF dependencies; its SBCL-only
 raw-mode implementation loads the bundled `sb-posix` contrib with `require`
-(see [Compatibility](compatibility.md)). These modules pull additional
+(see [Compatibility](../reference/compatibility.md)). These modules pull additional
 libraries from Quicklisp, or from `nerima-lisp/cl-prolog`,
 `nerima-lisp/cl-weave`, and `nerima-lisp/cl-parser-kit` via this repository's
 `flake.nix` (`nix develop` puts all three on `CL_SOURCE_REGISTRY`, the same
@@ -71,7 +71,7 @@ Quicklisp). `cl-weave`'s `it-property` generators
 decoder and the public `cl-tty-kit:decode-input` entry point
 (see [Input Decoding](input-decoding.md)) with thousands of arbitrary byte
 sequences, asserting the documented contract: malformed input always signals
-a `cl-tty-kit:tty-kit-error` condition (see [Conditions](conditions.md)) and
+a `cl-tty-kit:tty-kit-error` condition (see [Conditions](../reference/conditions.md)) and
 never an undocumented Lisp error — the realistic threat model for decoders
 that read attacker-controlled PTY bytes. It also regression-tests the DCG CSI
 grammar above.

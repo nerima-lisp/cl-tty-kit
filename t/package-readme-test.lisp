@@ -104,7 +104,7 @@ mentioned on the page?\"."
     (nreverse cells)))
 
 (defun %examples-doc-entries (examples-doc)
-  "Parse the two-column table rows out of docs/src/examples.md into an alist of
+  "Parse the two-column table rows out of docs/src/guide/examples.md into an alist of
 (\"examples/name.lisp\" . summary), sorted by path. Backticks are stripped from
 the summary so the page may format symbol names as code while still matching
 the plain summary registered in scripts/example-files.lisp."
@@ -125,16 +125,16 @@ the plain summary registered in scripts/example-files.lisp."
                                  entries)))))))))
     (sort (nreverse entries) #'string< :key #'car)))
 
-(describe "API reference coverage (docs/src/api-reference.md)"
+(describe "API reference coverage (docs/src/reference/api.md)"
   (let* ((pkg (find-package :cl-tty-kit))
          (external-symbols (%package-external-symbol-names pkg))
-         (api-spans (%inline-code-spans (%doc-string "docs/src/api-reference.md"))))
+         (api-spans (%inline-code-spans (%doc-string "docs/src/reference/api.md"))))
     (dolist (symbol-name external-symbols)
       (it (format nil "~A is documented" symbol-name)
         (expect (member symbol-name api-spans :test #'string=))))))
 
-(describe "example registration (examples/ vs scripts/example-files.lisp vs docs/src/examples.md)"
-  (let* ((examples-doc (%doc-string "docs/src/examples.md"))
+(describe "example registration (examples/ vs scripts/example-files.lisp vs docs/src/guide/examples.md)"
+  (let* ((examples-doc (%doc-string "docs/src/guide/examples.md"))
          (registered-example-files (sort (copy-list (cl-user::example-script-files)) #'string<))
          (filesystem-example-files (%filesystem-example-script-files))
          (doc-entries (%examples-doc-entries examples-doc)))
@@ -142,7 +142,7 @@ the plain summary registered in scripts/example-files.lisp."
       (expect registered-example-files :to-equal filesystem-example-files))
     ;; Counting as well as looking each one up catches the reverse drift: an
     ;; example deleted from examples/ but left behind in the table.
-    (it "docs/src/examples.md lists exactly as many examples as are registered"
+    (it "docs/src/guide/examples.md lists exactly as many examples as are registered"
       (expect (length doc-entries) :to-be (length registered-example-files)))
     (dolist (example registered-example-files)
       (let ((summary (cl-user::example-summary example)))
@@ -151,8 +151,8 @@ the plain summary registered in scripts/example-files.lisp."
             (expect entry)
             (expect (cdr entry) :to-equal summary)))))))
 
-(describe "development command docs (docs/src/development.md)"
-  (let ((development-doc (%doc-string "docs/src/development.md")))
+(describe "development command docs (docs/src/project/development.md)"
+  (let ((development-doc (%doc-string "docs/src/project/development.md")))
     (dolist (command +expected-development-commands+)
       (it (format nil "~A is documented" command)
         (expect (%snippet-contains-p development-doc command))))))
@@ -168,10 +168,10 @@ the plain summary registered in scripts/example-files.lisp."
       (dolist (fragment +expected-quick-start-fragments+)
         (expect (%snippet-contains-p (first quick-start-snippets) fragment))))))
 
-(describe "docs/src/input-decoding.md examples"
+(describe "docs/src/guide/input-decoding.md examples"
   ;; Matched against any Lisp block on the page rather than a fixed position,
   ;; so reordering or adding examples does not break the check.
-  (let ((snippets (%language-block-bodies (%doc-string "docs/src/input-decoding.md") "lisp")))
+  (let ((snippets (%language-block-bodies (%doc-string "docs/src/guide/input-decoding.md") "lisp")))
     (it "shows the streaming decoder example"
       (expect (%some-snippet-contains-all-p snippets +expected-streaming-fragments+)))
     (it "shows the bracketed-paste example"

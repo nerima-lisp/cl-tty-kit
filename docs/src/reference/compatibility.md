@@ -32,7 +32,7 @@ in isolation:
 | OS-facing, SBCL-specific | raw-mode control, the terminal-session helper, PTY support | Isolated behind `#+sbcl` and the `unsupported-feature` contract below |
 
 Broader multi-implementation support is a possible future direction — see
-[Roadmap](roadmap.md) — but is explicitly deferred today: it would require
+[Roadmap](../project/roadmap.md) — but is explicitly deferred today: it would require
 shipping the Unicode tables the library currently borrows from `sb-unicode`,
 which runs against the project's intentionally-small ethos. Today the
 supported and tested target is SBCL, on both Linux and macOS (the CI matrix
@@ -45,7 +45,7 @@ provided — for example, a platform lacking a particular ioctl — the library
 signals [`unsupported-feature`](conditions.md#unsupported-feature) instead of
 silently degrading or returning a sentinel value. This is a repository-wide
 policy, not a per-function judgment call: see
-[Quality Gates](quality-gates.md) for the full non-functional requirements
+[Quality Gates](../project/quality-gates.md) for the full non-functional requirements
 this contract is part of.
 
 !!! note "Why fail loudly instead of degrading"
@@ -68,6 +68,6 @@ this contract is part of.
   written portably; it simply isn't packaged for or tested against other
   implementations today.
 
-See also [Roadmap](roadmap.md) for the project's explicit list of what stays
-out of scope on purpose, and [PTY](pty.md) for the SBCL-specific process and
+See also [Roadmap](../project/roadmap.md) for the project's explicit list of what stays
+out of scope on purpose, and [PTY](../guide/pty.md) for the SBCL-specific process and
 file-descriptor layer.

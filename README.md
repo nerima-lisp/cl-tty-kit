@@ -26,7 +26,7 @@ The source for that site lives in [docs/src/](docs/src/).
 
 The `examples/` directory holds 21 more runnable programs, from a full repaint
 to a double-buffered render loop; see
-[Examples](https://nerima-lisp.github.io/cl-tty-kit/examples/).
+[Examples](https://nerima-lisp.github.io/cl-tty-kit/guide/examples/).
 
 ## Install
 
@@ -52,16 +52,16 @@ dependencies somewhere ASDF can see them, then:
 (cl-tty-kit/bootstrap:load-core-system)
 ```
 
-See [Installation](https://nerima-lisp.github.io/cl-tty-kit/installation/) for
+See [Getting Started](https://nerima-lisp.github.io/cl-tty-kit/getting-started/) for
 the full setup, including the non-Nix path.
 
 ## Documentation
 
-- [Quick Start](https://nerima-lisp.github.io/cl-tty-kit/quick-start/) — the smallest end-to-end render
-- [Screen and Rendering](https://nerima-lisp.github.io/cl-tty-kit/screen-and-rendering/) — the screen model and the diff renderer
-- [Input Decoding](https://nerima-lisp.github.io/cl-tty-kit/input-decoding/) — turning terminal bytes into key events
-- [API Reference](https://nerima-lisp.github.io/cl-tty-kit/api-reference/) — every exported symbol, by subsystem
-- [Compatibility](https://nerima-lisp.github.io/cl-tty-kit/compatibility/) — why SBCL-only, and the API stability guarantee
+- [Getting Started](https://nerima-lisp.github.io/cl-tty-kit/getting-started/) — install, then the smallest end-to-end render
+- [Screen and Rendering](https://nerima-lisp.github.io/cl-tty-kit/guide/screen-and-rendering/) — the screen model and the diff renderer
+- [Input Decoding](https://nerima-lisp.github.io/cl-tty-kit/guide/input-decoding/) — turning terminal bytes into key events
+- [API Reference](https://nerima-lisp.github.io/cl-tty-kit/reference/api/) — every exported symbol, by subsystem
+- [Compatibility](https://nerima-lisp.github.io/cl-tty-kit/reference/compatibility/) — why SBCL-only, and the API stability guarantee
 
 ## Development
 
@@ -76,9 +76,9 @@ Tests live in `t/` and run under
 [cl-weave](https://github.com/nerima-lisp/cl-weave), the org's test framework;
 `nix run .#test` is the supported bounded test entry point. The Lisp-level
 script remains useful for debugger sessions. See
-[Development](https://nerima-lisp.github.io/cl-tty-kit/development/) for the
+[Development](https://nerima-lisp.github.io/cl-tty-kit/project/development/) for the
 coverage, example-smoke and source-registry scripts, and
-[Quality Gates](https://nerima-lisp.github.io/cl-tty-kit/quality-gates/) for
+[Quality Gates](https://nerima-lisp.github.io/cl-tty-kit/project/quality-gates/) for
 the bar a patch has to clear.
 
 The renderer keeps public screen access checked, while its private full-frame

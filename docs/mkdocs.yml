@@ -124,43 +124,40 @@ markdown_extensions:
       permalink: true
       title: On this page
 
-# Six fixed sections, in this order, per the org DOCS_STANDARD. The order
-# tracks the reader's state: Getting Started is for someone who has not run it
-# yet, Guide for someone who has but does not know the design, Reference for
-# someone writing code and looking up one answer, Internals for someone
-# changing the library, Project for someone contributing to it. Readers drop
-# off along that path, so reference and internals sit at the back.
+# Five fixed sections, in this order, per the org DOCS_STANDARD (2026-08-01
+# revision). Content lives in guide/, reference/ and project/; only index.md,
+# getting-started.md and assets/ sit at the root of docs/src. The order tracks
+# the reader's state: Getting Started is for someone who has not run it yet,
+# Guide for someone who has but does not know the design, Reference for someone
+# writing code and looking up one answer, Project for someone contributing.
+# Readers drop off along that path, so reference sits at the back.
 nav:
-  - Home: README.md
-  - Getting Started:
-      - Installation: installation.md
-      - Quick Start: quick-start.md
+  - Home: index.md
+  - Getting Started: getting-started.md
   - Guide:
-      - Screen and Rendering: screen-and-rendering.md
-      - Layout and Rects: layout.md
-      - Widgets: widgets.md
-      - Input Decoding: input-decoding.md
-      - Mouse Input: mouse-input.md
-      - ANSI Helpers: ansi-helpers.md
-      - Color: color.md
-      - Text Layout and Unicode Width: text-layout.md
-      - Terminal Session and Raw Mode: terminal-session.md
-      - PTY: pty.md
-      - Logic Engine (Prolog): logic-engine.md
-      - Examples: examples.md
-      - Optional Integrations: contrib.md
+      - Screen and Rendering: guide/screen-and-rendering.md
+      - Layout and Rects: guide/layout.md
+      - Widgets: guide/widgets.md
+      - Input Decoding: guide/input-decoding.md
+      - Mouse Input: guide/mouse-input.md
+      - ANSI Helpers: guide/ansi-helpers.md
+      - Color: guide/color.md
+      - Text Layout and Unicode Width: guide/text-layout.md
+      - Terminal Session and Raw Mode: guide/terminal-session.md
+      - PTY: guide/pty.md
+      - Logic Engine (Prolog): guide/logic-engine.md
+      - Examples: guide/examples.md
+      - Optional Integrations: guide/contrib.md
   - Reference:
-      - API Reference: api-reference.md
-      - Conditions: conditions.md
-      - Compatibility: compatibility.md
-  - Internals:
-      - Architecture: architecture.md
-      - Feature Audit: feature-audit.md
+      - API: reference/api.md
+      - Architecture: reference/architecture.md
+      - Conditions: reference/conditions.md
+      - Compatibility: reference/compatibility.md
   - Project:
-      - Development: development.md
-      - Quality Gates: quality-gates.md
-      - Release Process: release-process.md
-      - Roadmap: roadmap.md
+      - Development: project/development.md
+      - Quality Gates: project/quality-gates.md
+      - Release Process: project/release-process.md
+      - Roadmap: project/roadmap.md
 
 # docs/notes/ is for measurements worth keeping but not worth publishing.
 # --strict fails on any page missing from the nav, so without this declaration

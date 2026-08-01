@@ -152,4 +152,4 @@ The tracking mode selects how much the terminal reports:
 - [Screen and Rendering](screen-and-rendering.md) — the 0-based coordinate system
   mouse events share
 - [Terminal Session and Raw Mode](terminal-session.md) — scoping mouse modes
-- [API Reference](api-reference.md) — the complete exported symbol list
+- [API Reference](../reference/api.md) — the complete exported symbol list

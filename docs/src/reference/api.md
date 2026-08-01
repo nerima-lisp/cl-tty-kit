@@ -8,7 +8,7 @@ and navigation; each group links to the guide page that carries the depth.
     The core toolkit is a single package, `cl-tty-kit`. The test suite's
     embedded logic engine is [`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
     itself, used directly under its own `cl-prolog` package — see
-    [Logic Engine (Prolog)](logic-engine.md).
+    [Logic Engine (Prolog)](../guide/logic-engine.md).
 
 ## Conditions
 
@@ -33,21 +33,21 @@ because the full name is what you type and what you search for.
 ## Raw mode
 
 SBCL-specific terminal mode control. See
-[Terminal Session and Raw Mode](terminal-session.md).
+[Terminal Session and Raw Mode](../guide/terminal-session.md).
 
 `enable-raw-mode`, `disable-raw-mode`, `with-raw-mode`.
 
 ## Terminal session
 
 Lifecycle helper and runtime size query. See
-[Terminal Session and Raw Mode](terminal-session.md).
+[Terminal Session and Raw Mode](../guide/terminal-session.md).
 
 `with-terminal-session`, `terminal-size`.
 
 ## ANSI helpers
 
 String builders for escape sequences — cursor motion, screen/mode control, OSC,
-and SGR text attributes. All return strings. See [ANSI Helpers](ansi-helpers.md).
+and SGR text attributes. All return strings. See [ANSI Helpers](../guide/ansi-helpers.md).
 
 | Category | Symbols |
 | --- | --- |
@@ -64,7 +64,7 @@ and SGR text attributes. All return strings. See [ANSI Helpers](ansi-helpers.md)
 ## Input decoding
 
 Terminal input to `key-event` objects, plus reverse SGR/report parsers. See
-[Input Decoding](input-decoding.md).
+[Input Decoding](../guide/input-decoding.md).
 
 | Category | Symbols |
 | --- | --- |
@@ -74,7 +74,7 @@ Terminal input to `key-event` objects, plus reverse SGR/report parsers. See
 
 ## Mouse input
 
-SGR mouse-report decoding. See [Mouse Input](mouse-input.md).
+SGR mouse-report decoding. See [Mouse Input](../guide/mouse-input.md).
 
 `mouse-event`, `make-mouse-event`, `mouse-event-button`, `mouse-event-action`,
 `mouse-event-x`, `mouse-event-y`, `mouse-event-modifiers`,
@@ -83,7 +83,7 @@ SGR mouse-report decoding. See [Mouse Input](mouse-input.md).
 ## Character width
 
 Unicode terminal column width and grapheme segmentation. See
-[Text Layout and Unicode Width](text-layout.md).
+[Text Layout and Unicode Width](../guide/text-layout.md).
 
 `char-width`, `string-width`, `string-graphemes`, `grapheme-count`,
 `grapheme-width`.
@@ -91,7 +91,7 @@ Unicode terminal column width and grapheme segmentation. See
 ## Text layout
 
 Display-width-aware truncation, padding, wrapping, and ANSI stripping. See
-[Text Layout and Unicode Width](text-layout.md).
+[Text Layout and Unicode Width](../guide/text-layout.md).
 
 `truncate-string`, `pad-string`, `wrap-string`, `expand-tabs`, `chop-string`,
 `strip-ansi`, `*east-asian-ambiguous-wide*`.
@@ -99,7 +99,7 @@ Display-width-aware truncation, padding, wrapping, and ANSI stripping. See
 ## Color utilities
 
 Parsing, conversions, and blending across hex/RGB/xterm-256/HSL/HSV. See
-[Color](color.md).
+[Color](../guide/color.md).
 
 `parse-hex-color`, `parse-color`, `color-256-to-rgb`, `rgb-to-256`,
 `rgb-to-ansi16`, `color-luminance`, `contrast-color`, `rgb-to-hsl`,
@@ -107,7 +107,7 @@ Parsing, conversions, and blending across hex/RGB/xterm-256/HSL/HSV. See
 
 ## Formatting widgets
 
-Textual widgets rendered to strings. See [Widgets](widgets.md).
+Textual widgets rendered to strings. See [Widgets](../guide/widgets.md).
 
 `format-progress-bar`, `format-columns`, `format-table`, `format-sparkline`,
 `spinner-frame`, `format-sixel`, `ansi-kitty-image`.
@@ -115,7 +115,7 @@ Textual widgets rendered to strings. See [Widgets](widgets.md).
 ## Rectangles and layout
 
 Layout geometry and the constraint-based splitter. See
-[Layout and Rects](layout.md).
+[Layout and Rects](../guide/layout.md).
 
 | Category | Symbols |
 | --- | --- |
@@ -125,7 +125,7 @@ Layout geometry and the constraint-based splitter. See
 ## Screen and cells
 
 The pure screen/cell model, style construction, and text placement. See
-[Screen and Rendering](screen-and-rendering.md).
+[Screen and Rendering](../guide/screen-and-rendering.md).
 
 | Category | Symbols |
 | --- | --- |
@@ -138,14 +138,14 @@ The pure screen/cell model, style construction, and text placement. See
 ## Box drawing
 
 Border and line drawing onto a screen. See
-[Screen and Rendering](screen-and-rendering.md).
+[Screen and Rendering](../guide/screen-and-rendering.md).
 
 `screen-draw-box`, `screen-draw-horizontal-line`, `screen-draw-vertical-line`.
 
 ## Cursor and rendering
 
 Cursor state plus screen/diff/frame ANSI emitters. See
-[Screen and Rendering](screen-and-rendering.md).
+[Screen and Rendering](../guide/screen-and-rendering.md).
 
 | Category | Symbols |
 | --- | --- |
@@ -160,7 +160,7 @@ Cursor state plus screen/diff/frame ANSI emitters. See
 ## Double-buffered renderer
 
 Wraps the diff-render loop with an internal previous-frame buffer. See
-[Screen and Rendering](screen-and-rendering.md).
+[Screen and Rendering](../guide/screen-and-rendering.md).
 
 `renderer`, `make-renderer`, `renderer-screen`, `renderer-width`,
 `renderer-height`, `renderer-render`, `renderer-clear`, `renderer-resize`.
@@ -168,7 +168,7 @@ Wraps the diff-render loop with an internal previous-frame buffer. See
 ## PTY
 
 Minimal SBCL PTY abstraction, with a byte-transparent fd-centric layer
-alongside the stream API. See [PTY](pty.md).
+alongside the stream API. See [PTY](../guide/pty.md).
 
 | Category | Symbols |
 | --- | --- |

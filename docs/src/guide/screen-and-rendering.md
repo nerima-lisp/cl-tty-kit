@@ -14,7 +14,7 @@ loop for you.
 
     Every symbol below is exported from the `cl-tty-kit` package. The examples
     assume `(use-package :cl-tty-kit)` or a package-qualified call; see
-    [Installation](installation.md) for loading the system.
+    [Getting Started](../getting-started.md) for loading the system.
 
 ## The cell and screen data model
 
@@ -67,7 +67,7 @@ Invalid dimensions (negative, non-fixnum, or a cell count past
 `array-total-size-limit`) signal `screen-dimensions-invalid` with the offending
 width and height. Out-of-bounds coordinate access signals
 `screen-index-out-of-bounds`, which carries the screen dimensions and the
-rejected coordinates. See [Conditions](conditions.md) for the full contract.
+rejected coordinates. See [Conditions](../reference/conditions.md) for the full contract.
 
 ## The style model
 
@@ -451,4 +451,4 @@ change.
   and `style-bg`.
 - [ANSI Helpers](ansi-helpers.md) — `ansi-reset-style` and the escape builders
   `style-ansi` complements.
-- [API Reference](api-reference.md) — the complete exported symbol list.
+- [API Reference](../reference/api.md) — the complete exported symbol list.

@@ -205,4 +205,4 @@ directly.
   gradients.
 - [Text Layout and Unicode Width](text-layout.md) — measuring the styled text
   you color.
-- [API Reference](api-reference.md) — the full exported symbol list.
+- [API Reference](../reference/api.md) — the full exported symbol list.

@@ -103,6 +103,6 @@ since each pulls in the shared bootstrap on its own.
 
 ## See also
 
-- [Quick Start](quick-start.md) — the smallest end-to-end render
+- [Getting Started](../getting-started.md) — the smallest end-to-end render
 - [Screen and Rendering](screen-and-rendering.md) — the model behind the render examples
-- [API Reference](api-reference.md) — every symbol the examples use
+- [API Reference](../reference/api.md) — every symbol the examples use

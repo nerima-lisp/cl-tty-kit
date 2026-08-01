@@ -6,7 +6,7 @@
 ;;; See PACKAGE_STANDARD.md "asd の書き方".
 (in-package #:asdf-user)
 
-;; nerima-lisp/cl-prolog and nerima-lisp/cl-weave (see docs/src/logic-engine.md
+;; nerima-lisp/cl-prolog and nerima-lisp/cl-weave (see docs/src/guide/logic-engine.md
 ;; and t/sgr-prolog-oracle-test.lisp) are both used only by :CL-TTY-KIT/TEST below --
 ;; cl-prolog as a differential-testing oracle cross-checking the hand-written
 ;; SGR/CSI decoders, cl-weave as the test framework -- never by :CL-TTY-KIT

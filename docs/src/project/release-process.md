@@ -16,15 +16,15 @@ The project uses semantic versioning:
 
 From 1.0.0 onward, the *stable surface* is exactly the set of symbols exported
 from the `cl-tty-kit` package. That set is listed in the
-[API Reference](api-reference.md) and asserted against the live package by
+[API Reference](../reference/api.md) and asserted against the live package by
 `t/package-introspection-test.lisp`, so the documented list and the code cannot
 drift apart silently. Alongside the symbol names themselves, the contract
 covers the shape of decoded input events (a `key-event`'s type, code, and
-modifiers — see [Input Decoding](input-decoding.md)) and the condition
-hierarchy rooted at `tty-kit-error` (see [Conditions](conditions.md)).
+modifiers — see [Input Decoding](../guide/input-decoding.md)) and the condition
+hierarchy rooted at `tty-kit-error` (see [Conditions](../reference/conditions.md)).
 
 Outside the stable surface, and freely changeable in a minor or patch release:
-`%`-prefixed internals, the opt-in integrations under [Contrib](contrib.md),
+`%`-prefixed internals, the opt-in integrations under [Contrib](../guide/contrib.md),
 this repository's build and CI plumbing (including `flake.nix`'s inputs and
 outputs), and the exact byte sequence `render-diff` emits — that one is bounded
 only by the property `t/properties-test.lisp` asserts, namely that its visible
@@ -68,14 +68,14 @@ Before tagging a release:
    this package have to change their own code" — see "Release notes" below.
    The text is pasted in after the release job goes green.
 5. Bump `:version` in `cl-tty-kit.asd` to match the release being cut.
-6. Confirm that the [API Reference](api-reference.md) still matches the
-   exported symbols and that [Examples](examples.md) still lists every file
+6. Confirm that the [API Reference](../reference/api.md) still matches the
+   exported symbols and that [Examples](../guide/examples.md) still lists every file
    under `examples/` — `t/package-readme-test.lisp` checks both mechanically, but
    review them by hand too.
 7. Smoke-test the examples on a clean SBCL environment if possible.
 8. If `flake.lock` moved (the `cl-prolog`/`cl-weave`/`paredit-cli`/`nixpkgs`
    inputs), confirm `nix flake check` still passes against the new pins before
-   tagging — see [Contrib](contrib.md). `--all-systems` is not used: `systems`
+   tagging — see [Contrib](../guide/contrib.md). `--all-systems` is not used: `systems`
    is `[ "x86_64-linux" ]` alone, so there is no second platform for it to
    reach.
 
@@ -115,7 +115,7 @@ Release notes should call out:
 
 ## Contract updates
 
-When a public contract changes, update the [API Reference](api-reference.md)
+When a public contract changes, update the [API Reference](../reference/api.md)
 and the test suite in the same patch so the new surface is explicit and
 executable. The user-visible half of the change is written up in the next
 release's notes.

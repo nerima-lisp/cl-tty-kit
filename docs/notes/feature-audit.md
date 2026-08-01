@@ -4,8 +4,9 @@ This page is the **enumeration ("洗い出し") phase**: a systematic sweep of t
 capability space of a terminal toolkit, cross-referenced against the
 established libraries in the field (notcurses, crossterm, tcell/termbox,
 blessed, Python `rich`/`prompt_toolkit`, ncurses), with each capability
-marked against `cl-tty-kit`'s actual public API. This page is the
-canonical copy; the former `docs/FEATURE-AUDIT.md` duplicate is gone.
+marked against `cl-tty-kit`'s actual public API. It is a maintainer
+record kept under `docs/notes/`, not a published page: the org DOCS_STANDARD
+keeps audit records out of `docs/src/`.
 
 Status legend:
 
@@ -13,9 +14,9 @@ Status legend:
 - **GAP** — a reasonable, in-scope capability that was missing; addressed in
   the "wave 5" pass unless noted.
 - **DEFERRED** — intentionally out of scope for now, with a rationale. These
-  are also recorded in [Roadmap](roadmap.md).
+  are also recorded in [Roadmap](../src/project/roadmap.md).
 
-The guiding constraint (see [Roadmap](roadmap.md)) is *terminal primitives,
+The guiding constraint (see [Roadmap](../src/project/roadmap.md)) is *terminal primitives,
 SBCL-only, small and testable* — not an application framework.
 "Comprehensive" is measured against that boundary, not against full terminal
 emulation.
@@ -26,20 +27,20 @@ emulation.
 
 | Capability | Status | Notes |
 |---|---|---|
-| Raw mode (enter/leave, nesting) | DONE | `enable-raw-mode`, `disable-raw-mode`, `with-raw-mode` — see [Terminal Session](terminal-session.md) |
+| Raw mode (enter/leave, nesting) | DONE | `enable-raw-mode`, `disable-raw-mode`, `with-raw-mode` — see [Terminal Session](../src/guide/terminal-session.md) |
 | Alternate screen buffer | DONE | `ansi-enter-alternate-screen`, `ansi-exit-alternate-screen` |
 | Terminal session lifecycle | DONE | `with-terminal-session` |
 | Cursor show/hide | DONE | `ansi-hide-cursor`, `ansi-show-cursor` |
-| Bracketed paste mode | DONE | enable/disable + streaming collection — see [Input Decoding](input-decoding.md) |
+| Bracketed paste mode | DONE | enable/disable + streaming collection — see [Input Decoding](../src/guide/input-decoding.md) |
 | Focus reporting | DONE | enable/disable + `:focus-in`/`:focus-out` decode |
-| Mouse tracking modes | DONE | `ansi-enable-mouse`/`-disable-mouse` (:normal/:button/:any + SGR) — see [Mouse Input](mouse-input.md) |
+| Mouse tracking modes | DONE | `ansi-enable-mouse`/`-disable-mouse` (:normal/:button/:any + SGR) — see [Mouse Input](../src/guide/mouse-input.md) |
 | Kitty keyboard enhancement | DONE | `ansi-set/push/pop-keyboard-enhancements` |
 | Cursor position query | DONE | `ansi-request-cursor-position` + `decode-cursor-position-report` |
 | Terminal bell | GAP → DONE | `ansi-bell` |
 | Synchronized output (DEC 2026) | GAP → DONE | `ansi-begin-synchronized-update`/`-end-synchronized-update` (flicker-free repaints) |
 | Terminal soft reset | GAP → DONE | `ansi-reset-terminal` (RIS) |
 | Runtime terminal size | GAP → DONE | `terminal-size` (ioctl TIOCGWINSZ; returns NIL off a tty) |
-| PTY window-size propagation | DONE (third pass) | `pty-resize` — see [PTY](pty.md) |
+| PTY window-size propagation | DONE (third pass) | `pty-resize` — see [PTY](../src/guide/pty.md) |
 
 ## B. ANSI escape building
 
@@ -56,7 +57,7 @@ emulation.
 | SGR reset | DONE | `ansi-reset-style` |
 | Default fg/bg (SGR 39/49) | GAP → DONE | `ansi-default-foreground`, `ansi-default-background` |
 | OSC 8 hyperlinks | DONE | `ansi-hyperlink` |
-| 256-color / truecolor SGR | DONE | via the style model + `style-ansi` — see [ANSI Helpers](ansi-helpers.md) |
+| 256-color / truecolor SGR | DONE | via the style model + `style-ansi` — see [ANSI Helpers](../src/guide/ansi-helpers.md) |
 
 ## C. Input decoding
 
@@ -73,7 +74,7 @@ emulation.
 | Human-readable key labels | DONE | `key-event->string` |
 | Device attributes (DA) response decode | DONE (third pass) | `ansi-request-device-attributes` + `decode-device-attributes` |
 
-See [Input Decoding](input-decoding.md) and [Mouse Input](mouse-input.md) for
+See [Input Decoding](../src/guide/input-decoding.md) and [Mouse Input](../src/guide/mouse-input.md) for
 the full API.
 
 ## D. Unicode and text measurement
@@ -87,7 +88,7 @@ the full API.
 | Word wrapping (+ hard split) | DONE | `wrap-string` |
 | Grapheme-cluster segmentation | DONE (fourth pass) | `string-graphemes`, `grapheme-count`, `grapheme-width` via `sb-unicode:graphemes` |
 
-See [Text Layout](text-layout.md) for the full API.
+See [Text Layout](../src/guide/text-layout.md) for the full API.
 
 ## E. Screen / cell model
 
@@ -115,7 +116,7 @@ See [Text Layout](text-layout.md) for the full API.
 | Double-buffered render loop | DONE | `renderer` (`renderer-render` emits only changes + snapshots) |
 | Synchronized-update wrapping | DONE (B) | `ansi-begin/end-synchronized-update` can bracket a `renderer-render` |
 
-See [Screen and Rendering](screen-and-rendering.md) for the full API.
+See [Screen and Rendering](../src/guide/screen-and-rendering.md) for the full API.
 
 ## G. Color
 
@@ -130,7 +131,7 @@ See [Screen and Rendering](screen-and-rendering.md) for the full API.
 | HSL / HSV round-tripping | DONE (second pass) | `rgb-to-hsl`/`hsl-to-rgb`, `rgb-to-hsv`/`hsv-to-rgb` |
 | Unified color parsing | DONE (second pass) | `parse-color` (hex / `rgb(...)` / name), `contrast-color` |
 
-See [Color](color.md) for the full API.
+See [Color](../src/guide/color.md) for the full API.
 
 ## H. Layout geometry
 
@@ -145,7 +146,7 @@ See [Color](color.md) for the full API.
 | Constraint-based layout split | DONE (fourth pass) | `layout-split` (ratatui-style `:length`/`:percentage`/`:ratio`/`:min`/`:fill`) |
 | Full flex/grid constraint solver (Cassowary) | DEFERRED | application-framework territory; `layout-split`/`rect-inset` cover panel layout |
 
-See [Layout](layout.md) for the full API.
+See [Layout](../src/guide/layout.md) for the full API.
 
 ## I. Widgets and formatting
 
@@ -160,7 +161,7 @@ See [Layout](layout.md) for the full API.
 | Spinner frames | GAP → DONE | `spinner-frame` |
 | Bitmap graphics (sixel) | DONE (fifth pass) | `format-sixel` |
 
-See [Widgets](widgets.md) for the full API.
+See [Widgets](../src/guide/widgets.md) for the full API.
 
 ## J. PTY / process
 
@@ -171,7 +172,7 @@ See [Widgets](widgets.md) for the full API.
 | Window-size propagation | DONE (third pass) | `pty-resize` |
 | Fd-centric byte-transparent I/O (multiplexer use) | DONE | `pty-fd`, `pty-pid`, `fd-read-octets`, `fd-write-octets` |
 
-See [PTY](pty.md) for the full API.
+See [PTY](../src/guide/pty.md) for the full API.
 
 ## K. Embedded logic engine
 
@@ -179,7 +180,7 @@ See [PTY](pty.md) for the full API.
 |---|---|---|
 | Unification + CPS resolution + clause DB | DONE | `nerima-lisp/cl-prolog`, a test-suite dependency (differential-testing oracle) |
 
-See [Logic Engine](logic-engine.md) for the full API.
+See [Logic Engine](../src/guide/logic-engine.md) for the full API.
 
 ---
 
@@ -308,13 +309,13 @@ a decodable capability left on the table:
 - **Window manipulation (XTWINOPS `CSI Ps … t`: resize, move, minimize,
   raise/lower, report position/size)** — considered (crossterm exposes a
   `SetSize`). Left out because it is *window-manager* behavior, which
-  [Roadmap](roadmap.md) defers on purpose; the size *query* it overlaps with
+  [Roadmap](../src/project/roadmap.md) defers on purpose; the size *query* it overlaps with
   is already served by `terminal-size` (ioctl). Providing the in-terminal
   rendering escapes is in scope; manipulating the terminal window is not.
 - **Non-SBCL portability** — would require shipping Unicode
   category/width/grapheme tables the library currently borrows from
   `sb-unicode`, against the intentionally-small ethos. Recorded as a
-  standing [Roadmap](roadmap.md) item; see also [Compatibility](compatibility.md).
+  standing [Roadmap](../src/project/roadmap.md) item; see also [Compatibility](../src/reference/compatibility.md).
 
 Everything marked **GAP → DONE**, and every item under the second- through
 fifth-pass lists, was implemented after enumeration and is covered by tests.
