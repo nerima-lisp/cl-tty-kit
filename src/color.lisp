@@ -17,6 +17,17 @@
 (defparameter +xterm-cube-levels+ #(0 95 135 175 215 255)
   "The six per-channel intensity levels of the 6x6x6 color cube (indices
 16-231).")
+(defparameter +nearest-cube-level-indices+
+  (let ((indices (make-array 256 :element-type (quote (unsigned-byte 8)))))
+    (dotimes (value 256 indices)
+      (let ((best 0)
+            (best-distance nil))
+        (dotimes (index (length +xterm-cube-levels+))
+          (let ((distance (abs (- value (aref +xterm-cube-levels+ index)))))
+            (when (or (null best-distance) (< distance best-distance))
+              (setf best-distance distance
+                    best index))))
+        (setf (aref indices value) best)))))
 
 (defmacro %hex-nibble (char)
   `(let* ((char ,char)
@@ -60,42 +71,47 @@ grayscale ramp. An out-of-range INDEX signals an error."
        (values gray gray gray)))))
 
 (defmacro %nearest-cube-level-index (value)
-  `(let ((value ,value)
-         (best 0)
-         (best-distance nil))
-     (dotimes (index (length +xterm-cube-levels+) best)
-       (let ((distance (abs (- value (aref +xterm-cube-levels+ index)))))
-         (when (or (null best-distance) (< distance best-distance))
-           (setf best-distance distance best index))))))
+  `(aref +nearest-cube-level-indices+ ,value))
 
 (defmacro %rgb-distance (r1 g1 b1 r2 g2 b2)
-  `(let ((r1 ,r1) (g1 ,g1) (b1 ,b1) (r2 ,r2) (g2 ,g2) (b2 ,b2))
-     (+ (expt (- r1 r2) 2) (expt (- g1 g2) 2) (expt (- b1 b2) 2))))
+  `(let* ((r-delta (- ,r1 ,r2))
+          (g-delta (- ,g1 ,g2))
+          (b-delta (- ,b1 ,b2)))
+     (+ (* r-delta r-delta)
+        (* g-delta g-delta)
+        (* b-delta b-delta))))
 
 (defmacro %assert-rgb-channels (r g b)
   `(let ((r ,r) (g ,g) (b ,b))
-     (dolist (channel (list r g b))
-       (%assert (typep channel '(integer 0 255))
-                "RGB channel ~S must be an integer in [0, 255]." channel))))
+     (%assert (typep r '(integer 0 255))
+              "RGB channel ~S must be an integer in [0, 255]." r)
+     (%assert (typep g '(integer 0 255))
+              "RGB channel ~S must be an integer in [0, 255]." g)
+     (%assert (typep b '(integer 0 255))
+              "RGB channel ~S must be an integer in [0, 255]." b)))
 
+(defun %rgb-to-256-unchecked (r g b)
+  (let* ((red-index (%nearest-cube-level-index r))
+         (green-index (%nearest-cube-level-index g))
+         (blue-index (%nearest-cube-level-index b))
+         (cube-index (+ 16 (* 36 red-index) (* 6 green-index) blue-index))
+         (gray-step (clamp (round (- (+ r g b) 24) 30) 0 23))
+         (gray-value (+ 8 (* 10 gray-step)))
+         (gray-index (+ 232 gray-step))
+         (cube-red (aref +xterm-cube-levels+ red-index))
+         (cube-green (aref +xterm-cube-levels+ green-index))
+         (cube-blue (aref +xterm-cube-levels+ blue-index)))
+    (if (<= (%rgb-distance r g b cube-red cube-green cube-blue)
+            (%rgb-distance r g b gray-value gray-value gray-value))
+        cube-index
+        gray-index)))
 (defun rgb-to-256 (r g b)
   "Return the xterm 256-color palette index closest to the RGB triple R G B.
 Both the 6x6x6 cube and the grayscale ramp are considered and the nearer match
 (by squared RGB distance) wins, so near-gray inputs map to the smoother gray
 ramp. Each channel must be an integer in [0, 255]."
   (%assert-rgb-channels r g b)
-  (let* ((cube-index (+ 16
-                        (* 36 (%nearest-cube-level-index r))
-                        (* 6 (%nearest-cube-level-index g))
-                        (%nearest-cube-level-index b)))
-         (gray-step (clamp (round (- (/ (+ r g b) 3) 8) 10) 0 23))
-         (gray-value (+ 8 (* 10 gray-step)))
-         (gray-index (+ 232 gray-step)))
-    (multiple-value-bind (cr cg cb) (color-256-to-rgb cube-index)
-      (if (<= (%rgb-distance r g b cr cg cb)
-              (%rgb-distance r g b gray-value gray-value gray-value))
-          cube-index
-          gray-index))))
+  (%rgb-to-256-unchecked r g b))
 
 (defun rgb-to-ansi16 (r g b)
   "Return the 0-15 system-palette index closest to the RGB triple R G B.

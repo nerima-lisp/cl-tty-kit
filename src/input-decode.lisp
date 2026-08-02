@@ -66,21 +66,23 @@ it signals a TTY-KIT-ERROR."
 Returns the decoded string. When EOF is true a truncated tail is not held and
 its decode signals INVALID-UTF8-SEQUENCE instead."
   `(let ((decoder ,decoder) (octets ,octets) (eof ,eof))
-     (let ((combined
-           (if (plusp (length (input-decoder-pending-octets decoder))) (let ((size (+ (length (input-decoder-pending-octets decoder)) (length octets))))
-               (%assert-decoder-buffer-size decoder size)
-               (concatenate
-                 '(vector (unsigned-byte 8))
-                 (input-decoder-pending-octets decoder)
-                 octets))
-             (if (subtypep (array-element-type octets) '(unsigned-byte 8)) octets
-               (coerce octets '(vector (unsigned-byte 8)))))))
-       (if eof (progn
-           (setf (input-decoder-pending-octets decoder) #())
-           (%utf8-octets-to-string combined))
-         (multiple-value-bind (string leftover) (%utf8-decode-prefix combined)
-           (setf (input-decoder-pending-octets decoder) leftover)
-           string)))))
+     (if (and (not eof) (zerop (length octets)))
+         ""
+       (let ((combined
+             (if (plusp (length (input-decoder-pending-octets decoder))) (let ((size (+ (length (input-decoder-pending-octets decoder)) (length octets))))
+                 (%assert-decoder-buffer-size decoder size)
+                 (concatenate
+                   '(vector (unsigned-byte 8))
+                   (input-decoder-pending-octets decoder)
+                   octets))
+               (if (subtypep (array-element-type octets) '(unsigned-byte 8)) octets
+                 (coerce octets '(vector (unsigned-byte 8)))))))
+         (if eof (progn
+             (setf (input-decoder-pending-octets decoder) #())
+             (%utf8-octets-to-string combined))
+           (multiple-value-bind (string leftover) (%utf8-decode-prefix combined)
+             (setf (input-decoder-pending-octets decoder) leftover)
+             string))))))
 
 (defmacro %decoder-decode-chunk-string (decoder input eof)
   "Reduce a raw INPUT chunk to a decoded string, updating octet buffering."
@@ -104,19 +106,21 @@ that INPUT is the final chunk, forcing any buffered tail through the fallback
 rules."
   (with-input-decoder-state
     (decoder)
-    (let* ((decoded (%decoder-decode-chunk-string decoder input eof))
-           (full
-          (if (plusp (length pending-string)) (progn
-              (%assert-decoder-buffer-size
-                decoder
-                (+ (length pending-string) (length decoded)))
-              (concatenate 'string pending-string decoded))
-            decoded)))
-      (setf pending-string "")
-      (multiple-value-bind (events pending) (%decoder-collect-events decoder full eof)
-        (setf pending-string (or pending ""))
-        (%check-decoder-buffer decoder)
-        events))))
+    (let ((decoded (%decoder-decode-chunk-string decoder input eof)))
+      (if (and (not eof) (zerop (length decoded)))
+          nil
+        (let ((full
+               (if (plusp (length pending-string)) (progn
+                   (%assert-decoder-buffer-size
+                     decoder
+                     (+ (length pending-string) (length decoded)))
+                   (concatenate 'string pending-string decoded))
+                 decoded)))
+          (setf pending-string "")
+          (multiple-value-bind (events pending) (%decoder-collect-events decoder full eof)
+            (setf pending-string (or pending ""))
+            (%check-decoder-buffer decoder)
+            events))))))
 
 (defun flush-input-decoder (decoder)
   "Force DECODER's buffered tail through the one-shot fallback rules.

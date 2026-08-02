@@ -95,9 +95,9 @@ signals. STYLE, when non-NIL, applies to every written cell."
                                (setf normalized-style (%coerce-cell-style style)
                                      style-normalized-p t))
                              (%screen-write-string-normalized
-                              screen x row line 0 end normalized-style))
+                              screen x row line 0 end normalized-style nil))
                            (%screen-write-string-normalized
-                            screen x row line 0 end nil)))))))
+                            screen x row line 0 end nil nil)))))))
   screen))
 
 (defun screen-write-wrapped (screen x y width text &key style)
@@ -137,9 +137,9 @@ preserved, as with SCREEN-WRITE-LINES."
                               (setf normalized-style (%coerce-cell-style style)
                                     style-normalized-p t))
                             (%screen-write-string-normalized
-                             screen x row line 0 end normalized-style))
+                             screen x row line 0 end normalized-style nil))
                           (%screen-write-string-normalized
-                           screen x row line 0 end nil)))
+                           screen x row line 0 end nil nil)))
                     (incf visible-count))))
                (incf row)
                (< row screen-height))))

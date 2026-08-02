@@ -22,17 +22,6 @@
 ;;; reverse its unconditional cell copy for the transparent cells.
 ;;; --------------------------------------------------------------------------
 
-(defmacro %sprite-lines (text)
-  "Split TEXT on #\\Newline into a list of lines."
-  `(let ((text ,text))
-     (loop with start = 0
-           with lines = '()
-           for newline-position = (position #\Newline text :start start)
-           do (push (subseq text start (or newline-position (length text))) lines)
-              (if newline-position
-                  (setf start (1+ newline-position))
-                  (return (nreverse lines))))))
-
 (define-simple-assert %assert-sprite-text (text)
   (stringp text)
   "Sprite TEXT ~S must be a string." text)
@@ -74,22 +63,43 @@ lines) is a no-op."
   (%assert-screen-offset :x x)
   (%assert-screen-offset :y y)
   (%assert-sprite-transparent transparent)
-  (let* ((lines (coerce (%sprite-lines text) 'vector))
-         (height (length lines))
-         (width (loop for line across lines maximize (length line))))
-    (when (and (plusp width) (plusp height))
-      (multiple-value-bind (column-start column-end row-start row-end)
-          (%sprite-clip-bounds x y width height screen)
-        (loop for row from row-start below row-end
-              for line = (aref lines row)
-              for line-length = (length line)
-              do (loop for column from column-start below column-end
-                       when (< column line-length)
-                         do (let ((char (char line column))
-                                  (dest-x (+ x column))
-                                  (dest-y (+ y row)))
-                              (unless (char= char transparent)
-                                (if style
-                                    (screen-put-cell screen dest-x dest-y char :style style)
-                                    (screen-put-cell screen dest-x dest-y char)))))))))
+  (let* ((text-length (length text))
+         (screen-width (screen-width screen))
+         (screen-height (screen-height screen))
+         (cells (screen-cells screen))
+         (normalized-style nil)
+         (style-ready-p (null style))
+         (line-start 0)
+         (row 0)
+         (first-changed-row nil)
+         (last-changed-row nil))
+    (loop
+      for newline-position = (position #\Newline text :start line-start)
+      for line-end = (or newline-position text-length)
+      for destination-y = (+ y row)
+      when (and (<= 0 destination-y) (< destination-y screen-height))
+        do (loop with column-start = (max 0 (- x))
+                 with column-end = (min (- line-end line-start)
+                                        (- screen-width x))
+                 for column from column-start below column-end
+                 for char = (char text (+ line-start column))
+                 unless (char= char transparent)
+                   do (unless style-ready-p
+                        (setf normalized-style (%normalize-cell-style style)
+                              style-ready-p t))
+                      (setf (aref cells (+ (* destination-y screen-width)
+                                           x column))
+                            (%make-cell :char char
+                                        :raw-style (and normalized-style
+                                                        (copy-tree normalized-style))))
+                      (unless first-changed-row
+                        (setf first-changed-row destination-y))
+                      (setf last-changed-row destination-y))
+      if newline-position
+        do (setf line-start (1+ newline-position))
+           (incf row)
+      else
+        do (return))
+    (when first-changed-row
+      (%screen-touch screen first-changed-row (1+ last-changed-row))))
   screen)

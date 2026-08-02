@@ -86,6 +86,7 @@ checks both of those slots, never just that some error was signaled."
       (expect (decode-input-chunk decoder "") :to-be-falsy)
       (expect (decode-input-chunk decoder #()) :to-be-falsy)
       (expect (flush-input-decoder decoder) :to-be-falsy)))
+  (it "preserves pending escape storage across non-final empty chunks" (let ((decoder (make-input-decoder))) (expect (decode-input-chunk decoder (string #\Esc)) :to-be-falsy) (let ((pending (cl-tty-kit::input-decoder-pending-string decoder))) (expect (decode-input-chunk decoder "") :to-be-falsy) (expect (cl-tty-kit::input-decoder-pending-string decoder) :to-be pending) (expect (decode-input-chunk decoder #()) :to-be-falsy) (expect (cl-tty-kit::input-decoder-pending-string decoder) :to-be pending) (expect (%event-signatures-of (decode-input-chunk decoder "[A" :eof t)) :to-equal '((:special :up nil))))))
   (it "rejects a negative :max-pending"
     (expect (lambda () (make-input-decoder :max-pending -1)) :to-throw 'error))
   (it "rejects a fractional :max-pending"
@@ -206,6 +207,8 @@ checks both of those slots, never just that some error was signaled."
     (let ((decoder (make-input-decoder)))
       (expect (decode-input-chunk decoder #(227 129)) :to-be-falsy)
       (%expect-invalid-utf8 (decode-input-chunk decoder "x" :eof t) 0 :truncated-sequence)))
+  (it "preserves pending UTF-8 storage across a non-final empty specialized octet chunk" (let ((decoder (make-input-decoder)) (empty-chunk (make-array 0 :element-type '(unsigned-byte 8)))) (expect (decode-input-chunk decoder #(227 129)) :to-be-falsy) (let ((pending (cl-tty-kit::input-decoder-pending-octets decoder))) (expect (decode-input-chunk decoder empty-chunk) :to-be-falsy) (expect (cl-tty-kit::input-decoder-pending-octets decoder) :to-be pending) (expect (%event-signatures-of (decode-input-chunk decoder #(130) :eof t)) :to-equal `((:character ,(code-char #x3042) nil))))))
+  (it "keeps EOF semantics for an empty specialized octet chunk after partial UTF-8" (let ((decoder (make-input-decoder)) (empty-chunk (make-array 0 :element-type '(unsigned-byte 8)))) (expect (decode-input-chunk decoder #(227 129)) :to-be-falsy) (%expect-invalid-utf8 (decode-input-chunk decoder empty-chunk :eof t) 0 :truncated-sequence) (expect (length (cl-tty-kit::input-decoder-pending-octets decoder)) :to-be 0)))
   (it "preserves split UTF-8 streaming behavior for specialized (unsigned-byte 8) octet chunks"
     (let ((decoder (make-input-decoder))
           (first-chunk

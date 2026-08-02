@@ -21,16 +21,16 @@
 
 (defun %sixel-color-indices (pixels width height)
   "Return per-pixel xterm-256 palette indices and a sorted palette list.
-RGB-TO-256 is intentionally called once per pixel; band rendering reuses the
+Color quantization is performed once per pixel; band rendering reuses the
 indices instead of requantizing every color pass."
   (let ((indices (make-array (* width height)
                              :element-type '(unsigned-byte 8)))
         (seen (make-array 256 :element-type 'bit :initial-element 0)))
     (dotimes (pixel-index (* width height))
       (let* ((rgb-index (* pixel-index 3))
-             (color (rgb-to-256 (aref pixels rgb-index)
-                                (aref pixels (+ rgb-index 1))
-                                (aref pixels (+ rgb-index 2)))))
+             (color (%rgb-to-256-unchecked (aref pixels rgb-index)
+                                           (aref pixels (+ rgb-index 1))
+                                           (aref pixels (+ rgb-index 2)))))
         (setf (aref indices pixel-index) color
               (aref seen color) 1)))
     (let ((palette '()))
@@ -54,7 +54,11 @@ indices instead of requantizing every color pass."
     (next-x 0 :type (integer 0))
     run-char
     (run-count 0 :type (integer 0))
-    runs)
+    (runs (make-array 16
+                      :element-type (quote (unsigned-byte 32))
+                      :adjustable t
+                      :fill-pointer 0)
+          :type (vector (unsigned-byte 32))))
 
   (defstruct (%sixel-band-workspace
               (:constructor %make-sixel-band-workspace))
@@ -65,7 +69,8 @@ indices instead of requantizing every color pass."
                              :element-type (quote (unsigned-byte 8))
                              :initial-element 0))
     (column-seen (make-array 256 :element-type (quote bit) :initial-element 0))
-    column-colors)
+    (column-colors (make-array 256
+                               :element-type (quote (unsigned-byte 8)))))
 
   (defun %sixel-band-workspace-reset (workspace)
     (dolist (color (%sixel-band-workspace-colors workspace))
@@ -74,16 +79,18 @@ indices instead of requantizing every color pass."
               (%sixel-band-state-next-x state) 0
               (%sixel-band-state-run-char state) nil
               (%sixel-band-state-run-count state) 0
-              (%sixel-band-state-runs state) nil)))
-    (setf (%sixel-band-workspace-colors workspace) nil
-          (%sixel-band-workspace-column-colors workspace) nil)
+              (fill-pointer (%sixel-band-state-runs state)) 0)))
+    (setf (%sixel-band-workspace-colors workspace) nil)
     workspace))
 
 (defun %sixel-band-state-flush (state)
   (when (%sixel-band-state-run-char state)
-    (push (cons (%sixel-band-state-run-char state)
-                (%sixel-band-state-run-count state))
-          (%sixel-band-state-runs state))
+    (let ((runs (%sixel-band-state-runs state)))
+      (vector-push-extend
+       (logior (char-code (%sixel-band-state-run-char state))
+               (ash (%sixel-band-state-run-count state) 7))
+       runs
+       (max 16 (length runs))))
     (setf (%sixel-band-state-run-char state) nil
           (%sixel-band-state-run-count state) 0)))
 
@@ -107,11 +114,14 @@ indices instead of requantizing every color pass."
   (%sixel-band-state-add-run state #\?
                              (- width (%sixel-band-state-next-x state)))
   (%sixel-band-state-flush state)
-  (nreverse (%sixel-band-state-runs state)))
+  (%sixel-band-state-runs state))
 
 (defun %sixel-emit-runs (out runs)
-  (dolist (run runs)
-    (%sixel-emit-run out (car run) (cdr run))))
+  (dotimes (index (fill-pointer runs))
+    (let ((run (aref runs index)))
+      (%sixel-emit-run out
+                       (code-char (logand run #x7F))
+                       (ash run -7)))))
 
 (defun %sixel-band-runs (workspace color-indices width height base-y)
   "Return sorted colors and RLE state for the band starting at BASE-Y.
@@ -123,31 +133,38 @@ again, which avoids rescanning WIDTH for every palette entry."
         (colors nil)
         (column-bits (%sixel-band-workspace-column-bits workspace))
         (column-seen (%sixel-band-workspace-column-seen workspace))
-        (column-colors nil))
+        (column-colors (%sixel-band-workspace-column-colors workspace))
+        (band-row-count
+          (max 0 (min +sixel-band-height+ (- height base-y))))
+        (column-index (* base-y width)))
     (dotimes (x width)
-      (setf column-colors nil)
-      (dotimes (row +sixel-band-height+)
-        (let ((y (+ base-y row)))
-          (when (< y height)
-            (let ((color (aref color-indices (+ (* y width) x))))
-              (when (zerop (sbit seen color))
-                (setf (sbit seen color) 1)
-                (unless (aref states color)
-                  (setf (aref states color) (%make-sixel-band-state)))
-                (push color colors))
-              (when (zerop (sbit column-seen color))
-                (setf (sbit column-seen color) 1)
-                (push color column-colors))
-              (setf (aref column-bits color)
-                    (logior (aref column-bits color) (ash 1 row)))))))
-      (dolist (color column-colors)
-        (%sixel-band-state-add-column
-         (aref states color) x (code-char (+ #x3F (aref column-bits color))))
-        (setf (aref column-bits color) 0
-              (sbit column-seen color) 0)))
+      (let ((column-color-count 0))
+        (loop repeat band-row-count
+              for pixel-index = column-index then (+ pixel-index width)
+              for bit = 1 then (ash bit 1)
+              for color = (aref color-indices pixel-index)
+              do
+                 (when (zerop (sbit seen color))
+                   (setf (sbit seen color) 1)
+                   (unless (aref states color)
+                     (setf (aref states color) (%make-sixel-band-state)))
+                   (push color colors))
+                 (when (zerop (sbit column-seen color))
+                   (setf (sbit column-seen color) 1
+                         (aref column-colors column-color-count) color)
+                   (incf column-color-count))
+                 (setf (aref column-bits color)
+                       (logior (aref column-bits color) bit)))
+        (dotimes (index column-color-count)
+          (let ((color (aref column-colors index)))
+            (%sixel-band-state-add-column
+             (aref states color) x
+             (code-char (+ #x3F (aref column-bits color))))
+            (setf (aref column-bits color) 0
+                  (sbit column-seen color) 0))))
+      (incf column-index))
     (let ((sorted-colors (sort colors (function <))))
-      (setf (%sixel-band-workspace-colors workspace) sorted-colors
-            (%sixel-band-workspace-column-colors workspace) column-colors)
+      (setf (%sixel-band-workspace-colors workspace) sorted-colors)
       (values sorted-colors states))))
 
 (defun %check-image-dimensions (width height)

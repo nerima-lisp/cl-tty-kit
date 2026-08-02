@@ -175,9 +175,9 @@ TRUNCATE-STRING if a hard cap is needed."
   "Return a list of row strings for ROWS, each ROW a list of field strings.
 Every column is padded to the width of its widest field (by STRING-WIDTH) so the
 columns align down the table; ragged rows are padded with empty trailing fields.
-Each row is laid out by FORMAT-COLUMNS with ALIGNS, SEPARATOR, and PAD. An empty
-ROWS yields an empty list. Feed the result to SCREEN-WRITE-LINES to place a
-table, or print the lines directly."
+ALIGNS controls per-column alignment, SEPARATOR joins adjacent fields, and PAD
+fills unused column width. An empty ROWS yields an empty list. Feed the result to
+SCREEN-WRITE-LINES to place a table, or print the lines directly."
   (unless (listp rows)
     (error "ROWS ~S must be a list of rows." rows))
   (%assert-aligns aligns)
@@ -189,22 +189,45 @@ table, or print the lines directly."
     (dolist (field row)
       (%assert-string-field "Table field" field)))
   (if (null rows)
-      '()
-      (let* ((columns (reduce #'max rows :key #'length :initial-value 0))
-             (widths (make-array columns :initial-element 0)))
-        (dolist (row rows)
-          (loop for field in row
-                for index from 0
-                for width = (string-width field)
-                do (when (> width (aref widths index))
-                     (setf (aref widths index) width))))
-        (let ((width-list (coerce widths 'list)))
-          (mapcar (lambda (row)
-                    (format-columns
-                     (append row (make-list (- columns (length row))
-                                            :initial-element ""))
-                     width-list
-                     :aligns aligns
-                     :separator separator
-                     :pad pad))
-                  rows)))))
+      (quote ())
+      (let* ((columns (reduce (function max) rows :key (function length) :initial-value 0))
+             (widths (make-array columns :initial-element 0))
+             (row-widths
+              (mapcar
+               (lambda (row)
+                 (let ((current-widths (make-array (length row))))
+                   (loop for field in row
+                         for index from 0
+                         for width = (string-width field)
+                         do (setf (aref current-widths index) width)
+                         (when (> width (aref widths index))
+                           (setf (aref widths index) width)))
+                   current-widths))
+               rows)))
+        (when (plusp columns)
+          (%assert (= 1 (char-width pad)) "PAD ~S must be a single-column character." pad))
+        (mapcar
+         (lambda (row current-widths)
+           (with-output-to-string (out)
+                                  (loop for index below columns
+                                        for field-tail = row then (cdr field-tail)
+                                        for align-tail = aligns then (cdr align-tail)
+                                        for field = (if field-tail (car field-tail) "")
+                                        for current-width = (if field-tail (aref current-widths index) 0)
+                                        for deficit = (- (aref widths index) current-width)
+                                        for align = (if align-tail (car align-tail) :left)
+                                        for left-padding = (ecase align
+                                                             (:left 0)
+                                                             (:right deficit)
+                                                             (:center (floor deficit 2)))
+                                        do (unless (zerop index)
+                                             (write-string separator out))
+                                        (dotimes (padding left-padding)
+                                          (declare (ignore padding))
+                                          (write-char pad out))
+                                        (write-string field out)
+                                        (dotimes (padding (- deficit left-padding))
+                                          (declare (ignore padding))
+                                          (write-char pad out)))))
+         rows
+         row-widths))))

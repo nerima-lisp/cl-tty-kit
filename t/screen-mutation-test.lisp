@@ -211,6 +211,14 @@
         (expect-cell (wide 0 0) ideograph)
         (expect-cell (wide 1 0) #\Space)
         (expect-cell (wide 2 0) #\X))))
+  (it "gives a zero-width combining character its own cell"
+    (let* ((combining (code-char #x0301))
+           (text (format nil "e~Ca" combining))
+           (screen (make-screen 3 1 :initial-cell #\.)))
+      (screen-write-string screen 0 0 text)
+      (expect-cell (screen 0 0) #\e)
+      (expect-cell (screen 1 0) combining)
+      (expect-cell (screen 2 0) #\a)))
   (it "reserves a trailing blank cell when a narrow char precedes a wide glyph"
     (let ((ideograph (code-char #x65E5)))
       (let ((wide (make-screen 4 1 :initial-cell #\.)))
@@ -219,6 +227,15 @@
         (expect-cell (wide 1 0) ideograph)
         (expect-cell (wide 2 0) #\Space)
         (expect-cell (wide 3 0) #\Y))))
+  (it "signals before changing any cell when a combining sequence overflows"
+    (let* ((combining (code-char #x0301))
+           (text (format nil "e~Ca" combining))
+           (screen (make-screen 2 1 :initial-cell #\.)))
+      (bounds-error-is
+        (condition 2 0 2 1)
+        (screen-write-string screen 0 0 text))
+      (expect-cell (screen 0 0) #\.)
+      (expect-cell (screen 1 0) #\.)))
   (it "applies style to both the wide glyph cell and its blank companion"
     (let ((ideograph (code-char #x65E5)))
       (let ((wide (make-screen 2 1)))

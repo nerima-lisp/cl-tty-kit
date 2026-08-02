@@ -42,8 +42,29 @@
   (it "round-trips a cube color back to itself"
     (multiple-value-bind (r g b) (color-256-to-rgb 141)
       (expect (rgb-to-256 r g b) :to-be 141)))
+  (it "matches an independent linear nearest-level reference for every channel value"
+    (labels ((linear-reference (value)
+               (let ((levels #(0 95 135 175 215 255))
+                     (best 0)
+                     (best-distance nil))
+                 (dotimes (index 6 best)
+                   (let ((distance (abs (- value (aref levels index)))))
+                     (when (or (null best-distance) (< distance best-distance))
+                       (setf best index
+                             best-distance distance)))))))
+      (dotimes (value 256)
+        (expect (cl-tty-kit::%nearest-cube-level-index value)
+                :to-be (linear-reference value)))))
+  (it "keeps the lower level on midpoint ties and switches immediately after"
+    (dolist (case (list (cons 47 0) (cons 48 1)
+                        (cons 115 1) (cons 116 2)
+                        (cons 155 2) (cons 156 3)
+                        (cons 195 3) (cons 196 4)
+                        (cons 235 4) (cons 236 5)))
+      (expect (cl-tty-kit::%nearest-cube-level-index (car case))
+              :to-be (cdr case))))
   (it "rejects an out-of-range channel"
-    (expect (lambda () (rgb-to-256 256 0 0)) :to-throw)))
+  (expect (lambda () (rgb-to-256 256 0 0)) :to-throw)))
 
 (describe "blend-colors"
   (it "blends at the midpoint"

@@ -8,13 +8,13 @@
 ;;; whole-grid operations: writing text, filling regions, scrolling,
 ;;; cropping, and compositing one screen onto another.
 ;;; --------------------------------------------------------------------------
-(defmacro %screen-write-string-normalized (screen x y string start end style)
+(defmacro %screen-write-string-normalized (screen x y string start end style all-width-one-p)
   "Write a validated STRING span using an already normalized STYLE."
-  `(let ((screen ,screen) (x ,x) (y ,y) (string ,string) (start ,start) (end ,end) (style ,style))
+  `(let ((screen ,screen) (x ,x) (y ,y) (string ,string) (start ,start) (end ,end) (style ,style) (all-width-one-p ,all-width-one-p))
      (let* ((cells (screen-cells screen)) (spacer nil) (cell nil) (previous-char nil) (column x) (row-start (* y (screen-width screen))))
        (loop for offset from start below end
              for char = (char string offset)
-             for width = (%character-width char)
+             for width = (if all-width-one-p 1 (%character-width char))
              for index = (+ row-start column)
              do (unless (and cell (char= char previous-char))
                   (setf cell (%make-cell :char char :raw-style style) previous-char char))
@@ -43,13 +43,17 @@ no-op."
                          (%assert-string-bounds string start end)
                          (- end start))))
       (when (plusp run-length)
-        (let ((total-width
-                (loop for offset from start below end
-                      sum (max 1 (%character-width (char string offset))))))
+        (let ((total-width 0)
+              (all-width-one-p t))
+          (loop for offset from start below end
+                for width = (%character-width (char string offset))
+                do (incf total-width (max 1 width))
+                   (unless (= width 1)
+                     (setf all-width-one-p nil)))
           (%assert-screen-bounds screen x y)
           (%assert-screen-bounds screen (+ x (1- total-width)) y)
           (%screen-write-string-normalized
-           screen x y string start end (%coerce-cell-style style))))
+           screen x y string start end (%coerce-cell-style style) all-width-one-p)))
       screen))
 
 (defun screen-fill-rect (screen x y width height value &key (style nil style-supplied-p)) "Fill the WIDTH by HEIGHT rectangle at X and Y in SCREEN with VALUE. Returns SCREEN." (%assert-screen-rect-bounds screen x y width height) (when (and (plusp width) (plusp height)) (let ((cells (screen-cells screen)) (cell (%coerce-cell-value value style style-supplied-p)) (screen-width (screen-width screen))) (loop for row from y below (+ y height) for start = (+ (* row screen-width) x) do (fill cells cell :start start :end (+ start width))) (%screen-touch screen y (+ y height)))) screen)
