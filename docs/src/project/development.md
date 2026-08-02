@@ -131,6 +131,21 @@ iteration count; it is a regression signal, not a portable performance claim.
 The renderer cases reuse their alternating cell templates, so their allocation
 figures do not include constructing a new cell for every input mutation.
 
+`scripts/benchmark-hotpaths.lisp` complements the renderer benchmark with
+function-level measurements for other hot paths: the render threshold check,
+`screen-write-string` on ASCII and mixed-width input, the streaming input
+decoder's empty-chunk paths, `ansi-set-clipboard`'s OSC 52 base64 encoding,
+`format-table`, and `rgb-to-256`. It is a standalone script, not wired into
+`flake.nix`'s apps, since it is a development aid rather than a CI gate:
+
+```sh
+sbcl --script scripts/benchmark-hotpaths.lisp
+sbcl --script scripts/benchmark-hotpaths.lisp 500000
+```
+
+Same caveats as above: same idle host and iteration count across runs, a
+regression signal rather than a portable claim.
+
 ## Reporting issues
 
 When filing a bug, include:
