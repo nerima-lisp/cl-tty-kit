@@ -1,13 +1,14 @@
 (in-package #:cl-tty-kit)
 
-(defun %input->string (input)
-  (cond
-    ((stringp input)
-     input)
-    ((%octet-input-p input)
-     (%utf8-octets-to-string input))
-    (t
-     (%coerce-character-vector input))))
+(defmacro %input->string (input)
+  `(let ((input ,input))
+     (cond
+       ((stringp input)
+        input)
+       ((%octet-input-p input)
+        (%utf8-octets-to-string input))
+       (t
+        (%coerce-character-vector input)))))
 
 (defconstant +max-color-report-component-digits+ 4
   "Maximum hex digits accepted in one OSC color report component.")
@@ -67,30 +68,32 @@ not a complete report. Pairs with ANSI-REQUEST-DEVICE-ATTRIBUTES."
                     (return))))
             (values (nreverse params) (- (1+ final) start))))))))
 
-(defun %scale-hex-to-byte (string start end)
+(defmacro %scale-hex-to-byte (string start end)
   "Parse the hex field [START, END) of STRING and scale it to a byte in [0, 255]
 by its digit width, so a 2- or 4-hex-digit OSC color component maps correctly.
 There is no zero-digit special case: %BOUNDED-DIGIT-RUN-P's (< START END)
 guard above ensures at least one digit, so MAXIMUM is always at least 15 and
 the division below never divides by zero."
-  (when (%bounded-digit-run-p string start end +max-color-report-component-digits+ 16)
-    (let* ((digits (- end start))
-           (value (parse-integer string :start start :end end :radix 16))
-           (maximum (1- (expt 16 digits))))
-      (round (* value 255) maximum))))
+  `(let ((string ,string) (start ,start) (end ,end))
+     (when (%bounded-digit-run-p string start end +max-color-report-component-digits+ 16)
+       (let* ((digits (- end start))
+              (value (parse-integer string :start start :end end :radix 16))
+              (maximum (1- (expt 16 digits))))
+         (round (* value 255) maximum)))))
 
-(defun %color-report-terminator (string start limit)
+(defmacro %color-report-terminator (string start limit)
   "Return (VALUES POSITION LENGTH) of the ST terminating an OSC reply at or after
 START -- BEL (length 1) or ESC backslash (length 2) -- or (VALUES NIL NIL)."
-  (loop for index from start below limit
-        do (cond
-             ((char= (char string index) (code-char 7))
-              (return (values index 1)))
-             ((and (char= (char string index) #\Esc)
-                   (< (1+ index) limit)
-                   (char= (char string (1+ index)) #\\))
-              (return (values index 2))))
-        finally (return (values nil nil))))
+  `(let ((string ,string) (start ,start) (limit ,limit))
+     (loop for index from start below limit
+           do (cond
+                ((char= (char string index) (code-char 7))
+                 (return (values index 1)))
+                ((and (char= (char string index) #\Esc)
+                      (< (1+ index) limit)
+                      (char= (char string (1+ index)) #\\))
+                 (return (values index 2))))
+           finally (return (values nil nil)))))
 
 (defun decode-color-report (input &key (start 0))
   "Decode an OSC 10/11 color report `ESC ] {10|11} ; rgb:RR../GG../BB.. ST' from

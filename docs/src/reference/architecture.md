@@ -10,13 +10,13 @@ where it is.
 
 | Layer | Files | OS access |
 | --- | --- | --- |
-| Conditions | `conditions.lisp` | none |
+| Conditions | `conditions.lisp`, `condition-types.lisp` | none |
 | Utilities and codecs | `clamp.lisp`, `string-empty.lisp`, `utf8.lisp` | none |
 | Character width | `char-width.lisp`, `char-width-data.lisp` | none |
-| Text layout | `text-layout.lisp` | none |
-| Color, widgets, geometry | `color.lisp`, `format.lisp`, `rect.lisp` | none |
-| ANSI sequences | `ansi.lisp`, `ansi-control.lisp`, `ansi-osc.lisp`, `sixel.lisp` | none |
-| Input decoding | `key-tables.lisp`, `keys.lisp`, `keys-decode*.lisp`, `input-state.lisp`, `input-decode*.lisp`, `mouse.lisp` | none |
+| Text layout | `text-layout.lisp`, `text-wrap.lisp` | none |
+| Color, widgets, geometry | `color.lisp`, `color-space.lisp`, `format.lisp`, `rect.lisp`, `layout.lisp` | none |
+| ANSI sequences | `ansi.lisp`, `ansi-style.lisp`, `ansi-control.lisp`, `ansi-osc.lisp`, `sixel.lisp`, `kitty-image.lisp` | none |
+| Input decoding | `key-tables.lisp`, `keys.lisp`, `csi-field-parsing.lisp`, `keys-decode*.lisp`, `input-state.lisp`, `input-decode*.lisp`, `mouse.lisp` | none |
 | Screen and cells | `cell.lisp`, `screen.lisp`, `screen-regions.lisp`, `screen-text.lisp`, `box.lisp`, `cursor.lisp` | none |
 | Rendering | `render-style.lisp`, `sgr-parse.lisp`, `render-commands.lisp`, `render-diff-plan.lisp`, `render-diff.lisp`, `render.lisp`, `renderer.lisp` | none |
 | Raw mode and size | `raw-mode.lisp`, `raw-mode-sbcl.lisp`, `terminal-size.lisp` | **SBCL-specific** |
@@ -30,16 +30,23 @@ terminal.
 
 ## Notable boundaries
 
-`conditions.lisp` defines the public condition types, the `%assert`
-validation macro that the rest of the library signals through (so an invalid
-argument produces a typed condition with the offending value rather than a
-generic error), and two macros that declare a whole `%assert-*` validation
-helper in one form: `define-simple-assert` for a helper that validates as a
-pure side effect, and `define-validating-assert` for one that also returns
-its checked argument so the call composes as an expression. Most
-argument-validating helpers across `src/` are one of these two shapes; a
-helper with real control flow beyond that (composing several checks,
-dispatching on a `case`) stays a plain `defun`. See
+`conditions.lisp` is the condition/validation macro DSL: the `%assert`
+macro every signal in the library goes through (so an invalid argument
+produces a typed condition with the offending value rather than a generic
+error), `define-simple-assert`/`define-validating-assert` for declaring a
+whole `%assert-*` validation helper in one form (the pure-side-effect and
+returns-its-checked-argument shapes respectively -- most argument-validating
+helpers across `src/` are one of these two; a helper with real control flow
+beyond that, composing several checks or dispatching on a `case`, stays a
+plain `defun`), `define-tty-kit-condition`/`define-formatted-tty-kit-condition`
+for declaring a whole condition class in one form, and `document-function`
+for the `(setf (documentation 'name 'function) ...)` shape a `defstruct`
+accessor (or any function whose definition form has no docstring slot of its
+own) needs -- one macro instead of the same three-symbol boilerplate at each
+of the 33 call sites across `src/`. `condition-types.lisp` is this file's
+data: every condition class this library actually signals, built on those
+macros -- the policy/data split runs through this pair the same way it does
+for `char-width.lisp`/`char-width-data.lisp` below. See
 [Conditions](conditions.md).
 
 `char-width.lisp` expresses width as relations over the East Asian and
@@ -67,6 +74,32 @@ emission and strategy.
 `pty.lisp` wraps the SBCL process and stream; `pty-fd.lisp` sits alongside it
 as a byte-transparent layer over the bare master file descriptor, for callers
 running their own `select(2)` loop over many descriptors. See [PTY](../guide/pty.md).
+
+`input-decode-internals.lisp`'s `%decode-plain-events` and `%decode-paste-events`
+each walk a chunk once, calling a continuation per decoded event instead of
+building a list themselves; `%collect-plain-events`/`%collect-paste-events` are
+the thin list-collecting policies on top of them. This is the same shape
+`text-wrap.lisp`'s `%call-with-wrapped-lines` and `tick-loop.lisp`'s
+`advance`/`render`/`stop` callbacks already use elsewhere in `src/`: separate
+the one walk over the input from what a caller does with each result, so a
+future streaming consumer does not need a second walk.
+
+Every internal helper that is never passed as a first-class value (never
+`#'name`, never handed to `mapcar`/`funcall`/`apply`) and never recursive is a
+`defmacro`, not a `defun`: `clamp.lisp`, `color.lisp`, `color-space.lisp`,
+`layout.lisp`, `text-layout.lisp`, `text-wrap.lisp`, and the CSI-parameter
+validators in `ansi.lisp`/`ansi-style.lisp` follow this. Each such macro
+wraps its original body in a `let` that binds its parameters to the
+(unevaluated, backquote-spliced) argument forms -- evaluated once, in the
+same left-to-right order a function call already used, so this changes
+nothing about calling behavior. What it does *not* apply to: any of `src/`'s
+132 exported functions (breaking `#'name`/`funcall` for public API is a
+compatibility break other `nerima-lisp` repositories that depend on this
+library would hit), anything passed as a value even internally (there are 8
+of these, found by scanning every `#'name`/`(function name)` occurrence
+across `src/`, `t/`, and `examples/`), and anything recursive or using
+`return-from` against its own name (a `defmacro`'s expansion has no implicit
+block the way `defun` does).
 
 ## See also
 

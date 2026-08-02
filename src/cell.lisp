@@ -8,7 +8,7 @@
   (style-sequence nil :type (or null string))
   (style-sequence-ready-p nil :type boolean))
 
-(setf (documentation 'cell-char 'function) "Return the character stored in CELL.")
+(document-function 'cell-char "Return the character stored in CELL.")
 
 (defun cell-style (cell)
   "Return a defensive copy of the normalized style list stored in CELL."
@@ -45,19 +45,19 @@
   "Return a validated foreground style entry."
   (%style-color :fg first second third))
 
-(setf (documentation 'style-fg 'function) "Return a foreground style entry of the form (:FG INDEX) or (:FG R G B).")
+(document-function 'style-fg "Return a foreground style entry of the form (:FG INDEX) or (:FG R G B).")
 
 (defun style-bg (first &optional second third)
   "Return a validated background style entry."
   (%style-color :bg first second third))
 
-(setf (documentation 'style-bg 'function) "Return a background style entry of the form (:BG INDEX) or (:BG R G B).")
+(document-function 'style-bg "Return a background style entry of the form (:BG INDEX) or (:BG R G B).")
 
 (defun style-underline-color (first &optional second third)
   "Return a validated underline-color style entry (SGR 58)."
   (%style-color :underline-color first second third))
 
-(setf (documentation 'style-underline-color 'function) "Return an underline-color style entry, (:UNDERLINE-COLOR INDEX) or
+(document-function 'style-underline-color "Return an underline-color style entry, (:UNDERLINE-COLOR INDEX) or
 (:UNDERLINE-COLOR R G B), coloring the underline independently of the text (SGR
 58) on terminals that support it.")
 
@@ -94,61 +94,64 @@ more clearly than the bare integer. An unknown NAME signals an error."
       name
       (mapcar #'car +named-colors+))))
 
-(defun %color-style-item-p (item)
-  (and (consp item) (member (first item) '(:fg :bg :underline-color) :test #'eq)))
+(defmacro %color-style-item-p (item)
+  `(let ((item ,item))
+     (and (consp item) (member (first item) '(:fg :bg :underline-color) :test #'eq))))
 
-(defun %cell-style-items (style)
-  (cond
-    ((null style) nil)
-    ((%color-style-item-p style) (list style))
-    ((%proper-list-p style) style)
-    (t (list style))))
+(defmacro %cell-style-items (style)
+  `(let ((style ,style))
+     (cond
+       ((null style) nil)
+       ((%color-style-item-p style) (list style))
+       ((%proper-list-p style) style)
+       (t (list style)))))
 
 (defun %valid-color-byte-p (value)
   (typep value '(integer 0 255)))
 
-(defun %normalize-color-style-item (item)
-  (when (%color-style-item-p item)
-    (let ((channel (first item))
-          (payload (rest item)))
-      (when (%proper-list-p payload)
-        (cond
-          ((and (= (length payload) 1) (%valid-color-byte-p (first payload)))
-            (list channel (first payload)))
-          ((and (= (length payload) 3) (every #'%valid-color-byte-p payload))
-            (list channel (first payload) (second payload) (third payload)))
-          (t nil))))))
+(defmacro %normalize-color-style-item (item)
+  `(let ((item ,item))
+     (when (%color-style-item-p item)
+       (let ((channel (first item))
+             (payload (rest item)))
+         (when (%proper-list-p payload)
+           (cond
+             ((and (= (length payload) 1) (%valid-color-byte-p (first payload)))
+               (list channel (first payload)))
+             ((and (= (length payload) 3) (every #'%valid-color-byte-p payload))
+               (list channel (first payload) (second payload) (third payload)))
+             (t nil)))))))
 
-(defun %normalize-cell-style (style)
-  (let* ((items (%cell-style-items style))
-         (modifiers (normalize-modifiers items))
-         (foreground nil)
-         (background nil)
-         (underline nil))
-    (dolist (item items)
-      (let ((color (%normalize-color-style-item item)))
-        (when color
-          (case (first color)
-            (:fg
-              (setf foreground color))
-            (:bg
-              (setf background color))
-            (:underline-color
-              (setf underline color))))))
-    (append
-      modifiers
-      (when foreground
-        (list foreground))
-      (when background
-        (list background))
-      (when underline
-        (list underline)))))
+(defmacro %normalize-cell-style (style)
+  `(let* ((items (%cell-style-items ,style))
+          (modifiers (normalize-modifiers items))
+          (foreground nil)
+          (background nil)
+          (underline nil))
+     (dolist (item items)
+       (let ((color (%normalize-color-style-item item)))
+         (when color
+           (case (first color)
+             (:fg
+               (setf foreground color))
+             (:bg
+               (setf background color))
+             (:underline-color
+               (setf underline color))))))
+     (append
+       modifiers
+       (when foreground
+         (list foreground))
+       (when background
+         (list background))
+       (when underline
+         (list underline)))))
 
 (defun make-style (&rest items)
   "Return a normalized style list from modifier keywords and color entries."
   (copy-list (%normalize-cell-style items)))
 
-(setf (documentation 'make-style 'function) "Return a normalized style list with deduplicated modifiers and the last valid fg/bg entries.")
+(document-function 'make-style "Return a normalized style list with deduplicated modifiers and the last valid fg/bg entries.")
 
 (defun style-merge (base override)
   "Return a normalized style combining BASE with OVERRIDE, OVERRIDE winning.
@@ -166,8 +169,8 @@ a highlight over a base style is (STYLE-MERGE base-style (MAKE-STYLE :REVERSE)).
     :char (%assert-cell-character char)
     :raw-style (and style (%normalize-cell-style style))))
 
-(defun %blank-cell ()
-  (make-cell))
+(defmacro %blank-cell ()
+  `(make-cell))
 
 (defun copy-cell (cell)
   "Return a fresh copy of CELL."

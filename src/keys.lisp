@@ -13,32 +13,25 @@ optional associated text, and optional kitty shifted / base-layout alternates."
   (shifted-key nil :type (or null character))
   (base-key nil :type (or null character)))
 
-(setf (documentation 'key-event-type 'function)
-      "Return the event type of KEY-EVENT.")
+(document-function 'key-event-type "Return the event type of KEY-EVENT.")
 
-(setf (documentation 'key-event-code 'function)
-      "Return the code carried by KEY-EVENT.")
+(document-function 'key-event-code "Return the code carried by KEY-EVENT.")
 
-(setf (documentation 'key-event-modifiers 'function)
-      "Return the normalized modifier list of KEY-EVENT.")
+(document-function 'key-event-modifiers "Return the normalized modifier list of KEY-EVENT.")
 
-(setf (documentation 'key-event-kind 'function)
-      "Return the kind of KEY-EVENT: :PRESS, :REPEAT, or :RELEASE. Terminals
+(document-function 'key-event-kind "Return the kind of KEY-EVENT: :PRESS, :REPEAT, or :RELEASE. Terminals
 report :REPEAT and :RELEASE only under the kitty keyboard protocol (see
 ANSI-SET-KEYBOARD-ENHANCEMENTS); otherwise every event is :PRESS.")
 
-(setf (documentation 'key-event-text 'function)
-      "Return the text associated with KEY-EVENT, or NIL. Only the kitty keyboard
+(document-function 'key-event-text "Return the text associated with KEY-EVENT, or NIL. Only the kitty keyboard
 protocol's text-reporting mode supplies this -- the string a key would insert,
 useful for international/IME input where it differs from the key code.")
 
-(setf (documentation 'key-event-shifted-key 'function)
-      "Return the shifted alternate of KEY-EVENT's key as a character, or NIL.
+(document-function 'key-event-shifted-key "Return the shifted alternate of KEY-EVENT's key as a character, or NIL.
 The kitty keyboard protocol reports this as the second sub-field of its key
 field (e.g. `a' shifted is `A'); NIL otherwise.")
 
-(setf (documentation 'key-event-base-key 'function)
-      "Return the base-layout alternate of KEY-EVENT's key as a character, or NIL.
+(document-function 'key-event-base-key "Return the base-layout alternate of KEY-EVENT's key as a character, or NIL.
 The kitty keyboard protocol reports this as the third sub-field of its key field
 -- the key at that physical position on the base (e.g. US-QWERTY) layout -- for
 layout-independent keybindings; NIL otherwise.")

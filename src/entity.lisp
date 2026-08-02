@@ -24,12 +24,11 @@ screen's bounds."
   (dy 0 :type real)
   (on-exit nil :type (or null function)))
 
-(setf (documentation 'entity-x 'function) "Return the column position of ENTITY.")
-(setf (documentation 'entity-y 'function) "Return the row position of ENTITY.")
-(setf (documentation 'entity-dx 'function) "Return the per-tick column velocity of ENTITY.")
-(setf (documentation 'entity-dy 'function) "Return the per-tick row velocity of ENTITY.")
-(setf (documentation 'entity-on-exit 'function)
-      "Return ENTITY's off-bounds callback, or NIL.")
+(document-function 'entity-x "Return the column position of ENTITY.")
+(document-function 'entity-y "Return the row position of ENTITY.")
+(document-function 'entity-dx "Return the per-tick column velocity of ENTITY.")
+(document-function 'entity-dy "Return the per-tick row velocity of ENTITY.")
+(document-function 'entity-on-exit "Return ENTITY's off-bounds callback, or NIL.")
 
 (define-simple-assert %assert-entity (entity)
   (entity-p entity)

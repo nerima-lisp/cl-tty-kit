@@ -18,23 +18,13 @@
     #P"scripts/bootstrap.lisp"
     (uiop:pathname-directory-pathname *load-truename*)))
 
-(defparameter *test-timeout-seconds* 120)
-
-;; A hung test must fail the build rather than sit until the CI job's own
-;; timeout, which reports "the job took 30 minutes" instead of naming the
-;; suite that stopped making progress.
-(defmacro with-test-timeout ((label) &body body)
-  `(handler-case (sb-ext:with-timeout *test-timeout-seconds* ,@body)
-    (sb-ext:timeout ()
-      (error "~A timed out after ~D seconds" ,label *test-timeout-seconds*))))
-
 ;; Resolve through the package's external symbols rather than reading the
 ;; symbols at compile time: this file is loaded before cl-tty-kit/test exists,
 ;; so a direct reference would not read. Requiring :EXTERNAL also means an
 ;; accidental unexport fails here instead of silently calling an internal.
 (progn
-  (with-test-timeout
-    ("test suite")
+  (cl-tty-kit/bootstrap:with-script-timeout
+    ("test suite" 120)
     (cl-tty-kit/bootstrap:call-exported-function "CL-TTY-KIT/BOOTSTRAP" "LOAD-TEST-SYSTEM")
     (cl-tty-kit/bootstrap:call-exported-function "CL-TTY-KIT/TEST" "RUN-TESTS"))
   (uiop:quit 0))

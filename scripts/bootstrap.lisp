@@ -10,7 +10,8 @@
     #:load-test-system
     #:load-example-file
     #:run-example-file
-    #:call-exported-function))
+    #:call-exported-function
+    #:with-script-timeout))
 
 (in-package #:cl-tty-kit/bootstrap)
 
@@ -52,6 +53,20 @@
             (error "Symbol ~A is not exported from ~A." symbol-name package-name))
           symbol)))
     (apply (symbol-function symbol) arguments)))
+
+;; Every script entry point (run-tests.lisp, scripts/verify.lisp,
+;; scripts/coverage.lisp, scripts/examples.lisp,
+;; scripts/source-registry-smoke.lisp) bounds its long-running steps so a
+;; hang fails the build with the name of the step that stopped making
+;; progress, rather than sitting until the CI job's own timeout reports only
+;; "the job took 30 minutes". This was five near-identical
+;; defparameter+defmacro pairs, one per script, differing only in the
+;; timeout duration; SECONDS is now a per-call argument instead of a
+;; per-file special variable.
+(defmacro with-script-timeout ((label seconds) &body body)
+  `(handler-case (sb-ext:with-timeout ,seconds ,@body)
+     (sb-ext:timeout ()
+       (error "~A timed out after ~D seconds" ,label ,seconds))))
 
 (defun load-core-system (&key force)
   (when force

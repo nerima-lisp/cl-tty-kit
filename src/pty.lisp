@@ -5,11 +5,9 @@
   process
   stream)
 
-(setf (documentation 'pty-process 'function)
-      "Return the process object associated with PTY.")
+(document-function 'pty-process "Return the process object associated with PTY.")
 
-(setf (documentation 'pty-stream 'function)
-      "Return the stream connected to PTY.")
+(document-function 'pty-stream "Return the stream connected to PTY.")
 
 #+sbcl
 (defun %transient-spawn-failure-p (condition)

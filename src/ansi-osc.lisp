@@ -14,9 +14,9 @@
         (= code #x7F)
         (<= #x80 code #x9F))))
 
-(defun %sanitize-osc-string (value)
+(defmacro %sanitize-osc-string (value)
   "Return VALUE as a string without control bytes that can break out of OSC."
-  (remove-if #'%terminal-control-character-p (princ-to-string value)))
+  `(remove-if #'%terminal-control-character-p (princ-to-string ,value)))
 
 (defun %osc-52-target-character-p (character)
   (let ((code (char-code character)))
@@ -24,13 +24,14 @@
         (<= (char-code #\A) code (char-code #\Z))
         (<= (char-code #\a) code (char-code #\z)))))
 
-(defun %validate-osc-52-target (target)
-  (let ((string (princ-to-string target)))
-    (unless (and (plusp (length string))
-                 (every #'%osc-52-target-character-p string))
-      (error "OSC 52 clipboard target must be non-empty alphanumeric ASCII: ~S."
-             target))
-    string))
+(defmacro %validate-osc-52-target (target)
+  `(let ((target ,target))
+     (let ((string (princ-to-string target)))
+       (unless (and (plusp (length string))
+                    (every #'%osc-52-target-character-p string))
+         (error "OSC 52 clipboard target must be non-empty alphanumeric ASCII: ~S."
+                target))
+       string)))
 
 (defun ansi-hyperlink (uri text)
   "Return TEXT wrapped in an OSC 8 hyperlink pointing at URI.
@@ -45,10 +46,11 @@ using the ST (`ESC \\') terminator."
 (defparameter +base64-alphabet+
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
 
-(defun %base64-encode-octets (octets)
+(defmacro %base64-encode-octets (octets)
   "Return the standard base64 encoding of the octet vector OCTETS."
-  (with-output-to-string (out)
-    (let ((length (length octets)))
+  `(let ((octets ,octets))
+     (with-output-to-string (out)
+       (let ((length (length octets)))
       (loop for index from 0 below length by 3
             do (let* ((b0 (aref octets index))
                       (b1 (if (< (+ index 1) length) (aref octets (+ index 1)) 0))
@@ -63,7 +65,7 @@ using the ST (`ESC \\') terminator."
                  (write-char (if (< (+ index 2) length)
                                  (char +base64-alphabet+ (ldb (byte 6 0) packed))
                                  #\=)
-                             out))))))
+                             out)))))))
 
 (defun ansi-set-clipboard (text &key (target "c"))
   "Return an OSC 52 sequence that sets the terminal clipboard TARGET to TEXT.
@@ -75,13 +77,14 @@ UTF-8 and base64 per the protocol. Requires terminal OSC 52 support."
            (sb-ext:string-to-octets text :external-format :utf-8))
           +escape+))
 
-(defun %rgb-hex-pair (value)
-  (format nil "~2,'0X" value))
+(defmacro %rgb-hex-pair (value)
+  `(format nil "~2,'0X" ,value))
 
-(defun %validate-ansi-byte (name value)
-  (unless (typep value '(integer 0 255))
-    (error "~A must be an integer in [0, 255]: ~S." name value))
-  value)
+(defmacro %validate-ansi-byte (name value)
+  `(let ((name ,name) (value ,value))
+     (unless (typep value '(integer 0 255))
+       (error "~A must be an integer in [0, 255]: ~S." name value))
+     value))
 
 (defun ansi-set-palette-color (index red green blue)
   "Return an OSC 4 sequence redefining palette entry INDEX to RGB RED GREEN BLUE.

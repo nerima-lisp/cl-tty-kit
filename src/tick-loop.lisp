@@ -40,14 +40,15 @@
   (and (realp interval) (plusp interval))
   "Tick interval ~S must be a positive real number of seconds." interval)
 
-(defun %tick-loop-advance (state advance render)
+(defmacro %tick-loop-advance (state advance render)
   "Run one tick: call ADVANCE on STATE to get the next state, then RENDER (if
 supplied) on the next state to get its frame. Returns (VALUES NEW-STATE
 FRAME), FRAME NIL when RENDER is NIL. Both TICK-LOOP-RUN and
 TICK-LOOP-RUN-REALTIME call this for every tick, so the two modes can never
 disagree about what a tick does."
-  (let ((new-state (funcall advance state)))
-    (values new-state (and render (funcall render new-state)))))
+  `(let ((state ,state) (advance ,advance) (render ,render))
+     (let ((new-state (funcall advance state)))
+       (values new-state (and render (funcall render new-state))))))
 
 (defun tick-loop-run (state advance ticks &key render)
   "Call ADVANCE on STATE exactly TICKS times, threading each result into the
@@ -72,16 +73,18 @@ STATE unchanged with an empty FRAMES list."
           (push frame frames))))
     (values state (nreverse frames))))
 
-(defun %tick-loop-sleep-remainder (tick-start-time interval)
+(defmacro %tick-loop-sleep-remainder (tick-start-time interval)
   "Sleep the portion of INTERVAL seconds not already spent since
 TICK-START-TIME (an INTERNAL-TIME-UNITS-PER-SECOND-scaled timestamp), so a
 slow tick shortens the following sleep instead of accumulating drift across
 many frames. A tick that already ran longer than INTERVAL sleeps not at all."
-  (let* ((elapsed (/ (- (get-internal-real-time) tick-start-time)
+  `(let* ((tick-start-time ,tick-start-time)
+          (interval ,interval)
+          (elapsed (/ (- (get-internal-real-time) tick-start-time)
                       internal-time-units-per-second))
-         (remaining (- interval elapsed)))
-    (when (plusp remaining)
-      (sleep remaining))))
+          (remaining (- interval elapsed)))
+     (when (plusp remaining)
+       (sleep remaining))))
 
 (defun tick-loop-run-realtime (state advance render stop
                                &key (stream *standard-output*) (interval 1/30))

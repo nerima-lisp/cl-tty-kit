@@ -12,7 +12,7 @@
 ;;; --------------------------------------------------------------------------
 (defstruct (renderer (:constructor %make-renderer (&key screen front cursor diff-plan rendered-generation)) (:copier nil)) "A double-buffered repaint helper. Draw into its back SCREEN each frame, then call RENDERER-RENDER to emit only what changed since the previous frame." (screen nil :type screen) (front nil :type (or null screen)) (cursor nil :type (or null cursor)) (diff-plan nil :type (or null diff-plan)) (rendered-generation nil :type (or null fixnum)))
 
-(setf (documentation 'renderer-screen 'function) "Return the back-buffer SCREEN of RENDERER, the grid to draw the next
+(document-function 'renderer-screen "Return the back-buffer SCREEN of RENDERER, the grid to draw the next
 frame into.")
 
 (defun make-renderer (width height &key initial-cell)
@@ -46,14 +46,15 @@ frame into.")
   (%assert-renderer renderer)
   (screen-height (renderer-screen renderer)))
 
-(defun %snapshot-cursor (cursor)
-  (make-cursor
-    :x
-    (cursor-x cursor)
-    :y
-    (cursor-y cursor)
-    :visible
-    (cursor-visible-p cursor)))
+(defmacro %snapshot-cursor (cursor)
+  `(let ((cursor ,cursor))
+     (make-cursor
+       :x
+       (cursor-x cursor)
+       :y
+       (cursor-y cursor)
+       :visible
+       (cursor-visible-p cursor))))
 
   (defun %snapshot-renderer-cursor (renderer cursor)
   "Store CURSOR in RENDERER without replacing an existing private snapshot."

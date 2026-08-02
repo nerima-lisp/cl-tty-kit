@@ -16,23 +16,27 @@
   (typep value 'boolean)
   'cursor-parameter-invalid :parameter :visible :value value :expected "a boolean")
 
-(defun %validated-cursor-coordinate (parameter value)
-  (%assert-cursor-coordinate parameter value)
-  value)
+(defmacro %validated-cursor-coordinate (parameter value)
+  `(let ((parameter ,parameter) (value ,value))
+     (%assert-cursor-coordinate parameter value)
+     value))
 
-(defun %set-cursor-x (cursor value)
-  (setf (%cursor-x cursor) (%validated-cursor-coordinate :x value)))
+(defmacro %set-cursor-x (cursor value)
+  `(let ((cursor ,cursor) (value ,value))
+     (setf (%cursor-x cursor) (%validated-cursor-coordinate :x value))))
 
-(defun %set-cursor-y (cursor value)
-  (setf (%cursor-y cursor) (%validated-cursor-coordinate :y value)))
+(defmacro %set-cursor-y (cursor value)
+  `(let ((cursor ,cursor) (value ,value))
+     (setf (%cursor-y cursor) (%validated-cursor-coordinate :y value))))
 
-(defun %set-cursor-visible (cursor value)
-  (%assert-cursor-visibility value)
-  (setf (%cursor-visible cursor) value))
+(defmacro %set-cursor-visible (cursor value)
+  `(let ((cursor ,cursor) (value ,value))
+     (%assert-cursor-visibility value)
+     (setf (%cursor-visible cursor) value)))
 
-(setf (documentation 'cursor-x 'function) "Return the X coordinate of CURSOR.")
+(document-function 'cursor-x "Return the X coordinate of CURSOR.")
 
-(setf (documentation 'cursor-y 'function) "Return the Y coordinate of CURSOR.")
+(document-function 'cursor-y "Return the Y coordinate of CURSOR.")
 
 (defun cursor-x (cursor)
   "Return the X coordinate of CURSOR."

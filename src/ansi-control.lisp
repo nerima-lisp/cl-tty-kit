@@ -172,11 +172,12 @@ STYLE is one of :DEFAULT, :BLINKING-BLOCK, :STEADY-BLOCK, :BLINKING-UNDERLINE,
 reports press/release, :BUTTON adds motion while a button is held, and :ANY
 reports all motion.")
 
-(defun %mouse-tracking-code (mode)
-  (or (cdr (assoc mode +mouse-tracking-modes+))
-      (error "Unknown mouse tracking mode ~S; expected one of ~S."
-             mode
-             (mapcar #'car +mouse-tracking-modes+))))
+(defmacro %mouse-tracking-code (mode)
+  `(let ((mode ,mode))
+     (or (cdr (assoc mode +mouse-tracking-modes+))
+         (error "Unknown mouse tracking mode ~S; expected one of ~S."
+                mode
+                (mapcar #'car +mouse-tracking-modes+)))))
 
 (defun ansi-enable-mouse (&optional (mode :button))
   "Return the sequence that enables mouse reporting in tracking MODE.

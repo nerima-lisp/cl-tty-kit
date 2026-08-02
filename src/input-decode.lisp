@@ -41,56 +41,60 @@ it signals a TTY-KIT-ERROR."
     :max-pending
     max-pending))
 
-(defun %check-decoder-buffer (decoder)
+(defmacro %check-decoder-buffer (decoder)
   "Signal when DECODER buffered data exceeds its MAX-PENDING bound."
-  (with-input-decoder-state
-    (decoder)
-    (%assert-decoder-buffer-size
-      decoder
-      (+
-        (length pending-string)
-        (length pending-octets)
-        (if pending-paste (length pending-paste)
-          0))))
-  decoder)
+  `(let ((decoder ,decoder))
+     (with-input-decoder-state
+       (decoder)
+       (%assert-decoder-buffer-size
+         decoder
+         (+
+           (length pending-string)
+           (length pending-octets)
+           (if pending-paste (length pending-paste)
+             0))))
+     decoder))
 
-(defun %decoder-collect-events (decoder string eof)
+(defmacro %decoder-collect-events (decoder string eof)
   "Run the decoder's string-level collector, returning (VALUES EVENTS PENDING)."
-  (if (input-decoder-collect-bracketed-paste-p decoder) (%decode-string-events-with-paste decoder string :eof eof)
-    (%collect-plain-events string eof)))
+  `(let ((decoder ,decoder) (string ,string) (eof ,eof))
+     (if (input-decoder-collect-bracketed-paste-p decoder) (%decode-string-events-with-paste decoder string :eof eof)
+       (%collect-plain-events string eof))))
 
-(defun %decoder-decode-octets (decoder octets eof)
+(defmacro %decoder-decode-octets (decoder octets eof)
   "Decode OCTETS for DECODER, buffering an incomplete trailing sequence.
 Returns the decoded string. When EOF is true a truncated tail is not held and
 its decode signals INVALID-UTF8-SEQUENCE instead."
-  (let ((combined
-        (if (plusp (length (input-decoder-pending-octets decoder))) (let ((size (+ (length (input-decoder-pending-octets decoder)) (length octets))))
-            (%assert-decoder-buffer-size decoder size)
-            (concatenate
-              '(vector (unsigned-byte 8))
-              (input-decoder-pending-octets decoder)
-              octets))
-          (if (subtypep (array-element-type octets) '(unsigned-byte 8)) octets
-            (coerce octets '(vector (unsigned-byte 8)))))))
-    (if eof (progn
-        (setf (input-decoder-pending-octets decoder) #())
-        (%utf8-octets-to-string combined))
-      (multiple-value-bind (string leftover) (%utf8-decode-prefix combined)
-        (setf (input-decoder-pending-octets decoder) leftover)
-        string))))
+  `(let ((decoder ,decoder) (octets ,octets) (eof ,eof))
+     (let ((combined
+           (if (plusp (length (input-decoder-pending-octets decoder))) (let ((size (+ (length (input-decoder-pending-octets decoder)) (length octets))))
+               (%assert-decoder-buffer-size decoder size)
+               (concatenate
+                 '(vector (unsigned-byte 8))
+                 (input-decoder-pending-octets decoder)
+                 octets))
+             (if (subtypep (array-element-type octets) '(unsigned-byte 8)) octets
+               (coerce octets '(vector (unsigned-byte 8)))))))
+       (if eof (progn
+           (setf (input-decoder-pending-octets decoder) #())
+           (%utf8-octets-to-string combined))
+         (multiple-value-bind (string leftover) (%utf8-decode-prefix combined)
+           (setf (input-decoder-pending-octets decoder) leftover)
+           string)))))
 
-(defun %decoder-decode-chunk-string (decoder input eof)
+(defmacro %decoder-decode-chunk-string (decoder input eof)
   "Reduce a raw INPUT chunk to a decoded string, updating octet buffering."
-  (cond
-    ((stringp input)
-     ;; Pending octets are necessarily an incomplete UTF-8 tail. A later
-     ;; character chunk cannot complete it, but EOF must still report it.
-     (when (and eof
-                (plusp (length (input-decoder-pending-octets decoder))))
-       (%decoder-decode-octets decoder #() eof))
-     input)
-    ((%octet-input-p input) (%decoder-decode-octets decoder input eof))
-    (t (%coerce-character-vector input))))
+  `(let ((decoder ,decoder) (input ,input) (eof ,eof))
+     (cond
+       ((stringp input)
+        ;; Pending octets are necessarily an incomplete UTF-8 tail. A later
+        ;; character chunk cannot complete it, but EOF must still report it.
+        (when (and eof
+                   (plusp (length (input-decoder-pending-octets decoder))))
+          (%decoder-decode-octets decoder #() eof))
+        input)
+       ((%octet-input-p input) (%decoder-decode-octets decoder input eof))
+       (t (%coerce-character-vector input)))))
 
 (defun decode-input-chunk (decoder input &key eof)
   "Feed INPUT (a string or octet vector) into DECODER, returning its events.

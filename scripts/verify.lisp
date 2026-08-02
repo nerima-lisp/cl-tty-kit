@@ -22,9 +22,7 @@
 (defparameter *verify-timeout-seconds* 60)
 
 (defmacro with-step-timeout ((label) &body body)
-  `(handler-case (sb-ext:with-timeout *verify-timeout-seconds* ,@body)
-    (sb-ext:timeout ()
-      (error "~A timed out after ~D seconds" ,label *verify-timeout-seconds*))))
+  `(cl-tty-kit/bootstrap:with-script-timeout (,label *verify-timeout-seconds*) ,@body))
 
 (defun run-source-registry-smoke ()
   (let* ((scripts-dir (uiop:pathname-directory-pathname *load-truename*))

@@ -18,10 +18,11 @@
   "The six per-channel intensity levels of the 6x6x6 color cube (indices
 16-231).")
 
-(defun %hex-nibble (char)
-  (let ((digit (digit-char-p char 16)))
-    (%assert digit "Invalid hex digit ~S in color string." char)
-    digit))
+(defmacro %hex-nibble (char)
+  `(let* ((char ,char)
+          (digit (digit-char-p char 16)))
+     (%assert digit "Invalid hex digit ~S in color string." char)
+     digit))
 
 (defun parse-hex-color (string)
   "Parse a hex color STRING into (VALUES R G B), each an integer in [0, 255].
@@ -58,21 +59,24 @@ grayscale ramp. An out-of-range INDEX signals an error."
      (let ((gray (+ 8 (* 10 (- index 232)))))
        (values gray gray gray)))))
 
-(defun %nearest-cube-level-index (value)
-  (let ((best 0)
-        (best-distance nil))
-    (dotimes (index (length +xterm-cube-levels+) best)
-      (let ((distance (abs (- value (aref +xterm-cube-levels+ index)))))
-        (when (or (null best-distance) (< distance best-distance))
-          (setf best-distance distance best index))))))
+(defmacro %nearest-cube-level-index (value)
+  `(let ((value ,value)
+         (best 0)
+         (best-distance nil))
+     (dotimes (index (length +xterm-cube-levels+) best)
+       (let ((distance (abs (- value (aref +xterm-cube-levels+ index)))))
+         (when (or (null best-distance) (< distance best-distance))
+           (setf best-distance distance best index))))))
 
-(defun %rgb-distance (r1 g1 b1 r2 g2 b2)
-  (+ (expt (- r1 r2) 2) (expt (- g1 g2) 2) (expt (- b1 b2) 2)))
+(defmacro %rgb-distance (r1 g1 b1 r2 g2 b2)
+  `(let ((r1 ,r1) (g1 ,g1) (b1 ,b1) (r2 ,r2) (g2 ,g2) (b2 ,b2))
+     (+ (expt (- r1 r2) 2) (expt (- g1 g2) 2) (expt (- b1 b2) 2))))
 
-(defun %assert-rgb-channels (r g b)
-  (dolist (channel (list r g b))
-    (%assert (typep channel '(integer 0 255))
-             "RGB channel ~S must be an integer in [0, 255]." channel)))
+(defmacro %assert-rgb-channels (r g b)
+  `(let ((r ,r) (g ,g) (b ,b))
+     (dolist (channel (list r g b))
+       (%assert (typep channel '(integer 0 255))
+                "RGB channel ~S must be an integer in [0, 255]." channel))))
 
 (defun rgb-to-256 (r g b)
   "Return the xterm 256-color palette index closest to the RGB triple R G B.
@@ -92,16 +96,6 @@ ramp. Each channel must be an integer in [0, 255]."
               (%rgb-distance r g b gray-value gray-value gray-value))
           cube-index
           gray-index))))
-
-(defun blend-colors (color-a color-b ratio)
-  "Return the RGB triple (list R G B) that is RATIO of the way from COLOR-A to
-COLOR-B. Each color is a three-element (R G B) list and RATIO is clamped to
-[0, 1], so 0 yields COLOR-A and 1 yields COLOR-B. Channels are rounded to the
-nearest integer."
-  (let ((ratio (clamp ratio 0 1)))
-    (mapcar (lambda (a b) (round (+ a (* (- b a) ratio))))
-            color-a
-            color-b)))
 
 (defun rgb-to-ansi16 (r g b)
   "Return the 0-15 system-palette index closest to the RGB triple R G B.
@@ -124,78 +118,6 @@ versa). Each channel must be an integer in [0, 255]."
   (%assert-rgb-channels r g b)
   (round (+ (* 299/1000 r) (* 587/1000 g) (* 114/1000 b))))
 
-(defun rgb-to-hsl (r g b)
-  "Convert the RGB triple R G B (each 0-255) to (VALUES HUE SATURATION LIGHTNESS),
-with HUE in degrees [0, 360) and SATURATION/LIGHTNESS as percentages [0, 100]."
-  (let* ((rf (/ r 255)) (gf (/ g 255)) (bf (/ b 255))
-         (mx (max rf gf bf)) (mn (min rf gf bf))
-         (lightness (/ (+ mx mn) 2)))
-    (if (= mx mn)
-        (values 0 0 (round (* lightness 100)))
-        (let* ((d (- mx mn))
-               (s (if (> lightness 1/2) (/ d (- 2 mx mn)) (/ d (+ mx mn))))
-               (h (cond ((= mx rf) (mod (/ (- gf bf) d) 6))
-                        ((= mx gf) (+ (/ (- bf rf) d) 2))
-                        (t (+ (/ (- rf gf) d) 4)))))
-          (values (mod (round (* h 60)) 360)
-                  (round (* s 100))
-                  (round (* lightness 100)))))))
-
-(defun %hue-to-channel (p q hue)
-  (let ((hue (mod hue 1)))
-    (cond ((< hue 1/6) (+ p (* (- q p) 6 hue)))
-          ((< hue 1/2) q)
-          ((< hue 2/3) (+ p (* (- q p) (- 2/3 hue) 6)))
-          (t p))))
-
-(defun hsl-to-rgb (hue saturation lightness)
-  "Convert HUE (degrees) SATURATION LIGHTNESS (percentages) to (VALUES R G B),
-each an integer in [0, 255]. Inverse of RGB-TO-HSL."
-  (let ((h (/ (mod hue 360) 360))
-        (s (/ saturation 100))
-        (l (/ lightness 100)))
-    (if (zerop s)
-        (let ((v (round (* l 255)))) (values v v v))
-        (let* ((q (if (< l 1/2) (* l (+ 1 s)) (- (+ l s) (* l s))))
-               (p (- (* 2 l) q)))
-          (values (round (* 255 (%hue-to-channel p q (+ h 1/3))))
-                  (round (* 255 (%hue-to-channel p q h)))
-                  (round (* 255 (%hue-to-channel p q (- h 1/3)))))))))
-
-(defun rgb-to-hsv (r g b)
-  "Convert the RGB triple R G B (each 0-255) to (VALUES HUE SATURATION VALUE),
-with HUE in degrees [0, 360) and SATURATION/VALUE as percentages [0, 100]."
-  (let* ((rf (/ r 255)) (gf (/ g 255)) (bf (/ b 255))
-         (mx (max rf gf bf)) (mn (min rf gf bf)) (d (- mx mn)))
-    (values (mod (round (* 60 (cond ((zerop d) 0)
-                                    ((= mx rf) (mod (/ (- gf bf) d) 6))
-                                    ((= mx gf) (+ (/ (- bf rf) d) 2))
-                                    (t (+ (/ (- rf gf) d) 4)))))
-                 360)
-            (round (* 100 (if (zerop mx) 0 (/ d mx))))
-            (round (* 100 mx)))))
-
-(defun hsv-to-rgb (hue saturation value)
-  "Convert HUE (degrees) SATURATION VALUE (percentages) to (VALUES R G B), each
-an integer in [0, 255]. Inverse of RGB-TO-HSV."
-  (let* ((h (/ (mod hue 360) 60))
-         (s (/ saturation 100))
-         (v (/ value 100))
-         (i (floor h))
-         (f (- h i))
-         (p (* v (- 1 s)))
-         (q (* v (- 1 (* s f))))
-         (u (* v (- 1 (* s (- 1 f))))))
-    (multiple-value-bind (rf gf bf)
-        (ecase (mod i 6)
-          (0 (values v u p))
-          (1 (values q v p))
-          (2 (values p v u))
-          (3 (values p q v))
-          (4 (values u p v))
-          (5 (values v p q)))
-      (values (round (* 255 rf)) (round (* 255 gf)) (round (* 255 bf))))))
-
 (defun contrast-color (r g b)
   "Return (0 0 0) or (255 255 255) -- black or white -- whichever is more readable
 as a foreground over the background RGB triple R G B, decided by COLOR-LUMINANCE."
@@ -203,36 +125,37 @@ as a foreground over the background RGB triple R G B, decided by COLOR-LUMINANCE
       (list 0 0 0)
       (list 255 255 255)))
 
-(defun %parse-rgb-functional (string)
-  (labels ((malformed ()
-             (error "Malformed rgb() color ~S." string))
-            (parse-component (component)
-              (unless (and (plusp (length component))
-                           (<= (length component) 3)
-                           (every #'digit-char-p component))
-                (malformed))
-              (let ((value (parse-integer component)))
-                (unless (typep value '(integer 0 255))
+(defmacro %parse-rgb-functional (string)
+  `(let ((string ,string))
+     (labels ((malformed ()
+                (error "Malformed rgb() color ~S." string))
+              (parse-component (component)
+                (unless (and (plusp (length component))
+                             (<= (length component) 3)
+                             (every #'digit-char-p component))
                   (malformed))
-                value)))
-    (let ((open (position #\( string))
-          (close (position #\) string :from-end t)))
-      (unless (and open
-                   close
-                   (< open close)
-                   (loop for index from (1+ close) below (length string)
-                         always (char= (char string index) #\Space)))
-        (malformed))
-      (let* ((body (subseq string (1+ open) close))
-             ;; Splitting on comma after mapping every space to a comma
-             ;; handles "r, g, b" and "r g b" the same way, and dropping
-             ;; empty pieces absorbs the extra delimiters that produces
-             ;; (e.g. the run of two commas at each ", ").
-             (parts (remove-if (lambda (part) (zerop (length part)))
-                                (%split-on-char (substitute #\, #\Space body) #\,))))
-        (unless (= 3 (length parts))
-          (malformed))
-        (values-list (mapcar #'parse-component parts))))))
+                (let ((value (parse-integer component)))
+                  (unless (typep value '(integer 0 255))
+                    (malformed))
+                  value)))
+       (let ((open (position #\( string))
+             (close (position #\) string :from-end t)))
+         (unless (and open
+                      close
+                      (< open close)
+                      (loop for index from (1+ close) below (length string)
+                            always (char= (char string index) #\Space)))
+           (malformed))
+         (let* ((body (subseq string (1+ open) close))
+                ;; Splitting on comma after mapping every space to a comma
+                ;; handles "r, g, b" and "r g b" the same way, and dropping
+                ;; empty pieces absorbs the extra delimiters that produces
+                ;; (e.g. the run of two commas at each ", ").
+                (parts (remove-if (lambda (part) (zerop (length part)))
+                                   (%split-on-char (substitute #\, #\Space body) #\,))))
+           (unless (= 3 (length parts))
+             (malformed))
+           (values-list (mapcar #'parse-component parts)))))))
 
 (defun parse-color (spec)
   "Parse SPEC into (VALUES R G B), each an integer in [0, 255].
@@ -253,16 +176,3 @@ inputs styling layers accept."
             (find-symbol (string-upcase spec) :keyword)
           (%assert (and symbol status) "Unknown color name ~S." spec)
           (color-256-to-rgb (named-color symbol))))))))
-
-(defun color-gradient (from to steps)
-  "Return a list of STEPS RGB triples interpolating from FROM to TO inclusive.
-FROM and TO are (R G B) lists; the first result is FROM and, when STEPS > 1, the
-last is TO, with the rest evenly spaced (via BLEND-COLORS). STEPS must be a
-positive integer. Handy for heatmaps and status ramps feeding STYLE-FG/STYLE-BG
-through RGB-TO-256."
-  (%assert (and (integerp steps) (plusp steps))
-           "Gradient STEPS ~S must be a positive integer." steps)
-  (if (= steps 1)
-      (list (blend-colors from to 0))
-      (loop for index from 0 below steps
-            collect (blend-colors from to (/ index (1- steps))))))

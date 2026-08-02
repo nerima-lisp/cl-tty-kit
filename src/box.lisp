@@ -21,14 +21,15 @@
   "Maps a border-style keyword to its six drawing code points, in the order
 horizontal, vertical, top-left, top-right, bottom-left, bottom-right.")
 
-(defun %box-border-chars (name)
+(defmacro %box-border-chars (name)
   "Return the six border characters (H V TL TR BL BR) for style NAME."
-  (let ((entry (assoc name +box-borders+)))
-    (unless entry
-      (error "Unknown box border ~S; expected one of ~S."
-             name
-             (mapcar #'car +box-borders+)))
-    (mapcar #'code-char (rest entry))))
+  `(let ((name ,name))
+     (let ((entry (assoc name +box-borders+)))
+       (unless entry
+         (error "Unknown box border ~S; expected one of ~S."
+                name
+                (mapcar #'car +box-borders+)))
+       (mapcar #'code-char (rest entry)))))
 
 (define-simple-assert %assert-box-title (title)
   (or (null title) (stringp title))
@@ -38,21 +39,25 @@ horizontal, vertical, top-left, top-right, bottom-left, bottom-right.")
   (member align '(:left :center :right))
   "Box TITLE-ALIGN ~S must be one of :LEFT, :CENTER, or :RIGHT." align)
 
-(defun %box-put (screen x y char style style-supplied-p)
-  (if style-supplied-p
-      (screen-put-cell screen x y char :style style)
-      (screen-put-cell screen x y char)))
+(defmacro %box-put (screen x y char style style-supplied-p)
+  `(let ((screen ,screen) (x ,x) (y ,y) (char ,char) (style ,style)
+         (style-supplied-p ,style-supplied-p))
+     (if style-supplied-p
+         (screen-put-cell screen x y char :style style)
+         (screen-put-cell screen x y char))))
 
-(defun %screen-draw-line (screen glyph length style style-supplied-p cell-at)
+(defmacro %screen-draw-line (screen glyph length style style-supplied-p cell-at)
   "Paint LENGTH cells of GLYPH along a line, calling CELL-AT with each offset
 from 0 below LENGTH to get that cell's (VALUES X Y). Shared by
 SCREEN-DRAW-HORIZONTAL-LINE and SCREEN-DRAW-VERTICAL-LINE, which differ only in
 how an offset maps to a screen coordinate."
-  (when (plusp length)
-    (loop for offset below length
-          do (multiple-value-bind (x y) (funcall cell-at offset)
-               (%box-put screen x y glyph style style-supplied-p))))
-  screen)
+  `(let ((screen ,screen) (glyph ,glyph) (length ,length) (style ,style)
+         (style-supplied-p ,style-supplied-p) (cell-at ,cell-at))
+     (when (plusp length)
+       (loop for offset below length
+             do (multiple-value-bind (x y) (funcall cell-at offset)
+                  (%box-put screen x y glyph style style-supplied-p))))
+     screen))
 
 (defun screen-draw-horizontal-line (screen x y length
                                     &key (border :single) (style nil style-supplied-p))
@@ -74,31 +79,34 @@ that leaves the screen signals SCREEN-INDEX-OUT-OF-BOUNDS."
   (%screen-draw-line screen (second (%box-border-chars border)) length style style-supplied-p
                      (lambda (offset) (values x (+ y offset)))))
 
-(defun %box-title-column (x width title-cells align)
+(defmacro %box-title-column (x width title-cells align)
   "Return the starting column for a TITLE-CELLS-wide title on a box's top edge,
 inset one cell from each corner and placed by ALIGN."
-  (let ((inner-width (- width 2)))
-    (ecase align
-      (:left (1+ x))
-      (:right (+ x 1 (max 0 (- inner-width title-cells))))
-      (:center (+ x 1 (max 0 (floor (- inner-width title-cells) 2)))))))
+  `(let ((x ,x) (width ,width) (title-cells ,title-cells) (align ,align))
+     (let ((inner-width (- width 2)))
+       (ecase align
+         (:left (1+ x))
+         (:right (+ x 1 (max 0 (- inner-width title-cells))))
+         (:center (+ x 1 (max 0 (floor (- inner-width title-cells) 2))))))))
 
-(defun %draw-box-title (screen x y width title align style style-supplied-p title-style)
+(defmacro %draw-box-title (screen x y width title align style style-supplied-p title-style)
   "Write TITLE into the top border row of a box, clipped to the space between
 the corners. Uses TITLE-STYLE when given, else the box STYLE."
-  (let ((inner-width (- width 2)))
-    (when (and title (plusp inner-width))
-      (let* ((clipped (subseq title 0 (%cells-prefix-end title inner-width)))
-             (cells (%string-cell-width clipped)))
-        (when (plusp (length clipped))
-          (let ((column (%box-title-column x width cells align)))
-            (cond
-              (title-style
-               (screen-write-string screen column y clipped :style title-style))
-              (style-supplied-p
-               (screen-write-string screen column y clipped :style style))
-              (t
-               (screen-write-string screen column y clipped)))))))))
+  `(let ((screen ,screen) (x ,x) (y ,y) (width ,width) (title ,title) (align ,align)
+         (style ,style) (style-supplied-p ,style-supplied-p) (title-style ,title-style))
+     (let ((inner-width (- width 2)))
+       (when (and title (plusp inner-width))
+         (let* ((clipped (subseq title 0 (%cells-prefix-end title inner-width)))
+                (cells (%string-cell-width clipped)))
+           (when (plusp (length clipped))
+             (let ((column (%box-title-column x width cells align)))
+               (cond
+                 (title-style
+                  (screen-write-string screen column y clipped :style title-style))
+                 (style-supplied-p
+                  (screen-write-string screen column y clipped :style style))
+                 (t
+                  (screen-write-string screen column y clipped))))))))))
 
 (defun screen-draw-box (screen x y width height
                         &key (border :single) (style nil style-supplied-p)

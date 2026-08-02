@@ -77,7 +77,7 @@ to standard input (0)."
   "Terminal ~A must be a positive integer, got ~S." name value)
 
 #+sbcl
-(defun %set-terminal-size (fd columns rows)
+(defmacro %set-terminal-size (fd columns rows)
   "Set the window size on FD to COLUMNS by ROWS via ioctl TIOCSWINSZ.
 Returns (VALUES T NIL) on success and (VALUES NIL REASON) on failure, where
 REASON is :UNSUPPORTED-PLATFORM when the host's TIOCSWINSZ constant is unknown,
@@ -87,23 +87,24 @@ a terminal reports when it measures its window in cells only.
 
 Callers wanting the failure to be an error should use SET-TERMINAL-SIZE, which
 turns REASON into a TERMINAL-SIZE-SET-FAILED condition."
-  (setf fd (%assert-terminal-fd fd))
-  (if (null +tiocswinsz+)
-      (values nil :unsupported-platform)
-      (handler-case
-          (sb-alien:with-alien ((winsize (sb-alien:struct %winsize)))
-            (setf (sb-alien:slot winsize 'rows) rows
-                  (sb-alien:slot winsize 'columns) columns
-                  (sb-alien:slot winsize 'x-pixels) 0
-                  (sb-alien:slot winsize 'y-pixels) 0)
-            (multiple-value-bind (successp errno)
-                (sb-unix:unix-ioctl fd +tiocswinsz+
-                                    (sb-alien:alien-sap (sb-alien:addr winsize)))
-              (if successp
-                  (values t nil)
-                  (values nil (format nil "ioctl TIOCSWINSZ failed (errno ~A)"
-                                      errno)))))
-        (error (condition) (values nil condition)))))
+  `(let ((fd ,fd) (columns ,columns) (rows ,rows))
+     (setf fd (%assert-terminal-fd fd))
+     (if (null +tiocswinsz+)
+         (values nil :unsupported-platform)
+         (handler-case
+             (sb-alien:with-alien ((winsize (sb-alien:struct %winsize)))
+               (setf (sb-alien:slot winsize 'rows) rows
+                     (sb-alien:slot winsize 'columns) columns
+                     (sb-alien:slot winsize 'x-pixels) 0
+                     (sb-alien:slot winsize 'y-pixels) 0)
+               (multiple-value-bind (successp errno)
+                   (sb-unix:unix-ioctl fd +tiocswinsz+
+                                       (sb-alien:alien-sap (sb-alien:addr winsize)))
+                 (if successp
+                     (values t nil)
+                     (values nil (format nil "ioctl TIOCSWINSZ failed (errno ~A)"
+                                         errno)))))
+           (error (condition) (values nil condition))))))
 
 #+sbcl
 (defun set-terminal-size (columns rows &optional (fd 0))

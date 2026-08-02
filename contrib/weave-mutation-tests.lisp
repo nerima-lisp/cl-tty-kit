@@ -118,7 +118,7 @@ notice every one-operator change to the real implementation."
           (expect (apply #'cl-tty-kit::%split-on-char arguments) :to-equal expected)))))
   (it "every mutation of %SPLIT-ON-CHAR's body is killed by the case battery"
     (%assert-full-mutation-kill
-     "src/text-layout.lisp" 'cl-tty-kit::%split-on-char
+     "src/text-wrap.lisp" 'cl-tty-kit::%split-on-char
      '((("a;b;c" #\;) ("a" "b" "c"))
        (("" #\;) (""))
        ((";a" #\;) ("" "a"))

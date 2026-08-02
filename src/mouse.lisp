@@ -23,22 +23,17 @@ row, and a normalized modifier list."
   (y 0 :type (integer 0))
   (modifiers nil :type list))
 
-(setf (documentation 'mouse-event-button 'function)
-      "Return the button of MOUSE-EVENT: :LEFT, :MIDDLE, :RIGHT, :WHEEL-UP,
+(document-function 'mouse-event-button "Return the button of MOUSE-EVENT: :LEFT, :MIDDLE, :RIGHT, :WHEEL-UP,
 :WHEEL-DOWN, :WHEEL-LEFT, :WHEEL-RIGHT, or :NONE.")
 
-(setf (documentation 'mouse-event-action 'function)
-      "Return the action of MOUSE-EVENT: :PRESS, :RELEASE, :DRAG, :MOVE, or
+(document-function 'mouse-event-action "Return the action of MOUSE-EVENT: :PRESS, :RELEASE, :DRAG, :MOVE, or
 :SCROLL.")
 
-(setf (documentation 'mouse-event-x 'function)
-      "Return the 0-based column of MOUSE-EVENT.")
+(document-function 'mouse-event-x "Return the 0-based column of MOUSE-EVENT.")
 
-(setf (documentation 'mouse-event-y 'function)
-      "Return the 0-based row of MOUSE-EVENT.")
+(document-function 'mouse-event-y "Return the 0-based row of MOUSE-EVENT.")
 
-(setf (documentation 'mouse-event-modifiers 'function)
-      "Return the normalized modifier list of MOUSE-EVENT.")
+(document-function 'mouse-event-modifiers "Return the normalized modifier list of MOUSE-EVENT.")
 
 (define-simple-assert %assert-mouse-button (button)
   (member button
@@ -67,37 +62,38 @@ row, and a normalized modifier list."
                      :y y
                      :modifiers (normalize-modifiers modifiers)))
 
-(defun %mouse-button-name (low-bits)
-  (case low-bits
-    (0 :left)
-    (1 :middle)
-    (2 :right)
-    (t :none)))
+(defmacro %mouse-button-name (low-bits)
+  `(case ,low-bits
+     (0 :left)
+     (1 :middle)
+     (2 :right)
+     (t :none)))
 
-(defun %decode-mouse-cb (cb final)
+(defmacro %decode-mouse-cb (cb final)
   "Return (VALUES BUTTON ACTION MODIFIERS) for the SGR button byte CB.
 FINAL is #\\M for a press/motion report and #\\m for a release."
-  (let ((modifiers (normalize-modifiers
-                    (append (when (logtest cb 4) '(:shift))
-                            (when (logtest cb 8) '(:alt))
-                            (when (logtest cb 16) '(:control)))))
-        (low (logand cb 3)))
-    (cond
-      ((logtest cb 64)
-       (values (case low
-                 (0 :wheel-up)
-                 (1 :wheel-down)
-                 (2 :wheel-left)
-                 (3 :wheel-right))
-               :scroll modifiers))
-      ((logtest cb 32)
-       (if (= low 3)
-           (values :none :move modifiers)
-           (values (%mouse-button-name low) :drag modifiers)))
-      (t
-       (values (%mouse-button-name low)
-               (if (char= final #\m) :release :press)
-               modifiers)))))
+  `(let ((cb ,cb) (final ,final))
+     (let ((modifiers (normalize-modifiers
+                       (append (when (logtest cb 4) '(:shift))
+                               (when (logtest cb 8) '(:alt))
+                               (when (logtest cb 16) '(:control)))))
+           (low (logand cb 3)))
+       (cond
+         ((logtest cb 64)
+          (values (case low
+                    (0 :wheel-up)
+                    (1 :wheel-down)
+                    (2 :wheel-left)
+                    (3 :wheel-right))
+                  :scroll modifiers))
+         ((logtest cb 32)
+          (if (= low 3)
+              (values :none :move modifiers)
+              (values (%mouse-button-name low) :drag modifiers)))
+         (t
+          (values (%mouse-button-name low)
+                  (if (char= final #\m) :release :press)
+                  modifiers))))))
 
 (defun %bounded-digit-run-p (string start end max-length &optional (radix 10))
   "Return true when [START, END) of STRING is a non-empty run of at most
@@ -111,28 +107,31 @@ decimal fields and src/keys-decode.lisp's %SCALE-HEX-TO-BYTE's hex fields."
 (defconstant +max-decoded-uint-digits+ 9
   "Maximum decimal digits accepted in terminal numeric reports.")
 
-(defun %parse-mouse-uint (string start end)
-  (when (%bounded-digit-run-p string start end +max-decoded-uint-digits+)
-    (parse-integer string :start start :end end)))
+(defmacro %parse-mouse-uint (string start end)
+  `(let ((string ,string) (start ,start) (end ,end))
+     (when (%bounded-digit-run-p string start end +max-decoded-uint-digits+)
+       (parse-integer string :start start :end end))))
 
-(defun %parse-mouse-params (string start end)
+(defmacro %parse-mouse-params (string start end)
   "Split the `Cb;Cx;Cy' body in [START, END) into three unsigned integers.
 Returns (VALUES CB CX CY), each NIL when the field is missing or non-numeric."
-  (let* ((first-sep (position #\; string :start start :end end))
-         (second-sep (and first-sep
-                          (position #\; string :start (1+ first-sep) :end end))))
-    (if (and first-sep second-sep)
-        (values (%parse-mouse-uint string start first-sep)
-                (%parse-mouse-uint string (1+ first-sep) second-sep)
-                (%parse-mouse-uint string (1+ second-sep) end))
-        (values nil nil nil))))
+  `(let ((string ,string) (start ,start) (end ,end))
+     (let* ((first-sep (position #\; string :start start :end end))
+            (second-sep (and first-sep
+                             (position #\; string :start (1+ first-sep) :end end))))
+       (if (and first-sep second-sep)
+           (values (%parse-mouse-uint string start first-sep)
+                   (%parse-mouse-uint string (1+ first-sep) second-sep)
+                   (%parse-mouse-uint string (1+ second-sep) end))
+           (values nil nil nil)))))
 
-(defun %mouse-final-index (string start limit)
-  (loop for index from start below limit
-        for char = (char string index)
-        when (or (char= char #\M) (char= char #\m))
-          do (return index)
-        finally (return nil)))
+(defmacro %mouse-final-index (string start limit)
+  `(let ((string ,string) (start ,start) (limit ,limit))
+     (loop for index from start below limit
+           for char = (char string index)
+           when (or (char= char #\M) (char= char #\m))
+             do (return index)
+           finally (return nil))))
 
 (defun decode-mouse-sequence (input &key (start 0))
   "Decode one SGR mouse report from INPUT starting at START.

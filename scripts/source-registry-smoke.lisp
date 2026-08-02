@@ -1,16 +1,5 @@
 (require :asdf)
 
-(defparameter *smoke-timeout-seconds* 120)
-
-(defmacro with-smoke-timeout ((label) &body body)
-  `(handler-case
-       (sb-ext:with-timeout *smoke-timeout-seconds*
-         ,@body)
-     (sb-ext:timeout ()
-       (error "~A timed out after ~D seconds"
-              ,label
-              *smoke-timeout-seconds*))))
-
 (defun call-exported-function (package-name symbol-name)
   (let* ((package (or (find-package package-name)
                       (error "Package ~A is not available." package-name)))
@@ -37,7 +26,7 @@
   (load (merge-pathnames #P"scripts/bootstrap.lisp" root))
   (unless (member preserved-entry asdf:*central-registry* :test #'equal)
     (error "Project bootstrap replaced the caller's ASDF central registry."))
-  (with-smoke-timeout ("source-registry smoke test")
+  (cl-tty-kit/bootstrap:with-script-timeout ("source-registry smoke test" 120)
     (call-exported-function "CL-TTY-KIT/BOOTSTRAP" "LOAD-TEST-SYSTEM")
     (format t "~&[TEST] cl-tty-kit via project bootstrap~%")
     (call-exported-function "CL-TTY-KIT/TEST" "RUN-TESTS")))

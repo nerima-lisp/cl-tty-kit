@@ -9,16 +9,9 @@
 
 (cl-tty-kit/bootstrap:load-support-files)
 
-(defparameter *examples-timeout-seconds* 30)
-
-(defmacro with-examples-timeout (() &body body)
-  `(handler-case (sb-ext:with-timeout *examples-timeout-seconds* ,@body)
-    (sb-ext:timeout ()
-      (error "examples timed out after ~D seconds" *examples-timeout-seconds*))))
-
 (progn
-  (with-examples-timeout
-    ()
+  (cl-tty-kit/bootstrap:with-script-timeout
+    ("examples" 30)
     (dolist (file (cl-user::example-script-files))
       (format t "~&[RUN] ~A~%" file)
       (finish-output)

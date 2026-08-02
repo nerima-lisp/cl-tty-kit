@@ -2,9 +2,9 @@
 
 (defstruct (screen (:constructor %make-screen)) "A fixed-size two-dimensional grid of CELL objects." (width 0 :type fixnum) (height 0 :type fixnum) (cells #() :type simple-vector) (generation 0 :type fixnum) (row-generations #() :type (simple-array fixnum (*))))
 
-(setf (documentation 'screen-width 'function) "Return the width of SCREEN.")
+(document-function 'screen-width "Return the width of SCREEN.")
 
-(setf (documentation 'screen-height 'function) "Return the height of SCREEN.")
+(document-function 'screen-height "Return the height of SCREEN.")
 
 (defun %screen-touch (screen &optional (start-y 0) (end-y (screen-height screen))) (let ((generation (the fixnum (1+ (screen-generation screen))))) (setf (screen-generation screen) generation) (fill (screen-row-generations screen) generation :start start-y :end end-y)) screen)
 
@@ -24,24 +24,27 @@
   (or (cell-p value) (characterp value))
   "Cell value ~S must be a CELL or a character." value)
 
-(defun %coerce-cell-template (value)
-  (%assert-cell-template value)
-  (cond
-    ((cell-p value) value)
-    ((characterp value) (make-cell :char value))
-    (t (make-cell))))
+(defmacro %coerce-cell-template (value)
+  `(let ((value ,value))
+     (%assert-cell-template value)
+     (cond
+       ((cell-p value) value)
+       ((characterp value) (make-cell :char value))
+       (t (make-cell)))))
 
-(defun %coerce-cell-value (value style style-supplied-p)
-  (%assert-cell-value value)
-  (cond
-    ((cell-p value)
-     (if style-supplied-p
-         (make-cell :char (cell-char value)
-                    :style (%coerce-cell-style style))
-         value))
-    (t (make-cell :char value :style style))))
+(defmacro %coerce-cell-value (value style style-supplied-p)
+  `(let ((value ,value) (style ,style) (style-supplied-p ,style-supplied-p))
+     (%assert-cell-value value)
+     (cond
+       ((cell-p value)
+        (if style-supplied-p
+            (make-cell :char (cell-char value)
+                       :style (%coerce-cell-style style))
+            value))
+       (t (make-cell :char value :style style)))))
 
-(defun %coerce-cell-style (style) (and style (copy-tree (%normalize-cell-style style))))
+(defmacro %coerce-cell-style (style)
+  `(let ((style ,style)) (and style (copy-tree (%normalize-cell-style style)))))
 
 ;; Reject not just negatives but any dimension whose cell grid could not be
 ;; allocated: each side must be a non-negative fixnum and the total cell
@@ -55,56 +58,60 @@
        (< (* width height) array-total-size-limit))
   'screen-dimensions-invalid :width width :height height)
 
-(defun %screen-index (screen x y)
-  (+ (* y (screen-width screen)) x))
+(defmacro %screen-index (screen x y)
+  `(let ((screen ,screen) (x ,x) (y ,y))
+     (+ (* y (screen-width screen)) x)))
 
-(defun %assert-screen-bounds (screen x y)
-  (%assert-screen screen)
-  (%assert
-    (and
-      (integerp x)
-      (integerp y)
-      (<= 0 x)
-      (< x (screen-width screen))
-      (<= 0 y)
-      (< y (screen-height screen)))
-    'screen-index-out-of-bounds
-    :screen
-    screen
-    :x
-    x
-    :y
-    y
-    :width
-    (screen-width screen)
-    :height
-    (screen-height screen)))
+(defmacro %assert-screen-bounds (screen x y)
+  `(let ((screen ,screen) (x ,x) (y ,y))
+     (%assert-screen screen)
+     (%assert
+       (and
+         (integerp x)
+         (integerp y)
+         (<= 0 x)
+         (< x (screen-width screen))
+         (<= 0 y)
+         (< y (screen-height screen)))
+       'screen-index-out-of-bounds
+       :screen
+       screen
+       :x
+       x
+       :y
+       y
+       :width
+       (screen-width screen)
+       :height
+       (screen-height screen))))
 
 (define-validating-assert %assert-screen-offset (name value)
   (integerp value)
   "Screen ~A ~S must be an integer." name value)
 
-(defun %assert-screen-rect-bounds (screen x y width height)
-  (%assert-screen screen)
-  (%assert-screen-dimensions width height)
-  (when (and (plusp width) (plusp height))
-    (%assert-screen-bounds screen x y)
-    (%assert-screen-bounds screen (+ x (1- width)) (+ y (1- height)))))
+(defmacro %assert-screen-rect-bounds (screen x y width height)
+  `(let ((screen ,screen) (x ,x) (y ,y) (width ,width) (height ,height))
+     (%assert-screen screen)
+     (%assert-screen-dimensions width height)
+     (when (and (plusp width) (plusp height))
+       (%assert-screen-bounds screen x y)
+       (%assert-screen-bounds screen (+ x (1- width)) (+ y (1- height))))))
 
-(defun %assert-string-bounds (string start end)
-  (unless (stringp string)
-    (error "Expected a string, got ~S." string))
-  (%assert
-    (and
-      (integerp start)
-      (integerp end)
-      (<= 0 start)
-      (<= start end)
-      (<= end (length string)))
-    "Invalid string bounds START=~S END=~S for string of length ~D."
-    start
-    end
-    (length string)))
+(defmacro %assert-string-bounds (string start end)
+  `(let ((string ,string) (start ,start) (end ,end))
+     (unless (stringp string)
+       (error "Expected a string, got ~S." string))
+     (%assert
+       (and
+         (integerp start)
+         (integerp end)
+         (<= 0 start)
+         (<= start end)
+         (<= end (length string)))
+       "Invalid string bounds START=~S END=~S for string of length ~D."
+       start
+       end
+       (length string))))
 
 (defun %screen-vector (width height &optional (cell (%blank-cell)))
   (let* ((size (* width height))

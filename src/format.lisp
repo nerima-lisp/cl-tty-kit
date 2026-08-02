@@ -30,15 +30,16 @@
   (member value '(:left :right :center) :test #'eq)
   "~A ~S must be :LEFT, :RIGHT, or :CENTER." name value)
 
-(defun %assert-aligns (aligns)
-  (unless (or (null aligns) (listp aligns))
-    (error "ALIGNS ~S must be NIL or a list." aligns))
-  (dolist (align aligns)
-    (%assert-column-align "Column align" align)))
+(defmacro %assert-aligns (aligns)
+  `(let ((aligns ,aligns))
+     (unless (or (null aligns) (listp aligns))
+       (error "ALIGNS ~S must be NIL or a list." aligns))
+     (dolist (align aligns)
+       (%assert-column-align "Column align" align))))
 
-(defun %fractional-block (eighths)
+(defmacro %fractional-block (eighths)
   "Return the left-aligned block glyph filling EIGHTHS (1-7) of a cell."
-  (code-char (- #x2590 eighths)))
+  `(code-char (- #x2590 ,eighths)))
 
 (defun format-progress-bar (ratio width &key (fractional t)
                                              (full +full-block+)
@@ -72,9 +73,9 @@ integer)."
 (defparameter +sparkline-levels+ 8
   "The number of distinct sparkline bar heights (U+2581 through U+2588).")
 
-(defun %sparkline-char (level)
+(defmacro %sparkline-char (level)
   "Return the sparkline glyph for LEVEL, an integer in [0, 7]."
-  (code-char (+ #x2581 level)))
+  `(code-char (+ #x2581 ,level)))
 
 (defun format-sparkline (values &key min max)
   "Return a one-line Unicode sparkline for the sequence VALUES.

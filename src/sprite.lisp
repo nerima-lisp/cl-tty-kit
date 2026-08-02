@@ -22,15 +22,16 @@
 ;;; reverse its unconditional cell copy for the transparent cells.
 ;;; --------------------------------------------------------------------------
 
-(defun %sprite-lines (text)
+(defmacro %sprite-lines (text)
   "Split TEXT on #\\Newline into a list of lines."
-  (loop with start = 0
-        with lines = '()
-        for newline-position = (position #\Newline text :start start)
-        do (push (subseq text start (or newline-position (length text))) lines)
-           (if newline-position
-               (setf start (1+ newline-position))
-               (return (nreverse lines)))))
+  `(let ((text ,text))
+     (loop with start = 0
+           with lines = '()
+           for newline-position = (position #\Newline text :start start)
+           do (push (subseq text start (or newline-position (length text))) lines)
+              (if newline-position
+                  (setf start (1+ newline-position))
+                  (return (nreverse lines))))))
 
 (define-simple-assert %assert-sprite-text (text)
   (stringp text)
@@ -40,14 +41,15 @@
   (characterp transparent)
   "Sprite :TRANSPARENT ~S must be a character." transparent)
 
-(defun %sprite-clip-bounds (x y width height screen)
+(defmacro %sprite-clip-bounds (x y width height screen)
   "Return (VALUES COLUMN-START COLUMN-END ROW-START ROW-END), the sprite-local
 bounds (see the file header) at which a WIDTH by HEIGHT sprite placed at
 (X, Y) overlaps SCREEN."
-  (values (max 0 (- x))
-          (min width (- (screen-width screen) x))
-          (max 0 (- y))
-          (min height (- (screen-height screen) y))))
+  `(let ((x ,x) (y ,y) (width ,width) (height ,height) (screen ,screen))
+     (values (max 0 (- x))
+             (min width (- (screen-width screen) x))
+             (max 0 (- y))
+             (min height (- (screen-height screen) y)))))
 
 (defun sprite-blit (screen text x y &key (transparent #\Space) style)
   "Composite the multi-line TEXT onto SCREEN at (X, Y), returning SCREEN.

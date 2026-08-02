@@ -1,7 +1,9 @@
 # Color
 
-`cl-tty-kit` ships a small, dependency-free set of color helpers in
-`src/color.lisp`. Every function is pure — it takes numbers or strings and
+`cl-tty-kit` ships a small, dependency-free set of color helpers, split across
+`src/color.lisp` (hex/palette parsing and the xterm 256-color mapping) and
+`src/color-space.lisp` (HSL/HSV conversions and blending). Every function is
+pure — it takes numbers or strings and
 returns fresh values, never touching global state or the terminal. The helpers
 exist to bridge two worlds:
 

@@ -90,16 +90,29 @@ second copy for the usual LF-only paste."
     (%incomplete-escape-sequence-p string index)
     (subseq string index)))
 
-(defun %collect-plain-events (string eof)
-  (loop with events = '()
-        with index = 0
+(defun %decode-plain-events (string eof continuation)
+  "Call CONTINUATION with each event STRING decodes, in order.
+Returns the still-undecoded pending tail: an incomplete escape fragment held
+for a later chunk, or \"\" once STRING is fully consumed. Streaming events to
+CONTINUATION rather than building a list here keeps this the one place that
+walks STRING; %COLLECT-PLAIN-EVENTS is the list-collecting policy built on
+top of it."
+  (loop with index = 0
         with limit = (length string)
         do (when (>= index limit)
-      (return (values (nreverse events) ""))) (let ((pending (%pending-escape-fragment string index eof)))
-      (when pending
-        (return (values (nreverse events) pending)))) (multiple-value-bind (event consumed) (%decode-next-event string index)
-      (push event events)
-      (setf index (+ index consumed)))))
+             (return ""))
+           (let ((pending (%pending-escape-fragment string index eof)))
+             (when pending
+               (return pending)))
+           (multiple-value-bind (event consumed) (%decode-next-event string index)
+             (funcall continuation event)
+             (setf index (+ index consumed)))))
+
+(defun %collect-plain-events (string eof)
+  (let* ((events '())
+         (pending (%decode-plain-events string eof
+                    (lambda (event) (push event events)))))
+    (values (nreverse events) pending)))
 
 (defun %append-paste-string (decoder pending-paste chunk &optional (start 0) (end (length chunk)))
   (let* ((old-length (length pending-paste))
@@ -146,53 +159,65 @@ order."
     (setf (input-decoder-pending-paste decoder) nil)
     flushed-events))
 
-(defun %collect-paste-events (decoder string eof)
-  (let ((events '())
-        (index 0)
+(defun %decode-paste-events (decoder string eof continuation)
+  "Call CONTINUATION with each event STRING decodes while DECODER's paste
+buffer may be open, in order. Returns the still-undecoded pending tail, the
+same contract %DECODE-PLAIN-EVENTS documents -- %COLLECT-PASTE-EVENTS is the
+list-collecting policy built on top of it, the paste-aware sibling of
+%COLLECT-PLAIN-EVENTS/%DECODE-PLAIN-EVENTS."
+  (let ((index 0)
         (limit (length string)))
     (flet ((finish-paste ()
              (let ((text (%copy-paste-buffer-string (input-decoder-pending-paste decoder))))
-            (setf (input-decoder-pending-paste decoder) nil)
-            (%make-paste-event
-              (if (input-decoder-normalize-paste-line-endings-p decoder) (%normalize-paste-line-endings text)
-                text))))
+               (setf (input-decoder-pending-paste decoder) nil)
+               (%make-paste-event
+                 (if (input-decoder-normalize-paste-line-endings-p decoder)
+                     (%normalize-paste-line-endings text)
+                     text))))
            (flush-pending-paste (suffix)
              (dolist (event (%flush-pending-paste-events decoder suffix))
-            (push event events))))
-      (loop (when (>= index limit)
+               (funcall continuation event))))
+      (loop
+        (when (>= index limit)
           (when (and eof (input-decoder-pending-paste decoder))
             (flush-pending-paste ""))
-          (return (values (nreverse events) ""))) (if (input-decoder-pending-paste decoder) (let ((end-index (search +bracketed-paste-end-sequence+ string :start2 index)))
-            (if end-index (progn
-                (when (< index end-index)
-                  (setf (input-decoder-pending-paste decoder) (%append-paste-string
-                      decoder
-                      (input-decoder-pending-paste decoder)
-                      string
-                      index
-                      end-index)))
-                (push (finish-paste) events)
-                (setf index (+ end-index (length +bracketed-paste-end-sequence+))))
-              (let* ((suffix-length (%bracketed-paste-suffix-length string index eof))
-                     (payload-end (- limit suffix-length)))
-                (if eof (progn
-                    (flush-pending-paste (subseq string index))
-                    (return (values (nreverse events) "")))
+          (return ""))
+        (if (input-decoder-pending-paste decoder)
+            (let ((end-index (search +bracketed-paste-end-sequence+ string :start2 index)))
+              (if end-index
                   (progn
-                    (when (< index payload-end)
-                      (setf (input-decoder-pending-paste decoder) (%append-paste-string
-                          decoder
-                          (input-decoder-pending-paste decoder)
-                          string
-                          index
-                          payload-end)))
-                    (return (values (nreverse events) (subseq string payload-end))))))))
-          (let ((pending (%pending-escape-fragment string index eof)))
-            (if pending (return (values (nreverse events) pending))
-              (multiple-value-bind (event consumed) (%decode-next-event string index)
-                (if (%paste-marker-event-p event :paste-start) (setf (input-decoder-pending-paste decoder) (%make-paste-buffer))
-                  (push event events))
-                (incf index consumed)))))))))
+                    (when (< index end-index)
+                      (setf (input-decoder-pending-paste decoder)
+                            (%append-paste-string decoder (input-decoder-pending-paste decoder)
+                                                   string index end-index)))
+                    (funcall continuation (finish-paste))
+                    (setf index (+ end-index (length +bracketed-paste-end-sequence+))))
+                  (let* ((suffix-length (%bracketed-paste-suffix-length string index eof))
+                         (payload-end (- limit suffix-length)))
+                    (if eof
+                        (progn
+                          (flush-pending-paste (subseq string index))
+                          (return ""))
+                        (progn
+                          (when (< index payload-end)
+                            (setf (input-decoder-pending-paste decoder)
+                                  (%append-paste-string decoder (input-decoder-pending-paste decoder)
+                                                         string index payload-end)))
+                          (return (subseq string payload-end)))))))
+            (let ((pending (%pending-escape-fragment string index eof)))
+              (if pending
+                  (return pending)
+                  (multiple-value-bind (event consumed) (%decode-next-event string index)
+                    (if (%paste-marker-event-p event :paste-start)
+                        (setf (input-decoder-pending-paste decoder) (%make-paste-buffer))
+                        (funcall continuation event))
+                    (incf index consumed)))))))))
+
+(defun %collect-paste-events (decoder string eof)
+  (let* ((events '())
+         (pending (%decode-paste-events decoder string eof
+                    (lambda (event) (push event events)))))
+    (values (nreverse events) pending)))
 
 (defun %decode-string-events-with-paste (decoder string &key eof)
   (%collect-paste-events decoder string eof))

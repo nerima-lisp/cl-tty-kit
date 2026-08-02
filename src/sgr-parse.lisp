@@ -9,63 +9,67 @@
 ;;; runs with STYLE-ANSI.
 ;;; --------------------------------------------------------------------------
 
-(defun %sgr-parameter-body (string)
+(defmacro %sgr-parameter-body (string)
   "Return the parameter substring of an SGR escape STRING (between `[' and the
 trailing `m'), or STRING itself when it is already a bare parameter body."
-  (let ((open (position #\[ string))
-        (close (position #\m string :from-end t)))
-    (if (and open close (< open close))
-        (subseq string (1+ open) close)
-        string)))
+  `(let ((string ,string))
+     (let ((open (position #\[ string))
+           (close (position #\m string :from-end t)))
+       (if (and open close (< open close))
+           (subseq string (1+ open) close)
+           string))))
 
-(defun %sgr-basic-color-item (code)
-  (cond
-    ((<= 30 code 37) (list :fg (- code 30)))
-    ((<= 90 code 97) (list :fg (+ 8 (- code 90))))
-    ((<= 40 code 47) (list :bg (- code 40)))
-    ((<= 100 code 107) (list :bg (+ 8 (- code 100))))
-    (t nil)))
+(defmacro %sgr-basic-color-item (code)
+  `(let ((code ,code))
+     (cond
+       ((<= 30 code 37) (list :fg (- code 30)))
+       ((<= 90 code 97) (list :fg (+ 8 (- code 90))))
+       ((<= 40 code 47) (list :bg (- code 40)))
+       ((<= 100 code 107) (list :bg (+ 8 (- code 100))))
+       (t nil))))
 
-(defun %sgr-modifier-for (token)
-  (car (rassoc token +style-sgr-keywords+ :test #'string=)))
+(defmacro %sgr-modifier-for (token)
+  `(car (rassoc ,token +style-sgr-keywords+ :test #'string=)))
 
-(defun %sgr-color-reset-channel (code)
+(defmacro %sgr-color-reset-channel (code)
   "Return the style channel keyword the SGR color-reset parameter CODE clears.
 CODE is 39 (foreground), 49 (background), or 59 (underline color)."
-  (case code (39 :fg) (49 :bg) (t :underline-color)))
+  `(case ,code (39 :fg) (49 :bg) (t :underline-color)))
 
-(defun %sgr-extended-color-item (tokens index count)
+(defmacro %sgr-extended-color-item (tokens index count)
   "Parse an extended-color SGR parameter (38/48/58 at TOKENS[INDEX]) into
 5;N (indexed) or 2;R;G;B (truecolor) form.
 Returns (VALUES ITEM NEXT-INDEX): ITEM is the parsed style item, or NIL when
 the parameter is malformed, truncated, or an unrecognized subtype; NEXT-INDEX
 is how far the caller should advance past the whole parameter."
-  (let ((channel (cond ((string= (aref tokens index) "38") :fg)
-                       ((string= (aref tokens index) "48") :bg)
-                       (t :underline-color)))
-        (kind (and (< (1+ index) count) (aref tokens (1+ index)))))
-    (cond
-      ((and kind (string= kind "5") (< (+ index 2) count))
-       (let ((color (%sgr-byte (aref tokens (+ index 2)))))
-         (values (and color (list channel color)) (+ index 3))))
-      ((and kind (string= kind "2") (< (+ index 4) count))
-       (let ((red (%sgr-byte (aref tokens (+ index 2))))
-             (green (%sgr-byte (aref tokens (+ index 3))))
-             (blue (%sgr-byte (aref tokens (+ index 4)))))
-         (values (and red green blue (list channel red green blue)) (+ index 5))))
-      (t (values nil (1+ index))))))
+  `(let ((tokens ,tokens) (index ,index) (count ,count))
+     (let ((channel (cond ((string= (aref tokens index) "38") :fg)
+                          ((string= (aref tokens index) "48") :bg)
+                          (t :underline-color)))
+           (kind (and (< (1+ index) count) (aref tokens (1+ index)))))
+       (cond
+         ((and kind (string= kind "5") (< (+ index 2) count))
+          (let ((color (%sgr-byte (aref tokens (+ index 2)))))
+            (values (and color (list channel color)) (+ index 3))))
+         ((and kind (string= kind "2") (< (+ index 4) count))
+          (let ((red (%sgr-byte (aref tokens (+ index 2))))
+                (green (%sgr-byte (aref tokens (+ index 3))))
+                (blue (%sgr-byte (aref tokens (+ index 4)))))
+            (values (and red green blue (list channel red green blue)) (+ index 5))))
+         (t (values nil (1+ index)))))))
 
 (defconstant +max-sgr-parameter-digits+ 12)
 
-(defun %sgr-integer (token)
-  (when (and (plusp (length token))
-             (<= (length token) +max-sgr-parameter-digits+)
-             (every #'digit-char-p token))
-    (parse-integer token)))
+(defmacro %sgr-integer (token)
+  `(let ((token ,token))
+     (when (and (plusp (length token))
+                (<= (length token) +max-sgr-parameter-digits+)
+                (every #'digit-char-p token))
+       (parse-integer token))))
 
-(defun %sgr-byte (token)
-  (let ((value (%sgr-integer token)))
-    (and value (<= 0 value 255) value)))
+(defmacro %sgr-byte (token)
+  `(let ((value (%sgr-integer ,token)))
+     (and value (<= 0 value 255) value)))
 
 (defun decode-sgr (string)
   "Parse an SGR escape STRING into (VALUES STYLE RESET-P).

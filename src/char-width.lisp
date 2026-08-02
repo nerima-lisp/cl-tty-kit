@@ -3,14 +3,15 @@
 (declaim (notinline sb-unicode:general-category)
          (inline %character-width))
 
-(defun %zero-width-general-category-p (category code)
-  (or (eq category :mn)
-      (eq category :me)
-      (and (eq category :cf)
-           (/= code #x00AD))))
+(defmacro %zero-width-general-category-p (category code)
+  `(let ((category ,category) (code ,code))
+     (or (eq category :mn)
+         (eq category :me)
+         (and (eq category :cf)
+              (/= code #x00AD)))))
 
-(defun %unicode-general-category (char)
-  (sb-unicode:general-category char))
+(defmacro %unicode-general-category (char)
+  `(sb-unicode:general-category ,char))
 
 (defparameter +wide-code-point-vector+
   (coerce +wide-code-point-ranges+ 'simple-vector)
@@ -19,23 +20,26 @@ is a binary search instead of a linear scan of the source list.")
 
 (defconstant +maximum-unicode-code-point+ #x10FFFF)
 
-(defun %valid-code-point-p (value)
-  (and (integerp value)
-       (<= 0 value +maximum-unicode-code-point+)))
+(defmacro %valid-code-point-p (value)
+  `(let ((value ,value))
+     (and (integerp value)
+          (<= 0 value +maximum-unicode-code-point+))))
 
-(defun %validate-code-point-designator (value)
-  (cond
-    ((characterp value) (char-code value))
-    ((%valid-code-point-p value) value)
-    (t (error "Expected a character or Unicode code point, got ~S." value))))
+(defmacro %validate-code-point-designator (value)
+  `(let ((value ,value))
+     (cond
+       ((characterp value) (char-code value))
+       ((%valid-code-point-p value) value)
+       (t (error "Expected a character or Unicode code point, got ~S." value)))))
 
-(defun %validate-string-bounds (string start end)
-  (let ((length (length string)))
-    (unless (and (integerp start)
-                 (integerp end)
-                 (<= 0 start end length))
-      (error "Invalid string bounds START=~S END=~S for string of length ~D."
-             start end length))))
+(defmacro %validate-string-bounds (string start end)
+  `(let ((string ,string) (start ,start) (end ,end))
+     (let ((length (length string)))
+       (unless (and (integerp start)
+                    (integerp end)
+                    (<= 0 start end length))
+         (error "Invalid string bounds START=~S END=~S for string of length ~D."
+                start end length)))))
 
 (defun %code-point-in-sorted-ranges-p (code ranges)
   "Return true when CODE lies inside one of the sorted, non-overlapping
@@ -51,21 +55,23 @@ is a binary search instead of a linear scan of the source list.")
               (t (return-from %code-point-in-sorted-ranges-p t)))))
     nil))
 
-(defun %zero-width-code-point-p (code)
-  (let ((char (code-char code)))
-    (and char
-         (let ((category (%unicode-general-category char)))
-           (or (%zero-width-general-category-p category code)
-               (<= #x1160 code #x11FF))))))
+(defmacro %zero-width-code-point-p (code)
+  `(let* ((code ,code)
+          (char (code-char code)))
+     (and char
+          (let ((category (%unicode-general-category char)))
+            (or (%zero-width-general-category-p category code)
+                (<= #x1160 code #x11FF))))))
 
-(defun %wide-code-point-p (code)
+(defmacro %wide-code-point-p (code)
   "Return true when CODE occupies two terminal columns."
-  (%code-point-in-sorted-ranges-p code +wide-code-point-vector+))
+  `(%code-point-in-sorted-ranges-p ,code +wide-code-point-vector+))
 
-(defun %control-code-point-p (code)
-  (and (integerp code)
-       (or (< code #x20)
-           (<= #x7F code #x9F))))
+(defmacro %control-code-point-p (code)
+  `(let ((code ,code))
+     (and (integerp code)
+          (or (< code #x20)
+              (<= #x7F code #x9F)))))
 
 (defvar *east-asian-ambiguous-wide* nil
   "When true, CHAR-WIDTH counts East Asian Ambiguous code points (such as U+00A7
@@ -74,13 +80,15 @@ terminals that render them full-width. The default NIL treats them as one column
 which is correct for most Western terminals -- and keeps the ASCII fast path,
 since the ambiguous check runs only when this is true.")
 
-(defun %ambiguous-width-code-point-p (code)
-  (let ((char (code-char code)))
-    (and char (eq :a (sb-unicode:east-asian-width char)))))
+(defmacro %ambiguous-width-code-point-p (code)
+  `(let* ((code ,code)
+          (char (code-char code)))
+     (and char (eq :a (sb-unicode:east-asian-width char)))))
 
-(defun %code-point-width (code)
-  (cond
-    ((%control-code-point-p code) 0)
+(defmacro %code-point-width (code)
+  `(let ((code ,code))
+     (cond
+       ((%control-code-point-p code) 0)
     ((and *east-asian-ambiguous-wide* (%ambiguous-width-code-point-p code)) 2)
     ;; Below U+0300 (the start of Combining Diacritical Marks) there is no
     ;; zero-width or wide code point, only Basic Latin/Latin-1/Latin
@@ -89,10 +97,10 @@ since the ambiguous check runs only when this is true.")
     ;; whose lowest range starts at U+1100. Skipping straight to width 1
     ;; here avoids a GENERAL-CATEGORY table lookup for the common case of
     ;; writing plain ASCII text.
-    ((< code #x300) 1)
-    ((%zero-width-code-point-p code) 0)
-    ((%wide-code-point-p code) 2)
-    (t 1)))
+       ((< code #x300) 1)
+       ((%zero-width-code-point-p code) 0)
+       ((%wide-code-point-p code) 2)
+       (t 1))))
 
 (defun %character-width (character)
   (%code-point-width (char-code character)))

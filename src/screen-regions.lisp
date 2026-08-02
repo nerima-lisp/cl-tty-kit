@@ -8,7 +8,22 @@
 ;;; whole-grid operations: writing text, filling regions, scrolling,
 ;;; cropping, and compositing one screen onto another.
 ;;; --------------------------------------------------------------------------
-(defun %screen-write-string-normalized (screen x y string start end style) "Write a validated STRING span using an already normalized STYLE." (let* ((cells (screen-cells screen)) (spacer nil) (cell nil) (previous-char nil) (column x) (row-start (* y (screen-width screen)))) (loop for offset from start below end for char = (char string offset) for width = (%character-width char) for index = (+ row-start column) do (unless (and cell (char= char previous-char)) (setf cell (%make-cell :char char :raw-style style) previous-char char)) (setf (aref cells index) cell) (when (= width 2) (unless spacer (setf spacer (%make-cell :char #\Space :raw-style style))) (setf (aref cells (1+ index)) spacer)) (incf column (max 1 width))) (%screen-touch screen y (1+ y))))
+(defmacro %screen-write-string-normalized (screen x y string start end style)
+  "Write a validated STRING span using an already normalized STYLE."
+  `(let ((screen ,screen) (x ,x) (y ,y) (string ,string) (start ,start) (end ,end) (style ,style))
+     (let* ((cells (screen-cells screen)) (spacer nil) (cell nil) (previous-char nil) (column x) (row-start (* y (screen-width screen))))
+       (loop for offset from start below end
+             for char = (char string offset)
+             for width = (%character-width char)
+             for index = (+ row-start column)
+             do (unless (and cell (char= char previous-char))
+                  (setf cell (%make-cell :char char :raw-style style) previous-char char))
+                (setf (aref cells index) cell)
+                (when (= width 2)
+                  (unless spacer (setf spacer (%make-cell :char #\Space :raw-style style)))
+                  (setf (aref cells (1+ index)) spacer))
+                (incf column (max 1 width)))
+       (%screen-touch screen y (1+ y)))))
 
   (defun screen-write-string (screen x y string &key style (start 0) (end nil end-supplied-p))
     "Write STRING (bounded by START and END) into SCREEN starting at X and Y.

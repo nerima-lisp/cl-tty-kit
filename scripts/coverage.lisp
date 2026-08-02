@@ -24,9 +24,7 @@
 (defparameter *coverage-timeout-seconds* 120)
 
 (defmacro with-coverage-timeout ((label) &body body)
-  `(handler-case (sb-ext:with-timeout *coverage-timeout-seconds* ,@body)
-    (sb-ext:timeout ()
-      (error "~A timed out after ~D seconds" ,label *coverage-timeout-seconds*))))
+  `(cl-tty-kit/bootstrap:with-script-timeout (,label *coverage-timeout-seconds*) ,@body))
 
 (defun coverage-entry-count ()
   "Return the number of SB-COVER instrumentation entries recorded so far."
