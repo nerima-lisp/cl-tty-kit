@@ -8,7 +8,7 @@
     (:homepage . "https://github.com/nerima-lisp/cl-tty-kit")
     (:bug-tracker . "https://github.com/nerima-lisp/cl-tty-kit/issues")
     (:source-control . (:git "https://github.com/nerima-lisp/cl-tty-kit.git"))
-    (:version . "1.2.0")))
+    (:version . "1.3.0")))
 
 (defparameter +expected-external-symbols+
   '("CHAR-WIDTH"
