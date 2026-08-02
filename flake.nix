@@ -19,7 +19,7 @@
   # distributed by Quicklisp, and this project keeps no vendored copy of any:
   # these flake inputs are the only source of all three, put on
   # CL_SOURCE_REGISTRY by every app/check/devShell below.
-  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.1.0";
+  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.2.0";
   inputs.cl-prolog.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-prolog.inputs.cl-weave.follows = "cl-weave";
   inputs.cl-prolog.inputs.paredit-cli.follows = "paredit-cli";
@@ -34,7 +34,7 @@
   # own flake outputs, so `flake = false` and no `inputs.nixpkgs.follows`:
   # only the source tree is needed, not cl-codec-kit's own transitive flake
   # graph (cl-nix-forge, its own cl-weave, treefmt-nix).
-  inputs.cl-codec-kit.url = "github:nerima-lisp/cl-codec-kit/v0.1.0";
+  inputs.cl-codec-kit.url = "github:nerima-lisp/cl-codec-kit/v0.3.1";
   inputs.cl-codec-kit.flake = false;
 
   # paredit-cli provides structural S-expression tooling for this repo's
@@ -47,7 +47,7 @@
   # independent declarative specification of the ECMA-48 CSI byte-class
   # grammar (see contrib/cl-prolog-csi-grammar.lisp for the first, built on
   # cl-prolog's DCG support instead). Never part of the core build/CI.
-  inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit/v1.0.0";
+  inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit/v1.0.2";
   inputs.cl-parser-kit.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-parser-kit.inputs.cl-prolog.follows = "cl-prolog";
   inputs.cl-parser-kit.inputs.cl-weave.follows = "cl-weave";
@@ -130,7 +130,7 @@
         pkgs:
         pkgs.sbcl.buildASDFSystem {
           pname = "cl-codec-kit";
-          version = "0.1.0";
+          version = "0.3.1";
           src = cl-codec-kit;
           systems = [ "cl-codec-kit" ];
         };
