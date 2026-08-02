@@ -62,7 +62,7 @@ START and END must delimit a valid range within OCTETS."
            (length octets))
   (let* ((alphabet +base64-alphabet+)
          (complete-end (- end (mod (- end start) 3))))
-    (declare (type simple-base-string alphabet)
+    (declare (type simple-string alphabet)
              (type fixnum start end complete-end))
     (loop for index fixnum from start below complete-end by 3
           do (let ((packed (logior (ash (the (unsigned-byte 8) (aref octets index)) 16)

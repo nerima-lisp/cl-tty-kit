@@ -1,14 +1,13 @@
 (in-package #:cl-tty-kit)
 
-(defmacro %input->string (input)
-  `(let ((input ,input))
-     (cond
-       ((stringp input)
-        input)
-       ((%octet-input-p input)
-        (%utf8-octets-to-string input))
-       (t
-        (%coerce-character-vector input)))))
+(defun %input->string (input)
+  (cond
+    ((stringp input)
+     input)
+    ((%octet-input-p input)
+     (%utf8-octets-to-string input))
+    (t
+     (%coerce-character-vector input))))
 
 (defconstant +max-color-report-component-digits+ 4
   "Maximum hex digits accepted in one OSC color report component.")

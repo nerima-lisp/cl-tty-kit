@@ -40,12 +40,12 @@ CONSTRAINT's shape is already validated by %CONSTRAINT-BASELINE, which
 
 (defmacro %clip-sizes (sizes available)
   "Clip SIZES cumulatively so their running sum never exceeds AVAILABLE."
-  `(let ((remaining ,available))
+  `(let ((%clip-sizes-list ,sizes) (%clip-sizes-remaining ,available))
      (mapcar (lambda (size)
-               (let ((take (max 0 (min size remaining))))
-                 (decf remaining take)
+               (let ((take (max 0 (min size %clip-sizes-remaining))))
+                 (decf %clip-sizes-remaining take)
                  take))
-             ,sizes)))
+             %clip-sizes-list)))
 
 (defmacro %largest-remainder-order (shares weights)
   "Return the indices of SHARES (each a weighted fractional share of the

@@ -285,7 +285,7 @@
             (when run-character
               (emit-run out run-character run-count))))
              (reference-format-sixel (pixels width height)
-               (multiple-value-bind (color-indices palette) (%sixel-color-indices pixels width height)
+               (multiple-value-bind (color-indices palette) (cl-tty-kit::%sixel-color-indices pixels width height)
             (with-output-to-string (out)
               (format out "~CPq" +escape+)
               (dolist (color palette)
@@ -294,9 +294,9 @@
                     out
                     "#~D;2;~D;~D;~D"
                     color
-                    (%sixel-percent red)
-                    (%sixel-percent green)
-                    (%sixel-percent blue))))
+                    (cl-tty-kit::%sixel-percent red)
+                    (cl-tty-kit::%sixel-percent green)
+                    (cl-tty-kit::%sixel-percent blue))))
               (loop for base-y from 0 below height by +sixel-band-height+
                     for first-band = t then nil
                     do (unless first-band

@@ -90,7 +90,7 @@
       (sprite-blit screen "XY" 9 9 :style '(:underline))
       (expect (cl-tty-kit::screen-generation screen) :to-equal generation)
       (expect (cl-tty-kit::screen-row-generations screen)
-              :to-equal row-generations)
+              :to-equalp row-generations)
       (expect (screen-to-string screen) :to-equal (format nil "...~%..."))))
   (it "signals a non-type-error for malformed arguments"
     (let ((screen (make-screen 3 3)))
