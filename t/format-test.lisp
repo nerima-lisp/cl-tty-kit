@@ -287,7 +287,7 @@
              (reference-format-sixel (pixels width height)
                (multiple-value-bind (color-indices palette) (cl-tty-kit::%sixel-color-indices pixels width height)
             (with-output-to-string (out)
-              (format out "~CPq" +escape+)
+              (format out "~CPq" cl-tty-kit::+escape+)
               (dolist (color palette)
                 (multiple-value-bind (red green blue) (color-256-to-rgb color)
                   (format
@@ -320,7 +320,7 @@
                         (setf first-color nil)
                         (format out "#~D" color)
                         (emit-data out data))))))
-              (format out "~C\\" +escape+)))))
+              (format out "~C\\" cl-tty-kit::+escape+)))))
       (loop for width from 1 to 5
             for pixels = (make-array
           (* width 3)
