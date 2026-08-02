@@ -76,15 +76,17 @@
       cl-nix-forge,
     }:
     let
-      # x86_64-linux and nothing else. The only platform this project is gated
-      # on is the CI runner, and a flake should not advertise a platform it
-      # never builds. aarch64-darwin was declared until the 2026-08-01 revision
-      # and was covered by a macOS leg of the ci.yml matrix; that runner is gone
-      # along with the promise. x86_64-darwin was already absent (nixpkgs 26.11
-      # dropped it outright) and so was aarch64-linux (nothing ran it).
-      # Development happens on Linux. See PACKAGE_STANDARD.md "systems".
+      # x86_64-linux is what CI gates; aarch64-darwin is the development
+      # machine. Every per-system output -- packages, checks, apps AND devShells
+      # -- comes from this one list, so leaving aarch64-darwin out takes `nix
+      # build` and `nix develop` off the development machine as well. That trade
+      # was made on 2026-08-01 and reverted on 2026-08-02; aarch64-darwin carries
+      # no CI gate, which PACKAGE_STANDARD.md's "systems" section accepts
+      # explicitly. aarch64-linux and x86_64-darwin are nobody's verification and
+      # are not declared.
       systems = [
         "x86_64-linux"
+        "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
       pkgsFor = system: nixpkgs.legacyPackages.${system};
