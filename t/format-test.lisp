@@ -297,7 +297,7 @@
                     (cl-tty-kit::%sixel-percent red)
                     (cl-tty-kit::%sixel-percent green)
                     (cl-tty-kit::%sixel-percent blue))))
-              (loop for base-y from 0 below height by +sixel-band-height+
+              (loop for base-y from 0 below height by cl-tty-kit::+sixel-band-height+
                     for first-band = t then nil
                     do (unless first-band
                   (write-char #\- out)) (let ((first-color t))
@@ -306,7 +306,7 @@
                           (with-output-to-string (band)
                             (dotimes (x width)
                               (let ((bits 0))
-                                (loop for y from base-y below (min height (+ base-y +sixel-band-height+))
+                                (loop for y from base-y below (min height (+ base-y cl-tty-kit::+sixel-band-height+))
                                       for bit = 1 then (ash bit 1)
                                       when (= color (aref color-indices (+ x (* y width))))
                                         do (setf bits (logior bits bit)))
