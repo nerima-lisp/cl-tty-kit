@@ -76,10 +76,10 @@
   `(let ((screen ,screen)
          (x ,x)
          (y ,y))
+     (%assert-screen screen)
      (let ((screen-width (screen-width screen))
            (screen-height (screen-height screen)))
        (declare (type fixnum screen-width screen-height))
-       (%assert-screen screen)
        (%assert
          (and
            (integerp x)
