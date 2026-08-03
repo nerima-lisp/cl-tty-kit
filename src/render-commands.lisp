@@ -13,15 +13,10 @@
          (row-start 0 (+ row-start width)))
         ((>= y height))
       (declare (type fixnum y row-start))
-      (let ((row-end (+ row-start width)))
-        (declare (type fixnum row-end))
-        (do ((index row-start (1+ index)))
-            ((>= index row-end))
-          (declare (type fixnum index))
-          (%write-cell (aref cells index) stream)))
+      (%write-cell-range cells row-start (+ row-start width) stream)
       (unless (= y (1- height))
-        (write-char #\Newline stream))))
-  stream)
+        (write-char #\Newline stream)))
+    stream))
 
 (defun %render-screen-output (screen stream)
   (%with-style-sgr-sequence-cache

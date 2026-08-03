@@ -125,11 +125,60 @@ grid -- can prefix a run with this and terminate it with ANSI-RESET-STYLE."
       (if prefix (+ (length prefix) +ansi-reset-style-length+)
         0))))
 
-(defun %write-cell (cell stream)
-  (let ((prefix (%cell-style-sequence cell)))
-    (when prefix
-      (write-string prefix stream))
-    (write-char (%render-safe-cell-character (cell-char cell)) stream)
-    (when prefix
-      (%write-ansi-reset-style stream)))
-  stream)
+(progn
+  (defun %write-cell (cell stream)
+    (let ((prefix (%cell-style-sequence cell)))
+      (when prefix
+        (write-string prefix stream))
+      (write-char (%render-safe-cell-character (cell-char cell)) stream)
+      (when prefix
+        (%write-ansi-reset-style stream)))
+    stream)
+
+  (defun %same-style-sgr-sequence-p (left right)
+    (or (eq left right)
+        (and left right (string= left right))))
+
+  (defun %write-cell-range (cells start end stream)
+    "Write CELLS in [START, END), emitting SGR transitions only when needed."
+    (declare (type simple-vector cells)
+             (type fixnum start end))
+    (let ((active-prefix nil))
+      (do ((index start (1+ index)))
+          ((>= index end)
+           (when active-prefix
+             (%write-ansi-reset-style stream))
+           stream)
+        (declare (type fixnum index))
+        (let* ((cell (aref cells index))
+               (prefix (%cell-style-sequence cell)))
+          (unless (%same-style-sgr-sequence-p active-prefix prefix)
+            (when active-prefix
+              (%write-ansi-reset-style stream))
+            (when prefix
+              (write-string prefix stream))
+            (setf active-prefix prefix))
+          (write-char (%render-safe-cell-character (cell-char cell)) stream)))))
+
+  (defun %cell-range-rendered-length (cells start end)
+    "Return the byte count %WRITE-CELL-RANGE emits for CELLS in [START, END)."
+    (declare (type simple-vector cells)
+             (type fixnum start end))
+    (let ((active-prefix nil)
+          (output-length 0))
+      (declare (type fixnum output-length))
+      (do ((index start (1+ index)))
+          ((>= index end)
+           (when active-prefix
+             (incf output-length +ansi-reset-style-length+))
+           output-length)
+        (declare (type fixnum index))
+        (let* ((cell (aref cells index))
+               (prefix (%cell-style-sequence cell)))
+          (unless (%same-style-sgr-sequence-p active-prefix prefix)
+            (when active-prefix
+              (incf output-length +ansi-reset-style-length+))
+            (when prefix
+              (incf output-length (length prefix)))
+            (setf active-prefix prefix))
+          (incf output-length))))))

@@ -99,9 +99,17 @@ TTY and press `q` to exit.
 
 `stop` is checked *after* a tick has been advanced and rendered, so the loop
 always emits the frame that caused it to stop rather than swallowing it.
-Pacing measures how long `advance` and `render` actually took and sleeps
-only the remainder of `interval`, so a slow tick shortens the next sleep
-instead of accumulating drift across many frames.
+Pacing uses a monotonic internal-time deadline for each frame rather than
+sleeping a fresh interval after every render. Scheduler overshoot therefore
+does not accumulate as drift; if a frame overruns its deadline, the loop
+resynchronizes to the current time instead of issuing a burst of catch-up
+frames.
+
+The compatibility string-frame driver accepts either a string or `NIL` from
+`render`; `NIL` suppresses output for that tick without allocating an empty
+string. Other return values signal an error. Use the direct-stream variant
+when the renderer already writes to the stream and can return a boolean output
+flag.
 
 Both modes call the same internal per-tick step, so behavior exercised under
 bounded-mode tests carries over unchanged to the real-time driver — the

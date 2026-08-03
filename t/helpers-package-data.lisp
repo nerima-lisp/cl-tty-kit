@@ -1,7 +1,6 @@
 (in-package #:cl-tty-kit/test)
 
-(defparameter +expected-system-metadata+
-  '((:description . "A small Common Lisp terminal toolkit.")
+(defparameter +expected-system-metadata+ '((:description . "A small Common Lisp terminal toolkit.")
     (:author . "takeokunn <bararararatty@gmail.com>")
     (:maintainer . "takeokunn <bararararatty@gmail.com>")
     (:license . "MIT")
@@ -10,8 +9,7 @@
     (:source-control . (:git "https://github.com/nerima-lisp/cl-tty-kit.git"))
     (:version . "1.3.0")))
 
-(defparameter +expected-external-symbols+
-  '("CHAR-WIDTH"
+(defparameter +expected-external-symbols+ '("CHAR-WIDTH"
     "STRING-WIDTH"
     "TTY-KIT-ERROR"
     "UNSUPPORTED-FEATURE"
@@ -55,6 +53,7 @@
     "STREAM-FD"
     "RENDERER-INVALIDATE"
     "WITH-TERMINAL-SESSION"
+    "WITH-TERMINAL-SESSION-OUTPUT"
     "TERMINAL-SIZE"
     "SET-TERMINAL-SIZE"
     "ANSI-BELL"
@@ -133,6 +132,8 @@
     "KEY-EVENT-BASE-KEY"
     "INPUT-DECODER"
     "MAKE-INPUT-DECODER"
+   "MAKE-STREAM-INPUT-POLLER"
+   "MAKE-TERMINAL-SIZE-POLLER"
     "DECODE-INPUT"
     "DECODE-INPUT-CHUNK"
     "DECODE-KEY-SEQUENCE"
@@ -227,6 +228,7 @@
     "SCREEN-RESIZE"
     "SCREEN-CLEAR"
     "SCREEN-PUT-CELL"
+    "WITH-SCREEN-BATCH"
     "SCREEN-FILL-RECT"
     "SCREEN-FILL"
     "SCREEN-WRITE-STRING"
@@ -280,15 +282,14 @@
     "FD-WRITE-OCTETS"
     "ANSI-REQUEST-DEVICE-ATTRIBUTES"))
 
-(defparameter +expected-development-commands+
-  (list "nix run .#test"
-        "nix run .#examples"
-        "nix run .#source-registry-smoke"
-        "nix run .#coverage"
-        "nix run .#verify"))
+(defparameter +expected-development-commands+ (list
+    "nix run .#test"
+    "nix run .#examples"
+    "nix run .#source-registry-smoke"
+    "nix run .#coverage"
+    "nix run .#verify"))
 
-(defparameter +expected-quick-start-fragments+
-  '("(make-screen 20 4)"
+(defparameter +expected-quick-start-fragments+ '("(make-screen 20 4)"
     "(screen-write-string screen 0 0 \"Hi\")"
     "(format t \"~A~%\" (render-screen screen))"))
 
@@ -296,10 +297,8 @@
 ;; qualify their symbols rather than assume a USE-PACKAGE the reader never saw.
 ;; The leading paren is deliberately not part of the fragment: the paste example
 ;; wraps its argument list across lines.
-(defparameter +expected-streaming-fragments+
-  '("cl-tty-kit:decode-input-chunk decoder (string #\\Esc)"
+(defparameter +expected-streaming-fragments+ '("cl-tty-kit:decode-input-chunk decoder (string #\\Esc)"
     "cl-tty-kit:decode-input-chunk decoder \"[A\""))
 
-(defparameter +expected-paste-fragments+
-  '("cl-tty-kit:make-input-decoder :collect-bracketed-paste t"
+(defparameter +expected-paste-fragments+ '("cl-tty-kit:make-input-decoder :collect-bracketed-paste t"
     "cl-tty-kit:decode-input-chunk decoder \"hello\""))

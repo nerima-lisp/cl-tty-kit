@@ -23,6 +23,7 @@
             (spacer nil)
             (cell nil)
             (previous-char nil)
+            (changed-p nil)
             (column x)
             (row-start (* y screen-width)))
         (declare (type fixnum screen-width column row-start x y start end))
@@ -31,19 +32,26 @@
               for width fixnum = (if all-width-one-p 1 (%character-width char))
               for advance fixnum = (if (= width 2) 2 1)
               for index fixnum = (+ row-start column)
-             do (unless (and cell (char= char previous-char))
-                  (setf cell (%make-cell :char char :raw-style style)
-                        previous-char char))
-                (setf (aref cells index) cell)
+             do (let ((existing (aref cells index)))
+                  (unless (and (char= char (cell-char existing)) (equal style (cell-raw-style existing)))
+                    (unless (and cell (char= char previous-char))
+                      (setf cell (%make-cell :char char :raw-style style)))
+                    (setf (aref cells index) cell
+                          changed-p t)))
                 (when (= width 2)
-                  (unless spacer
-                    (setf spacer (%make-cell :char #\Space :raw-style style)))
-                  (setf (aref cells (1+ index)) spacer))
+                  (let ((existing (aref cells (1+ index))))
+                    (unless (and (char= #\Space (cell-char existing)) (equal style (cell-raw-style existing)))
+                      (unless spacer
+                        (setf spacer (%make-cell :char #\Space :raw-style style)))
+                      (setf (aref cells (1+ index)) spacer
+                            changed-p t))))
+                (setf previous-char char)
                 (incf column advance))
-       (%screen-touch screen y (1+ y)))))
+       (when changed-p
+         (%screen-touch screen y (1+ y) x column)))))
 
-  (defun screen-write-string (screen x y string &key style (start 0) (end nil end-supplied-p))
-    "Write STRING (bounded by START and END) into SCREEN starting at X and Y.
+(defun screen-write-string (screen x y string &key style (start 0) (end nil end-supplied-p))
+  "Write STRING (bounded by START and END) into SCREEN starting at X and Y.
 Each character advances the column by its CHAR-WIDTH rather than by one cell
 per character: a double-width character (CHAR-WIDTH 2, such as a CJK
 ideograph) also fills the column immediately after it with a blank spacer
@@ -83,26 +91,38 @@ no-op."
         screen)))
 
   (defun screen-fill-rect (screen x y width height value &key (style nil style-supplied-p))
-    "Fill the WIDTH by HEIGHT rectangle at X and Y in SCREEN with VALUE. Returns SCREEN."
+    "Fill the WIDTH by HEIGHT rectangle at X and Y in SCREEN with VALUE. Returns SCREEN.
+
+STYLE overrides the value's style when supplied. Zero-sized rectangles are no-ops."
     (%assert-screen-rect-bounds screen x y width height)
     (when (and (plusp width) (plusp height))
-      (let ((cells (screen-cells screen))
-            (cell (%coerce-cell-value value style style-supplied-p))
-            (screen-width (screen-width screen))
-            (end-y (+ y height)))
+      (%assert-cell-value value)
+      (let* ((cells (screen-cells screen))
+             (screen-width (screen-width screen))
+             (end-y (+ y height))
+             (end-x (+ x width))
+             (target-char (if (cell-p value) (cell-char value) value))
+             (target-style (if style-supplied-p
+                                (%normalize-cell-style style)
+                                (and (cell-p value) (cell-raw-style value)))))
         (declare (type simple-vector cells)
-                 (type fixnum screen-width end-y))
-        (loop for row fixnum from y below end-y
-              for start fixnum = (+ (* row screen-width) x)
-              do (fill cells cell :start start :end (+ start width)))
-        (%screen-touch screen y end-y)))
+                 (type fixnum screen-width end-y end-x))
+        (unless (loop for row fixnum from y below end-y
+                      always (loop for column fixnum from x below end-x
+                                   always (let ((existing (aref cells (+ column (* row screen-width)))))
+                                            (and (char= (cell-char existing) target-char)
+                                                 (equal (cell-raw-style existing) target-style)))))
+          (let ((cell (if (and (cell-p value) (not style-supplied-p))
+                           value
+                           (%make-cell :char target-char :raw-style target-style))))
+            (loop for row fixnum from y below end-y
+                  do (loop for column fixnum from x below end-x
+                           do (setf (aref cells (+ column (* row screen-width))) cell)))
+            (%screen-touch screen y end-y x end-x)))))
     screen)
 
 (defun screen-fill (screen value &key (style nil style-supplied-p))
-  "Fill every cell of SCREEN with VALUE, returning SCREEN.
-VALUE is a CELL template or a character; STYLE overrides its style when supplied.
-This is SCREEN-FILL-RECT applied to the whole grid, so an empty screen is a
-no-op."
+  "Fill every cell of SCREEN with VALUE and optional STYLE, returning SCREEN."
   (%assert-screen screen)
   (let ((width (screen-width screen))
         (height (screen-height screen)))
@@ -112,7 +132,25 @@ no-op."
         (screen-fill-rect screen 0 0 width height value)))
   screen)
 
-(defun screen-copy (screen) "Return a new SCREEN with an independent backing vector and shared cells." (%assert-screen screen) (%make-screen :width (screen-width screen) :height (screen-height screen) :cells (copy-seq (screen-cells screen)) :generation (screen-generation screen) :row-generations (copy-seq (screen-row-generations screen))))
+(defun screen-clear (screen &key cell)
+  "Fill SCREEN with a shared CELL template, defaulting to a blank cell.
+CELL may be NIL, a CELL, or a character. Returns SCREEN."
+  (%assert-screen screen)
+  (screen-fill screen (%coerce-cell-template cell))
+  screen)
+
+(defun screen-copy (screen)
+  "Return a new SCREEN with independent backing storage and shared cells."
+  (%assert-screen screen)
+  (%make-screen
+   :width (screen-width screen)
+   :height (screen-height screen)
+   :cells (copy-seq (screen-cells screen))
+   :generation (screen-generation screen)
+   :row-generations (copy-seq (screen-row-generations screen))
+   :row-dirty-starts (copy-seq (screen-row-dirty-starts screen))
+   :row-dirty-ends (copy-seq (screen-row-dirty-ends screen))
+   :row-dirty-bits (%copy-row-dirty-bits (screen-row-dirty-bits screen))))
 
 (defun screen-row-string (screen y &key (start 0) (end nil end-supplied-p))
   "Return the characters stored in row Y of SCREEN between columns START and END.
@@ -144,8 +182,7 @@ out-of-range row or column span signals SCREEN-INDEX-OUT-OF-BOUNDS."
       (declare (type simple-vector cells)
                (type fixnum length cell-index))
       (loop for result-index fixnum from 0 below length
-            do (setf (schar result result-index)
-                     (cell-char (aref cells (+ cell-index result-index)))))
+            do (setf (schar result result-index) (cell-char (aref cells (+ cell-index result-index)))))
       result)))
 
   (defun screen-scroll (screen count &key fill)
@@ -284,5 +321,6 @@ out-of-range row or column span signals SCREEN-INDEX-OUT-OF-BOUNDS."
                             :end1 (+ destination-row-start copy-width)
                             :start2 source-row-start
                             :end2 (+ source-row-start copy-width))))
-        (%screen-touch dest destination-y (+ destination-y copy-height))))
+        (%screen-touch dest destination-y (+ destination-y copy-height)
+                        destination-x (+ destination-x copy-width))))
     dest))

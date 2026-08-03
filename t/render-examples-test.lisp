@@ -152,7 +152,7 @@
                "!"))
 
 (defun %terminal-session-example-expected-output ()
-  (concatenate 'string
+  (concatenate (quote string)
                (ansi-enter-alternate-screen)
                (ansi-hide-cursor)
                (ansi-enable-bracketed-paste)
@@ -160,13 +160,7 @@
                (ansi-clear-screen)
                (ansi-move-cursor 1 1)
                (ansi-bold)
-               "T"
-               (ansi-reset-style)
-               (ansi-bold)
-               "T"
-               (ansi-reset-style)
-               (ansi-bold)
-               "Y"
+               "TTY"
                (ansi-reset-style)
                " demo"
                (make-string 10 :initial-element #\Space)

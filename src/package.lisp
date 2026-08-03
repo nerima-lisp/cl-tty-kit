@@ -52,7 +52,9 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:with-raw-mode
    ;; terminal session
    #:with-terminal-session
+   #:with-terminal-session-output
    #:terminal-size
+   #:make-terminal-size-poller
    #:set-terminal-size
    #:stream-fd
    ;; ansi
@@ -137,6 +139,7 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:decode-input
    #:decode-input-chunk
    #:flush-input-decoder
+   #:make-stream-input-poller
    #:decode-key-sequence
    #:decode-cursor-position-report
    #:decode-color-report
@@ -237,11 +240,12 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:screen-cell
    #:screen-resize
    #:screen-clear
+   #:screen-copy
    #:screen-put-cell
+   #:with-screen-batch
    #:screen-fill-rect
    #:screen-fill
    #:screen-write-string
-   #:screen-copy
    #:screen-row-string
    #:screen-scroll
    #:screen-blit

@@ -1,29 +1,79 @@
 (in-package #:cl-tty-kit/test)
 
-(describe "make-renderer"
-  (it "creates a renderer wrapping a screen of the given size"
+(describe
+  "make-renderer"
+  (it
+    "creates a renderer wrapping a screen of the given size"
     (let ((renderer (make-renderer 4 2)))
       (expect (renderer-width renderer) :to-be 4)
       (expect (renderer-height renderer) :to-be 2)
       (expect (renderer-screen renderer) :to-be-instance-of 'screen))))
+(describe
+  "renderer dirty-cell diff plans"
+  (it
+    "only compares the changed cell range for a sparse row update"
+    (let ((renderer (make-renderer 80 1))
+          (calls 0)
+          (original (symbol-function 'cl-tty-kit::%cell-equal-p)))
+      (renderer-render renderer)
+      (screen-put-cell (renderer-screen renderer) 40 0 #\x)
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'cl-tty-kit::%cell-equal-p)
+                   (lambda (&rest arguments)
+                     (incf calls)
+                     (apply original arguments)))
+             (expect (renderer-render renderer)
+                     :to-equal
+                     (concatenate 'string (ansi-move-cursor 1 41) "x"))
+             (expect calls :to-be 1))
+        (setf (symbol-function 'cl-tty-kit::%cell-equal-p) original))))
+  (it
+    "compares only dirty cells when separated updates widen a row range"
+    (let ((renderer (make-renderer 80 1))
+          (calls 0)
+          (original (symbol-function 'cl-tty-kit::%cell-equal-p)))
+      (renderer-render renderer)
+      (screen-put-cell (renderer-screen renderer) 1 0 #\a)
+      (screen-put-cell (renderer-screen renderer) 78 0 #\b)
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'cl-tty-kit::%cell-equal-p)
+                   (lambda (&rest arguments)
+                     (incf calls)
+                     (apply original arguments)))
+             (renderer-render renderer)
+             (expect calls :to-be 2))
+        (setf (symbol-function 'cl-tty-kit::%cell-equal-p) original)))))
 
-(describe "renderer public API validation"
-  (it "rejects a non-renderer argument"
+(describe
+  "renderer public API validation"
+  (it
+    "rejects a non-renderer argument"
     (expect-non-type-error (renderer-width :not-a-renderer))
     (expect-non-type-error (renderer-height :not-a-renderer))
     (expect-non-type-error (renderer-render :not-a-renderer))
     (expect-non-type-error (renderer-clear :not-a-renderer))
     (expect-non-type-error (renderer-resize :not-a-renderer 1 1)))
-  (it "rejects a non-cursor :cursor argument"
-    (expect-non-type-error (renderer-render (make-renderer 1 1) :cursor :not-a-cursor))))
+  (it
+    "rejects a non-cursor :cursor argument"
+    (expect-non-type-error
+      (renderer-render (make-renderer 1 1) :cursor :not-a-cursor))))
 
-(describe "renderer-render"
-  (it "renders the initial screen, then only the diff, then nothing when unchanged"
+(describe
+  "renderer-render"
+  (it
+    "renders the initial screen, then only the diff, then nothing when unchanged"
     (let ((renderer (make-renderer 4 1)))
       (screen-write-string (renderer-screen renderer) 0 0 "Hi")
-      (expect (renderer-render renderer) :to-equal (render-screen (renderer-screen renderer)))
-      (expect (cl-tty-kit::renderer-rendered-generation renderer)
-              :to-be (cl-tty-kit::screen-generation (renderer-screen renderer)))
+      (expect
+        (renderer-render renderer)
+        :to-equal
+        (render-screen (renderer-screen renderer)))
+      (expect
+        (cl-tty-kit::renderer-rendered-generation renderer)
+        :to-be
+        (cl-tty-kit::screen-generation (renderer-screen renderer)))
       (expect (renderer-render renderer) :to-equal "")
       (let ((stream (make-string-output-stream)))
         (expect (renderer-render renderer :stream stream) :to-be stream)
@@ -34,22 +84,26 @@
         (expect (search "i" out) :to-be-falsy))
       (expect (renderer-render renderer) :to-equal ""))))
 
-(describe "renderer-render's cell-equality fast path"
-  (it "skips %CELL-EQUAL-P entirely when nothing changed"
+(describe
+  "renderer-render's cell-equality fast path"
+  (it
+    "skips %CELL-EQUAL-P entirely when nothing changed"
     (let ((renderer (make-renderer 80 24))
           (calls 0)
           (original (symbol-function 'cl-tty-kit::%cell-equal-p)))
       (renderer-render renderer)
-      (unwind-protect
-           (progn
-             (setf (symbol-function 'cl-tty-kit::%cell-equal-p)
-                   (lambda (&rest arguments) (incf calls) (apply original arguments)))
-             (expect (renderer-render renderer) :to-equal "")
-             (expect calls :to-be 0))
+      (unwind-protect (progn
+          (setf (symbol-function 'cl-tty-kit::%cell-equal-p) (lambda (&rest arguments)
+              (incf calls)
+              (apply original arguments)))
+          (expect (renderer-render renderer) :to-equal "")
+          (expect calls :to-be 0))
         (setf (symbol-function 'cl-tty-kit::%cell-equal-p) original)))))
 
-(describe "renderer front-buffer snapshot reuse"
-  (it "reuses the front buffer object across renders and its cell identities across no-op renders"
+(describe
+  "renderer front-buffer snapshot reuse"
+  (it
+    "reuses the front buffer object across renders and its cell identities across no-op renders"
     (let ((renderer (make-renderer 2 1)))
       (renderer-render renderer)
       (let ((front (cl-tty-kit::renderer-front renderer)))
@@ -59,66 +113,129 @@
         (let ((equivalent (make-cell :char #\x)))
           (setf (aref (cl-tty-kit::screen-cells front) 0) equivalent)
           (expect (renderer-render renderer) :to-equal "")
-          (expect (aref (cl-tty-kit::screen-cells (cl-tty-kit::renderer-front renderer)) 0)
-                  :to-be equivalent))
+          (expect
+            (aref (cl-tty-kit::screen-cells (cl-tty-kit::renderer-front renderer)) 0)
+            :to-be
+            equivalent))
         (expect (renderer-render renderer) :to-equal "")))))
 
-(describe "renderer diff-plan reuse"
-  (it "matches RENDER-DIFF's own output and updates the cached front buffer, including on clear-line"
+(describe
+  "renderer diff-plan reuse"
+  (it
+    "matches RENDER-DIFFs own output and updates the cached front buffer, including on clear-line"
     (let ((renderer (make-renderer 4 1)))
       (screen-write-string (renderer-screen renderer) 0 0 "ABCD")
       (renderer-render renderer)
       (screen-write-string (renderer-screen renderer) 1 0 "   ")
-      (let ((expected (render-diff (renderer-screen renderer)
-                                   (screen-copy (cl-tty-kit::renderer-front renderer))))
+      (let ((expected
+            (render-diff
+              (renderer-screen renderer)
+              (screen-copy (cl-tty-kit::renderer-front renderer))))
             (actual (renderer-render renderer)))
         (expect actual :to-equal expected)
         (expect (search (ansi-clear-line 0) actual)))
-      ;; The clear-line sentinel must also update the cached front buffer.
       (expect (renderer-render renderer) :to-equal "")
       (screen-put-cell (renderer-screen renderer) 0 0 #\Z)
-      (let ((expected (render-diff (renderer-screen renderer)
-                                   (screen-copy (cl-tty-kit::renderer-front renderer)))))
+      (let ((expected
+            (render-diff
+              (renderer-screen renderer)
+              (screen-copy (cl-tty-kit::renderer-front renderer)))))
         (expect (renderer-render renderer) :to-equal expected))))
-  (it "chooses a full repaint for a dense update and still refreshes the front buffer in one bulk copy"
+  (it
+    "replays a short unchanged gap instead of emitting a second cursor move"
+    (let ((renderer (make-renderer 5 1)))
+      (renderer-render renderer)
+      (screen-put-cell (renderer-screen renderer) 0 0 #\A)
+      (screen-put-cell (renderer-screen renderer) 4 0 #\B)
+      (let ((expected
+            (render-diff
+              (renderer-screen renderer)
+              (screen-copy (cl-tty-kit::renderer-front renderer)))))
+        (let ((actual (renderer-render renderer)))
+          (expect
+            actual
+            :to-equal
+            (concatenate (quote string) (ansi-move-cursor 1 1) "A   B"))
+          (expect (length actual) :to-be-less-than (length expected))))
+      (expect (renderer-render renderer) :to-equal "")))
+  (it
+    "chooses a full repaint for a dense update and still refreshes the front buffer in one bulk copy"
     (let ((renderer (make-renderer 80 24)))
       (renderer-render renderer)
       (screen-fill (renderer-screen renderer) #\X)
-      (expect (renderer-render renderer) :to-equal (render-screen (renderer-screen renderer)))
+      (expect
+        (renderer-render renderer)
+        :to-equal
+        (render-screen (renderer-screen renderer)))
       (expect (renderer-render renderer) :to-equal ""))))
 
-(describe "renderer diff-plan capacity across a resize"
-  (it "grows the reused diff-plan operations vector and keeps it stable afterward"
+(describe
+  "renderer diff-plan capacity across a resize"
+  (it
+    "grows the reused diff-plan operations vector and keeps it stable afterward"
     (let ((renderer (make-renderer 1 1)))
       (renderer-render renderer)
       (renderer-resize renderer 8 1)
       (renderer-render renderer)
-      (expect (array-total-size
-               (cl-tty-kit::diff-plan-operations (cl-tty-kit::renderer-diff-plan renderer)))
-              :to-be 16)
+      (expect
+        (array-total-size
+          (cl-tty-kit::diff-plan-operations (cl-tty-kit::renderer-diff-plan renderer)))
+        :to-be
+        16)
       (dolist (x '(0 2 4 6))
         (screen-put-cell (renderer-screen renderer) x 0 #\X))
       (renderer-render renderer)
-      (expect (array-total-size
-               (cl-tty-kit::diff-plan-operations (cl-tty-kit::renderer-diff-plan renderer)))
-              :to-be 16)
+      (expect
+        (array-total-size
+          (cl-tty-kit::diff-plan-operations (cl-tty-kit::renderer-diff-plan renderer)))
+        :to-be
+        16)
       (screen-put-cell (renderer-screen renderer) 1 0 #\Y)
-      (let ((expected (render-diff (renderer-screen renderer)
-                                   (screen-copy (cl-tty-kit::renderer-front renderer)))))
+      (let ((expected
+            (render-diff
+              (renderer-screen renderer)
+              (screen-copy (cl-tty-kit::renderer-front renderer)))))
         (expect (renderer-render renderer) :to-equal expected)))))
 
-(describe "renderer row-generation-guided diff plans"
-  (it "only marks the row a change touched as needing re-diffing"
+(describe
+  "renderer row-generation-guided diff plans"
+  (it
+    "only marks the row a change touched as needing re-diffing"
     (let ((renderer (make-renderer 4 2)))
       (renderer-render renderer)
       (let ((previous-generation (cl-tty-kit::renderer-rendered-generation renderer)))
         (screen-put-cell (renderer-screen renderer) 1 1 #\x)
-        (expect (aref (cl-tty-kit::screen-row-generations (renderer-screen renderer)) 0)
-                :to-be-less-than-or-equal previous-generation)
-        (expect (aref (cl-tty-kit::screen-row-generations (renderer-screen renderer)) 1)
-                :to-be-greater-than previous-generation)
-        (let ((expected (render-diff (renderer-screen renderer)
-                                     (screen-copy (cl-tty-kit::renderer-front renderer)))))
+        (expect
+          (aref (cl-tty-kit::screen-row-generations (renderer-screen renderer)) 0)
+          :to-be-less-than-or-equal
+          previous-generation)
+        (expect
+          (aref (cl-tty-kit::screen-row-generations (renderer-screen renderer)) 1)
+          :to-be-greater-than
+          previous-generation)
+        (let ((expected
+              (render-diff
+                (renderer-screen renderer)
+                (screen-copy (cl-tty-kit::renderer-front renderer)))))
+          (expect (renderer-render renderer) :to-equal expected)))))
+  (it
+    "renders a setter update in its actual row"
+    (let ((renderer (make-renderer 4 2)))
+      (renderer-render renderer)
+      (let ((previous-generation (cl-tty-kit::renderer-rendered-generation renderer)))
+        (setf (screen-cell (renderer-screen renderer) 3 1) #\x)
+        (expect
+          (aref (cl-tty-kit::screen-row-generations (renderer-screen renderer)) 0)
+          :to-be-less-than-or-equal
+          previous-generation)
+        (expect
+          (aref (cl-tty-kit::screen-row-generations (renderer-screen renderer)) 1)
+          :to-be-greater-than
+          previous-generation)
+        (let ((expected
+              (render-diff
+                (renderer-screen renderer)
+                (screen-copy (cl-tty-kit::renderer-front renderer)))))
           (expect (renderer-render renderer) :to-equal expected))))))
 
 (describe "renderer cursor tracking"
@@ -159,8 +276,10 @@
         (expect (search (render-cursor cursor) actual)))
       (expect (renderer-render renderer :cursor cursor) :to-equal ""))))
 
-(describe "renderer-render :stream"
-  (it "writes to the given stream and returns it"
+(describe
+  "renderer-render :stream"
+  (it
+    "writes to the given stream and returns it"
     (let ((renderer (make-renderer 2 1))
           (stream (make-string-output-stream))
           (cursor (make-cursor :x 1 :y 0)))
@@ -168,23 +287,41 @@
       (let ((expected (render-frame (renderer-screen renderer) cursor)))
         (expect (renderer-render renderer :stream stream :cursor cursor) :to-be stream)
         (expect (get-output-stream-string stream) :to-equal expected))
-      (expect (renderer-render renderer :cursor cursor) :to-equal ""))))
+      (expect (renderer-render renderer :cursor cursor) :to-equal "")))
+  (it
+    "reports whether it emitted output"
+    (let ((renderer (make-renderer 1 1))
+          (stream (make-string-output-stream)))
+      (screen-put-cell (renderer-screen renderer) 0 0 #\X)
+      (multiple-value-bind (output emitted-p) (renderer-render renderer :stream stream)
+        (expect output :to-be stream)
+        (expect emitted-p :to-be-truthy))
+      (multiple-value-bind (output emitted-p) (renderer-render renderer :stream stream)
+        (expect output :to-be stream)
+        (expect emitted-p :to-be-falsy)))))
 
-(describe "renderer-clear and renderer-resize"
-  (it "renderer-clear blanks the back buffer and returns the renderer"
+(describe
+  "renderer-clear and renderer-resize"
+  (it
+    "renderer-clear blanks the back buffer and returns the renderer"
     (let ((renderer (make-renderer 2 1)))
       (screen-write-string (renderer-screen renderer) 0 0 "ab")
       (renderer-render renderer)
       (expect (renderer-clear renderer) :to-be renderer)
       (expect (cell-char (screen-cell (renderer-screen renderer) 0 0)) :to-be #\Space)))
-  (it "renderer-resize changes size, returns the renderer, and forces a full repaint next time"
+  (it
+    "renderer-resize changes size, returns the renderer, and forces a full repaint next time"
     (let ((renderer (make-renderer 2 1)))
       (renderer-render renderer)
       (expect (renderer-resize renderer 3 1) :to-be renderer)
       (expect (renderer-width renderer) :to-be 3)
       (screen-write-string (renderer-screen renderer) 0 0 "x")
-      (expect (renderer-render renderer) :to-equal (render-screen (renderer-screen renderer)))))
-  (it "renderer-resize also forces a full repaint when only the height changes"
+      (expect
+        (renderer-render renderer)
+        :to-equal
+        (render-screen (renderer-screen renderer)))))
+  (it
+    "renderer-resize also forces a full repaint when only the height changes"
     (let ((renderer (make-renderer 2 1)))
       (renderer-render renderer)
       (renderer-resize renderer 2 3)

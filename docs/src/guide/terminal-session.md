@@ -208,7 +208,8 @@ to the body and torn down automatically:
 
 The companion macro `with-terminal-session-output` captures the emitted escape
 sequences into a returned string instead of writing to a live terminal, which is
-handy in tests and examples.
+handy in tests and examples. It is exported from the `cl-tty-kit` package, so
+callers can use `cl-tty-kit:with-terminal-session-output` directly.
 
 ## See also
 

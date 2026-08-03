@@ -15,6 +15,35 @@ There are two entry points:
 Both share the single-sequence decoder `decode-key-sequence`, and both produce the
 same `key-event` values.
 
+## Non-blocking stream polling
+
+For a single terminal input stream, `make-stream-input-poller` returns a
+`(lambda (state timeout) ...)` adapter around `read-char-no-hang` that drains
+at most `:limit` characters per call and returns the events decoded from them
+(or `NIL` when nothing is ready). It retains the supplied incremental decoder
+across frames, so an escape sequence split by the terminal or OS boundary is
+not lost. Compose it with `tick-loop-run-realtime`'s `:poll` by folding the
+returned events into state yourself:
+
+```lisp
+(let ((poll-input (make-stream-input-poller *standard-input*
+                                            :decoder (make-input-decoder)
+                                            :limit 4096)))
+  (tick-loop-run-realtime state #'advance #'render #'quit-p
+                          :poll (lambda (state)
+                                  (reduce #'apply-event
+                                          (funcall poll-input state 0)
+                                          :initial-value state))))
+```
+
+The adapter never waits for input and ignores the timeout argument it is
+passed. Its internal character buffer is reused between polls, so idle frames
+do not allocate a temporary string stream; `:limit` remains the maximum number
+of characters drained per call.
+Applications multiplexing several file descriptors should keep their own
+`select(2)`/`poll(2)` policy and feed ready bytes to `decode-input-chunk`
+instead.
+
 !!! note "Mouse events decode inline"
 
     `decode-input` and `decode-input-chunk` surface SGR mouse reports as

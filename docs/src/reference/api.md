@@ -43,7 +43,8 @@ SBCL-specific terminal mode control. See
 Lifecycle helper, runtime size query, and the matching size update. See
 [Terminal Session and Raw Mode](../guide/terminal-session.md).
 
-`with-terminal-session`, `terminal-size`, `set-terminal-size`.
+`with-terminal-session`, `with-terminal-session-output`, `terminal-size`,
+`make-terminal-size-poller`, `set-terminal-size`.
 
 ## ANSI helpers
 
@@ -70,7 +71,7 @@ Terminal input to `key-event` objects, plus reverse SGR/report parsers. See
 | Category | Symbols |
 | --- | --- |
 | Key events | `key-event`, `make-key-event`, `key-event-type`, `key-event-code`, `key-event-modifiers`, `key-event-kind`, `key-event-text`, `key-event-shifted-key`, `key-event-base-key`, `key-event->string` |
-| Decoders | `input-decoder`, `make-input-decoder`, `decode-input`, `decode-input-chunk`, `decode-key-sequence`, `flush-input-decoder` |
+| Decoders | `input-decoder`, `make-input-decoder`, `decode-input`, `decode-input-chunk`, `decode-key-sequence`, `flush-input-decoder`, `make-stream-input-poller` |
 | Report / SGR parsing | `decode-cursor-position-report`, `decode-color-report`, `decode-device-attributes`, `decode-sgr`, `parse-styled-string` |
 
 ## Mouse input
@@ -140,7 +141,7 @@ The pure screen/cell model, style construction, and text placement. See
 | --- | --- |
 | Cells / styles | `cell`, `make-cell`, `cell-char`, `cell-style`, `make-style`, `style-fg`, `style-bg`, `style-underline-color`, `style-ansi`, `style-merge`, `named-color`, `copy-cell`, `cell-blank-p` |
 | Screen struct | `screen`, `make-screen`, `screen-width`, `screen-height`, `screen-cell`, `screen-resize`, `screen-clear` |
-| Writing / filling | `screen-put-cell`, `screen-fill-rect`, `screen-fill`, `screen-write-string`, `screen-write-lines`, `screen-write-wrapped`, `screen-write-aligned` |
+| Writing / filling | `screen-put-cell`, `with-screen-batch`, `screen-fill-rect`, `screen-fill`, `screen-write-string`, `screen-write-lines`, `screen-write-wrapped`, `screen-write-aligned` |
 | Region ops | `screen-copy`, `screen-blit`, `screen-crop`, `screen-scroll`, `sprite-blit` |
 | Inspection | `screen-row-string`, `screen-to-string` |
 
@@ -180,7 +181,11 @@ Wraps the diff-render loop with an internal previous-frame buffer. See
 Bounded and real-time drivers sharing one per-tick step. See
 [Animation](../guide/animation.md).
 
-`tick-loop-run`, `tick-loop-run-realtime`.
+`tick-loop-run`, `tick-loop-run-realtime`. The realtime driver accepts a
+string or `NIL` from `render`; `NIL` suppresses output for that tick. Realtime
+pacing uses a monotonic internal-time deadline, so scheduler overshoot does
+not accumulate as drift; an overrun frame resynchronizes to the current time
+instead of producing a burst of catch-up frames.
 
 `tick-loop-run-realtime` accepts an optional `poll` function for input and
 resize observation before each tick. A renderer may return `nil` to suppress a

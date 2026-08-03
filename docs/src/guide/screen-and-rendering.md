@@ -168,6 +168,22 @@ distinct from omitting `:style`, which keeps a passed `cell`'s own style:
 (screen-put-cell screen 1 0 #\i :style nil)  ; force a plain, unstyled cell
 ```
 
+When a frame updates many individual cells, wrap the writes in
+`with-screen-batch`. Nested batches are supported, and a batch that makes no
+changes does not advance the screen generation:
+
+```lisp
+(let ((row 0))
+  (with-screen-batch (screen)
+    (loop for x below (screen-width screen)
+          do (screen-put-cell screen x row (matrix-glyph x)))))
+```
+
+The renderer still computes the exact changed cells, so batching changes the
+mutation bookkeeping rather than the rendered output. This is the preferred
+pattern for matrix effects, particle fields, charts, and other high-update-rate
+views.
+
 ### Filling regions
 
 `screen-fill-rect` applies the same character/template + `:style` semantics to a
@@ -186,9 +202,9 @@ overlapping top-left region and filling any newly exposed area from
 
 ### Writing text
 
-`screen-write-string` is the workhorse for laying out text runs. It builds on
-`screen-put-cell` and supports `:style`, `:start`, and `:end` for partial
-writes:
+`screen-write-string` is the workhorse for laying out text runs. It applies a
+text run as one batched screen mutation and supports `:style`, `:start`, and
+`:end` for partial writes:
 
 ```lisp
 (let ((screen (make-screen 20 3)))
@@ -387,8 +403,10 @@ once and then only touches what changed.
 
 Threading the previous screen and cursor by hand across every frame is
 error-prone. `renderer` wraps it: it holds a **back buffer** to draw into and a
-private snapshot of the last frame. Each `renderer-render` diffs the two, emits
-only the changes, then snapshots the back buffer as the new previous frame.
+private snapshot of the last frame. Each `renderer-render` diffs the two and
+then snapshots the back buffer as the new previous frame. When a short
+unchanged span between updates costs no more than another cursor movement, the
+renderer replays that span to reduce ANSI cursor-control traffic.
 
 ```lisp
 (let ((renderer (make-renderer 24 4)))

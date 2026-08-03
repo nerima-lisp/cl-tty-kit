@@ -91,6 +91,25 @@ case below.")
               :to-be (cl-tty-kit::%stream-fd *standard-output*)))
     (expect (stream-fd *standard-output*) :to-be (cl-tty-kit::%stream-fd *standard-output*))))
 
+(describe "terminal-size poller"
+  (it "returns no event when the terminal size is unavailable"
+    (let ((poll (make-terminal-size-poller :fd (expt 2 40))))
+      (expect (multiple-value-list (funcall poll nil 0.1))
+              :to-equal '(nil nil))))
+  (it "validates the file descriptor before polling"
+    (expect (lambda () (make-terminal-size-poller :fd -1)) :to-throw 'error))
+  (it "reports the size once on the first successful poll, then stays silent until it changes"
+    (let ((pty (make-pty :program "/bin/sh")))
+      (unwind-protect
+           (let* ((fd (cl-tty-kit::%stream-fd (pty-stream pty)))
+                  (poll (make-terminal-size-poller :fd fd)))
+             (set-terminal-size 93 41 fd)
+             (expect (multiple-value-list (funcall poll nil 0.1)) :to-equal '(93 41))
+             (expect (multiple-value-list (funcall poll nil 0.1)) :to-equal '(nil nil))
+             (set-terminal-size 41 93 fd)
+             (expect (multiple-value-list (funcall poll nil 0.1)) :to-equal '(41 93)))
+        (close-pty pty)))))
+
 #+sbcl
 (describe "set-terminal-size"
   (it "round-trips through a PTY: what it sets is what TERMINAL-SIZE reads back"
@@ -157,6 +176,12 @@ case below.")
                          (terminal-size-set-failed-reason condition))))))))
 
 (describe "with-terminal-session"
+  (it "exports the output-capturing companion macro"
+    (expect (cl-tty-kit:with-terminal-session-output (stream :alternate-screen nil
+                                                             :hide-cursor nil
+                                                             :stream stream)
+              (write-string "BODY" stream))
+            :to-equal "BODY"))
   (it "wraps the body in the default alternate-screen/hide-cursor bracket and returns its value"
     (let (body-ran)
       (let ((output (%capture-terminal-session-output ()

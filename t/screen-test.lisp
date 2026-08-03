@@ -80,6 +80,25 @@ condition."
   ;; An empty screen is a no-op rather than an error.
   (it "is a no-op on a zero-area screen"
     (expect (progn (screen-fill (make-screen 0 0) #\#) :ok) :to-be :ok)))
+(describe "screen mutation batching"
+  (it "coalesces multiple cell writes into one generation"
+    (let ((screen (make-screen 4 2)))
+      (let ((generation (cl-tty-kit::screen-generation screen)))
+        (with-screen-batch (screen)
+          (screen-put-cell screen 0 0 #\A)
+          (screen-put-cell screen 1 0 #\B)
+          (screen-put-cell screen 3 1 #\C))
+        (expect (cl-tty-kit::screen-generation screen) :to-equal (1+ generation)))))
+  (it "keeps nested and empty batches safe"
+    (let ((screen (make-screen 2 1)))
+      (let ((generation (cl-tty-kit::screen-generation screen)))
+        (with-screen-batch (screen)
+          (with-screen-batch (screen)
+            (screen-put-cell screen 0 0 #\X)))
+        (expect (cl-tty-kit::screen-generation screen) :to-equal (1+ generation)))
+      (let ((generation (cl-tty-kit::screen-generation screen)))
+        (with-screen-batch (screen))
+        (expect (cl-tty-kit::screen-generation screen) :to-equal generation)))))
 
 (describe "screen-copy"
   (it "copies dimensions and cell values, then diverges independently after a mutation"

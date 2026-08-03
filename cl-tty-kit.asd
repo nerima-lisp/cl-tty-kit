@@ -100,6 +100,7 @@
                (:file "src/input-state")
                (:file "src/input-decode-internals")
                (:file "src/input-decode")
+               (:file "src/input-poll")
                (:file "src/cell")
                (:file "src/screen")
                (:file "src/screen-regions")

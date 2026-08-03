@@ -72,6 +72,28 @@ to standard input (0)."
         (error () (values nil nil)))))
 
 #+sbcl
+(defun make-terminal-size-poller (&key (fd 0))
+  "Return a realtime-loop POLL-RESIZE callback for terminal FD.
+
+The callback queries TERMINAL-SIZE on each invocation and returns dimensions
+only on the first successful query or after they change. An unavailable size
+returns (VALUES NIL NIL), so transient ioctl failures do not disturb layout."
+  (setf fd (%assert-terminal-fd fd))
+  (let ((last-columns nil)
+        (last-rows nil))
+    (lambda (state timeout)
+      (declare (ignore state timeout))
+      (multiple-value-bind (columns rows) (terminal-size fd)
+        (if (and columns rows
+                 (or (not (eql columns last-columns))
+                     (not (eql rows last-rows))))
+            (progn
+              (setf last-columns columns
+                    last-rows rows)
+              (values columns rows))
+            (values nil nil))))))
+
+#+sbcl
 (define-simple-assert %assert-terminal-dimension (name value)
   (and (integerp value) (plusp value))
   "Terminal ~A must be a positive integer, got ~S." name value)

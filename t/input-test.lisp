@@ -105,6 +105,25 @@ checks both of those slots, never just that some error was signaled."
   (it "rejects a fractional :max-pending"
     (expect (lambda () (make-input-decoder :max-pending 1.5)) :to-throw 'error)))
 
+(describe "stream input poller"
+  (it "drains available characters and preserves split escape sequences"
+    (let* ((stream (make-string-input-stream (concatenate 'string
+                                                           (string #\Esc)
+                                                           "[A")))
+           (poll (make-stream-input-poller stream :limit 2)))
+      (expect (funcall poll nil 0.1) :to-be-falsy)
+      (expect (%event-signatures-of (funcall poll nil 0.1))
+              :to-equal '((:special :up nil)))))
+  (it "rejects a non-input stream, an invalid decoder, and an invalid limit"
+    (expect (lambda () (make-stream-input-poller (make-string-output-stream)))
+            :to-throw 'error)
+    (expect (lambda () (make-stream-input-poller (make-string-input-stream "x")
+                                                  :decoder :not-a-decoder))
+            :to-throw 'error)
+    (expect (lambda () (make-stream-input-poller (make-string-input-stream "x")
+                                                  :limit 0))
+            :to-throw 'error)))
+
 (describe "input decoder buffer overflow (:max-pending)"
   (it "reports the exceeded limit and size when a bracketed-paste payload overflows a small buffer"
     (let ((decoder (make-input-decoder :collect-bracketed-paste t :max-pending 8)))

@@ -1,7 +1,6 @@
 (in-package #:cl-tty-kit)
 
-(defstruct (diff-plan (:constructor %make-diff-plan (operations)) (:copier nil))
-  "Reusable pairs of inclusive diff starts and exclusive ends.
+(defstruct (diff-plan (:constructor %make-diff-plan (operations)) (:copier nil)) "Reusable pairs of inclusive diff starts and exclusive ends.
 
 An end of -1 represents an EL clear-line operation.  The renderer owns one of
 these plans, avoiding a second cell comparison pass for its steady-state path."
@@ -81,73 +80,129 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
         (positive-decimal-digit-count (1+ x))))))
 
 (defun %plan-diff-length (screen previous plan &optional changed-since)
-    "Record sparse updates in PLAN and return their rendered length."
-    (%clear-diff-plan plan)
-    (if (and changed-since
-         (eql changed-since (screen-generation screen)))
-    0
-    (let ((cells (screen-cells screen))
-          (previous-cells (screen-cells previous))
-          (row-generations (screen-row-generations screen))
-          (width (screen-width screen))
-          (height (screen-height screen))
-          (length 0))
-      (declare (type simple-vector cells previous-cells) (type (simple-array fixnum (*)) row-generations))
-      (do ((y 0 (1+ y))
-           (row-start 0 (+ row-start width)))
-          ((>= y height) length)
-        (declare (type fixnum y row-start))
-        (let ((row-end (if (and changed-since
-                                (<= (aref row-generations y) changed-since))
-                           row-start
-                           (+ row-start width)))
-                (blank-suffix-start nil))
-            (declare (type fixnum row-end)
-                     (type fixnum width height length))
-            (do ((index row-start))
-                ((>= index row-end))
-              (declare (type fixnum index))
-            (if (%cell-equal-p (aref cells index) (aref previous-cells index))
-                (incf index)
-                (let ((x (- index row-start)))
-                  (declare (type fixnum x))
-                  (when (and (null blank-suffix-start)
-                             (%render-blank-cell-p (aref cells index)))
-                    (setf blank-suffix-start
-                          (%row-blank-suffix-start cells row-start width)))
-                  (if (and blank-suffix-start (>= x blank-suffix-start))
-                      (progn
-                        (%record-diff-operation plan index -1)
-                        (incf length (+ (%diff-cursor-length x y) 4))
-                        (setf index row-end))
-                      (let ((start index))
-                        (do ()
-                            ((or (>= index row-end)
-                                 (%cell-equal-p
-                                   (aref cells index)
-                                   (aref previous-cells index))))
-                          (incf length (%cell-rendered-length (aref cells index)))
-                          (incf index))
-                        (%record-diff-operation plan start index)
-                        (incf length (%diff-cursor-length x y))))))))))))
-
+  "Record sparse updates in PLAN and return their rendered length."
+  (%clear-diff-plan plan)
+  (if (and changed-since (eql changed-since (screen-generation screen)))
+      0
+      (let ((cells (screen-cells screen))
+            (previous-cells (screen-cells previous))
+            (row-generations (screen-row-generations screen))
+            (row-dirty-starts (screen-row-dirty-starts screen))
+            (row-dirty-ends (screen-row-dirty-ends screen))
+            (row-dirty-bits (screen-row-dirty-bits screen))
+            (width (screen-width screen))
+            (height (screen-height screen))
+            (length 0))
+        (declare (type simple-vector cells previous-cells row-dirty-bits)
+                 (type (simple-array fixnum (*))
+                       row-generations row-dirty-starts row-dirty-ends))
+        (do ((y 0 (1+ y))
+             (row-start 0 (+ row-start width)))
+            ((>= y height) length)
+          (declare (type fixnum y row-start))
+          (let* ((full-row-start row-start)
+                 (row-start
+                  (if changed-since
+                      (if (<= (aref row-generations y) changed-since)
+                          (+ full-row-start width)
+                          (+ full-row-start (aref row-dirty-starts y)))
+                      full-row-start))
+                 (row-end
+                  (if changed-since
+                      (if (<= (aref row-generations y) changed-since)
+                          (+ full-row-start width)
+                          (+ full-row-start (aref row-dirty-ends y)))
+                      (+ full-row-start width)))
+                 (blank-suffix-start nil))
+            (declare (type fixnum full-row-start row-start row-end))
+            (let ((last-index -1) (last-same-p nil)) (labels ((same-cell-p (index)
+                                                                           (if (= index last-index)
+                                                                               last-same-p
+                                                                               (setf last-index index
+                                                                                     last-same-p
+                                                                                     (or (and changed-since
+                                                                                              (zerop
+                                                                                               (sbit (the simple-bit-vector
+                                                                                                          (aref row-dirty-bits y))
+                                                                                                     (- index full-row-start))))
+                                                                                         (%cell-equal-p (aref cells index)
+                                                                                                        (aref previous-cells index)))))))
+                                                       (do ((index row-start))
+                                                           ((>= index row-end))
+                                                         (declare (type fixnum index))
+                                                         (if (same-cell-p index)
+                                                             (incf index)
+                                                             (let ((x (- index full-row-start)))
+                                                               (declare (type fixnum x))
+                                                               (when (and (null blank-suffix-start)
+                                                                          (%render-blank-cell-p (aref cells index)))
+                                                                 (setf blank-suffix-start
+                                                                       (%row-blank-suffix-start cells full-row-start width)))
+                                                               (if (and blank-suffix-start (>= x blank-suffix-start))
+                                                                   (progn
+                                                                     (%record-diff-operation plan index -1)
+                                                                     (incf length (+ (%diff-cursor-length x y) 4))
+                                                                     (setf index row-end))
+                                                                   (let ((start index))
+                                                                     (declare (type fixnum start))
+                                                                     (incf length (%cell-rendered-length (aref cells index)))
+                                                                     (incf index)
+                                                                     (loop
+                                                                      (do ()
+                                                                          ((or (>= index row-end) (same-cell-p index)))
+                                                                        (incf length (%cell-rendered-length (aref cells index)))
+                                                                        (incf index))
+                                                                      (if (>= index row-end)
+                                                                          (progn
+                                                                            (%record-diff-operation plan start index)
+                                                                            (incf length (%diff-cursor-length x y))
+                                                                            (return))
+                                                                          (let ((gap-start index)
+                                                                                (gap-length 0))
+                                                                            (declare (type fixnum gap-start gap-length))
+                                                                            (do ()
+                                                                                ((or (>= index row-end)
+                                                                                     (not (same-cell-p index))))
+                                                                              (incf gap-length
+                                                                                    (%cell-rendered-length (aref cells index)))
+                                                                              (incf index))
+                                                                            (if (or
+                                                                                 (>= index row-end)
+                                                                                 (progn
+                                                                                   (when (and (null blank-suffix-start)
+                                                                                              (%render-blank-cell-p
+                                                                                               (aref cells index)))
+                                                                                     (setf blank-suffix-start
+                                                                                           (%row-blank-suffix-start
+                                                                                            cells full-row-start width)))
+                                                                                   (and blank-suffix-start
+                                                                                        (>= (- index full-row-start)
+                                                                                            blank-suffix-start)))
+                                                                                 (> gap-length
+                                                                                    (%diff-cursor-length
+                                                                                     (- index full-row-start) y)))
+                                                                                (progn
+                                                                                  (%record-diff-operation plan start gap-start)
+                                                                                  (incf length (%diff-cursor-length x y))
+                                                                                  (return))
+                                                                                (incf length gap-length)))))))))))))))
+      ))
 (defun %copy-diff-plan-cells (front back plan)
-    "Apply PLANs changed cells from BACK to FRONT without allocating."
-    (let ((front-cells (screen-cells front))
-          (back-cells (screen-cells back))
-          (width (screen-width back))
-          (operations (diff-plan-operations plan)))
-      (declare (type simple-vector front-cells back-cells)
-               (type (vector fixnum) operations)
-               (type fixnum width))
-      (do ((operation-index 0 (+ operation-index 2))
-           (operation-limit (fill-pointer operations)))
-          ((>= operation-index operation-limit) front)
-        (declare (type fixnum operation-index operation-limit))
-        (let ((start (aref operations operation-index))
-              (end (aref operations (1+ operation-index))))
-          (declare (type fixnum start end))
-          (when (minusp end)
-            (setf end (+ start (- width (mod start width)))))
-          (replace front-cells back-cells
-                   :start1 start :end1 end :start2 start :end2 end)))))
+  "Apply PLANs changed cells from BACK to FRONT without allocating."
+  (let ((front-cells (screen-cells front))
+        (back-cells (screen-cells back))
+        (width (screen-width back))
+        (operations (diff-plan-operations plan)))
+    (declare (type simple-vector front-cells back-cells)
+             (type (vector fixnum) operations)
+             (type fixnum width))
+    (do ((operation-index 0 (+ operation-index 2))
+         (operation-limit (fill-pointer operations)))
+      ((>= operation-index operation-limit) front)
+      (declare (type fixnum operation-index operation-limit))
+      (let ((start (aref operations operation-index))
+            (end (aref operations (1+ operation-index))))
+        (declare (type fixnum start end))
+        (when (minusp end)
+          (setf end (+ start (- width (mod start width)))))
+        (replace front-cells back-cells :start1 start :end1 end :start2 start :end2 end)))))

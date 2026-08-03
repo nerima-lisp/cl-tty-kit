@@ -10,9 +10,20 @@
 ;;; snapshot yet, so it repaints in full (RENDER-DIFF treats a NIL previous as a
 ;;; full redraw).
 ;;; --------------------------------------------------------------------------
-(defstruct (renderer (:constructor %make-renderer (&key screen front cursor diff-plan rendered-generation)) (:copier nil)) "A double-buffered repaint helper. Draw into its back SCREEN each frame, then call RENDERER-RENDER to emit only what changed since the previous frame." (screen nil :type screen) (front nil :type (or null screen)) (cursor nil :type (or null cursor)) (diff-plan nil :type (or null diff-plan)) (rendered-generation nil :type (or null fixnum)))
+(defstruct (renderer
+    (:constructor
+      %make-renderer
+      (&key screen front cursor diff-plan rendered-generation))
+    (:copier nil)) "A double-buffered repaint helper. Draw into its back SCREEN each frame, then call RENDERER-RENDER to emit only what changed since the previous frame."
+  (screen nil :type screen)
+  (front nil :type (or null screen))
+  (cursor nil :type (or null cursor))
+  (diff-plan nil :type (or null diff-plan))
+  (rendered-generation nil :type (or null fixnum)))
 
-(document-function 'renderer-screen "Return the back-buffer SCREEN of RENDERER, the grid to draw the next
+(document-function
+  'renderer-screen
+  "Return the back-buffer SCREEN of RENDERER, the grid to draw the next
 frame into.")
 
 (defun make-renderer (width height &key initial-cell)
@@ -28,13 +39,19 @@ frame into.")
       :diff-plan
       (%make-screen-diff-plan screen))))
 
-(define-validating-assert %assert-renderer (renderer)
+(define-validating-assert
+  %assert-renderer
+  (renderer)
   (renderer-p renderer)
-  "RENDERER ~S must be a renderer." renderer)
+  "RENDERER ~S must be a renderer."
+  renderer)
 
-(define-validating-assert %assert-render-cursor (cursor)
+(define-validating-assert
+  %assert-render-cursor
+  (cursor)
   (cursor-p cursor)
-  "CURSOR ~S must be a cursor." cursor)
+  "CURSOR ~S must be a cursor."
+  cursor)
 
 (defun renderer-width (renderer)
   "Return the column width of RENDERER's back buffer."
@@ -48,13 +65,13 @@ frame into.")
 
 (defmacro %snapshot-cursor (cursor)
   `(let ((cursor ,cursor))
-     (make-cursor
-       :x
-       (cursor-x cursor)
-       :y
-       (cursor-y cursor)
-       :visible
-       (cursor-visible-p cursor))))
+    (make-cursor
+      :x
+      (cursor-x cursor)
+      :y
+      (cursor-y cursor)
+      :visible
+      (cursor-visible-p cursor))))
 
 (defun %snapshot-renderer-cursor (renderer cursor)
   "Store CURSOR in RENDERER without replacing an existing private snapshot."
@@ -87,7 +104,7 @@ frame into.")
        (%copy-diff-plan-cells front back plan)))))
 
 (defun renderer-render (renderer &key stream cursor)
-  "Emit the changes needed to bring the terminal to the RENDERER back buffer. Diffs the back buffer against the previous frame and returns the ANSI string (or writes it to STREAM and returns STREAM). When CURSOR is supplied the frame also finishes in that cursor state, diffed against the previous frame cursor. After emitting, RENDERER snapshots the current screen and cursor as the new previous frame, so the next call diffs against this one. An uncursored render invalidates the saved cursor because rendering output may move the terminal cursor without restoring it."
+  "Emit the changes needed to bring the terminal to the RENDERER back buffer. Diffs the back buffer against the previous frame and returns the ANSI string (or writes it to STREAM and returns STREAM) as its primary value. Its secondary value is true exactly when it wrote terminal output. When CURSOR is supplied the frame also finishes in that cursor state, diffed against the previous frame cursor. After emitting, RENDERER snapshots the current screen and cursor as the new previous frame, so the next call diffs against this one. An uncursored render invalidates the saved cursor because rendering output may move the terminal cursor without restoring it."
   (%assert-renderer renderer)
   (when cursor
     (%assert-render-cursor cursor))
@@ -101,12 +118,15 @@ frame into.")
              (type (or null diff-plan) plan)
              (type (or null fixnum) rendered-generation)
              (type fixnum back-generation))
-    (if (and (null cursor)
-             front
-             (eql rendered-generation back-generation))
+    (if (and front
+             (eql rendered-generation back-generation)
+             (or (null cursor)
+                 (and (renderer-cursor renderer)
+                      (%cursor-equal-p cursor (renderer-cursor renderer)))))
         (progn
-          (setf (renderer-cursor renderer) nil)
-          (or stream ""))
+          (unless cursor
+            (setf (renderer-cursor renderer) nil))
+          (values (or stream "") nil))
         (multiple-value-bind (output diff-output-p full-repaint-p)
             (if cursor
                 (%render-frame-diff-output
@@ -123,13 +143,13 @@ frame into.")
                   stream
                   plan
                   rendered-generation))
-          (declare (ignore diff-output-p))
           (%snapshot-renderer-screen renderer back :full-repaint-p full-repaint-p)
+          (%screen-clear-dirty-cells back)
           (setf (renderer-rendered-generation renderer) back-generation)
           (if cursor
               (%snapshot-renderer-cursor renderer cursor)
               (setf (renderer-cursor renderer) nil))
-          output))))
+          (values output diff-output-p)))))
 
 (defun renderer-clear (renderer &key cell)
   "Reset RENDERER's back buffer to CELL (a template, character, or NIL for

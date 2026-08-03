@@ -224,3 +224,23 @@
        (%ansi-string (render-screen screen)
                      (ansi-move-cursor 1 1)
                      (ansi-hide-cursor))))))
+(describe "cell range rendering"
+  (it "coalesces equal styles and measures the resulting output"
+    (let ((screen (make-screen 5 1))
+          (stream (make-string-output-stream)))
+      (screen-put-cell screen 0 0 #\A :style (list :bold))
+      (screen-put-cell screen 1 0 #\B :style (list :bold))
+      (screen-put-cell screen 2 0 #\C)
+      (screen-put-cell screen 3 0 #\D :style (list (style-fg 196)))
+      (screen-put-cell screen 4 0 #\E :style (list (style-fg 196)))
+      (let* ((cells (cl-tty-kit::screen-cells screen))
+             (output (progn
+                       (cl-tty-kit::%write-cell-range cells 0 5 stream)
+                       (get-output-stream-string stream))))
+        (expect output
+                :to-equal (%ansi-string (ansi-bold) "AB"
+                                        (ansi-reset-style) "C"
+                                        (style-ansi (style-fg 196)) "DE"
+                                        (ansi-reset-style)))
+        (expect (cl-tty-kit::%cell-range-rendered-length cells 0 5)
+                :to-equal (length output))))))
