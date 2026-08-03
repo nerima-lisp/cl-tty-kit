@@ -1,7 +1,5 @@
 (in-package #:cl-tty-kit)
 
-(declaim (inline %row-blank-suffix-start %diff-cursor-length))
-
 (defstruct (diff-plan (:constructor %make-diff-plan (operations)) (:copier nil))
   "Reusable pairs of inclusive diff starts and exclusive ends.
 

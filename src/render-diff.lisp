@@ -1,7 +1,5 @@
 (in-package #:cl-tty-kit)
 
-(declaim (inline %write-diff-run))
-
 (defun %write-diff-run (cells previous-cells start-index row-end stream)
   (declare (type simple-vector cells previous-cells)
            (type fixnum start-index row-end))

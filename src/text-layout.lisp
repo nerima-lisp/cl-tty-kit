@@ -1,7 +1,5 @@
 (in-package #:cl-tty-kit)
 
-(declaim (inline %string-cell-width %skip-escape-sequence))
-
 ;;; --------------------------------------------------------------------------
 ;;; Display-width-aware text layout
 ;;;
