@@ -55,25 +55,32 @@ including spacer cells. A run that would extend past the screen edge signals
 SCREEN-INDEX-OUT-OF-BOUNDS and leaves SCREEN unchanged; an empty run is a
 no-op."
     (%assert-screen screen)
-    (let* ((end (if end-supplied-p end (and (stringp string) (length string))))
-           (run-length (progn
-                         (%assert-string-bounds string start end)
-                         (- end start))))
-      (declare (type fixnum run-length start end))
-      (when (plusp run-length)
-        (let ((total-width 0)
-              (all-width-one-p t))
-          (declare (type fixnum total-width))
-          (loop for offset fixnum from start below end
-                for width fixnum = (%character-width (char string offset))
-                do (incf total-width (if (= width 2) 2 1))
-                   (unless (= width 1)
-                     (setf all-width-one-p nil)))
-          (%assert-screen-bounds screen x y)
-          (%assert-screen-bounds screen (+ x (1- total-width)) y)
-          (%screen-write-string-normalized
-           screen x y string start end (%coerce-cell-style style) all-width-one-p)))
-      screen))
+    ;; END is computed from STRING/END-SUPPLIED-P before either is known to be
+    ;; well-formed, so it stays undeclared until %ASSERT-STRING-BOUNDS has
+    ;; confirmed STRING is a string and START/END are in-bounds integers --
+    ;; declaring it FIXNUM any earlier makes SBCL's own binding-time check
+    ;; fire on a malformed call (e.g. a non-string STRING, which leaves END
+    ;; NIL) before that assertion gets a chance to signal the library's own
+    ;; condition. See SCREEN-ROW-STRING for the same validate-before-declare
+    ;; shape.
+    (let ((end (if end-supplied-p end (and (stringp string) (length string)))))
+      (%assert-string-bounds string start end)
+      (let ((run-length (- end start)))
+        (declare (type fixnum run-length))
+        (when (plusp run-length)
+          (let ((total-width 0)
+                (all-width-one-p t))
+            (declare (type fixnum total-width))
+            (loop for offset fixnum from start below end
+                  for width fixnum = (%character-width (char string offset))
+                  do (incf total-width (if (= width 2) 2 1))
+                     (unless (= width 1)
+                       (setf all-width-one-p nil)))
+            (%assert-screen-bounds screen x y)
+            (%assert-screen-bounds screen (+ x (1- total-width)) y)
+            (%screen-write-string-normalized
+             screen x y string start end (%coerce-cell-style style) all-width-one-p)))
+        screen)))
 
   (defun screen-fill-rect (screen x y width height value &key (style nil style-supplied-p))
     "Fill the WIDTH by HEIGHT rectangle at X and Y in SCREEN with VALUE. Returns SCREEN."
