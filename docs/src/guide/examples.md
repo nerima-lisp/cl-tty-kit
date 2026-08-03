@@ -1,6 +1,6 @@
 # Examples
 
-The `examples/` directory contains ~21 self-contained, runnable programs that
+The `examples/` directory contains ~22 self-contained, runnable programs that
 exercise the public API. Each is a small, focused demonstration you can read as
 documentation and run as a smoke test.
 
@@ -51,6 +51,7 @@ the core system once; individual examples never load the library themselves.
 | `frame-render.lisp` | compose a frame render with an explicit final cursor state |
 | `screen-update.lisp` | diff two screens and emit only the changed cells |
 | `renderer-loop.lisp` | drive a double-buffered renderer, emitting a full paint then a diff-only update |
+| `interactive-dashboard.lisp` | run a resize-aware resident TUI with fd readiness and incremental input decoding |
 | `status-dashboard.lisp` | render an initial dashboard frame followed by incremental updates |
 
 ## Input decoding

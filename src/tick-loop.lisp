@@ -20,8 +20,8 @@
 ;;;
 ;;; Resizing is deliberately out of scope here. This repository polls
 ;;; TERMINAL-SIZE rather than trapping SIGWINCH (see terminal-size.lisp), so a
-;;; caller's own ADVANCE/RENDER functions are the place to poll and react to a
-;;; changed size; TICK-LOOP-RUN-REALTIME does not invent a signal handler.
+;;; caller's own POLL function is the place to wait for input and observe
+;;; terminal changes; TICK-LOOP-RUN-REALTIME does not invent a signal handler.
 ;;; --------------------------------------------------------------------------
 
 (define-simple-assert %assert-tick-loop-function (name value)
@@ -41,14 +41,17 @@
   "Tick interval ~S must be a positive real number of seconds." interval)
 
 (defmacro %tick-loop-advance (state advance render)
-  "Run one tick: call ADVANCE on STATE to get the next state, then RENDER (if
-supplied) on the next state to get its frame. Returns (VALUES NEW-STATE
-FRAME), FRAME NIL when RENDER is NIL. Both TICK-LOOP-RUN and
+  "Run one tick and return (VALUES NEW-STATE FRAME OUTPUT-WRITTEN-P
+OUTPUT-KNOWN-P). RENDER (if supplied) receives the next state. Both TICK-LOOP-RUN and
 TICK-LOOP-RUN-REALTIME call this for every tick, so the two modes can never
 disagree about what a tick does."
   `(let ((state ,state) (advance ,advance) (render ,render))
      (let ((new-state (funcall advance state)))
-       (values new-state (and render (funcall render new-state))))))
+       (if render
+           (multiple-value-bind (frame output-written-p output-known-p)
+               (funcall render new-state)
+             (values new-state frame output-written-p output-known-p))
+           (values new-state nil nil t)))))
 
 (defun tick-loop-run (state advance ticks &key render)
   "Call ADVANCE on STATE exactly TICKS times, threading each result into the
@@ -87,13 +90,20 @@ many frames. A tick that already ran longer than INTERVAL sleeps not at all."
        (sleep remaining))))
 
 (defun tick-loop-run-realtime (state advance render stop
-                               &key (stream *standard-output*) (interval 1/30))
+                               &key (stream *standard-output*) (interval 1/30)
+                                 poll)
   "Repeatedly advance STATE via ADVANCE (as TICK-LOOP-RUN does), writing each
 tick's (FUNCALL RENDER STATE) to STREAM, until (FUNCALL STOP STATE) is true.
 Returns the final state.
 
 ADVANCE and RENDER have the same contract as in TICK-LOOP-RUN; RENDER is
-mandatory here since a real-time loop exists to produce output. STOP is a
+mandatory here since a real-time loop exists to produce output. RENDER may
+return NIL to suppress a frame, or return STREAM when it wrote the frame
+directly to STREAM. In the latter form, the second and third return values may
+be used to explicitly report whether output was written and whether that fact
+is known. POLL, when supplied, is called with the current state before each
+advance and its return value is threaded into ADVANCE's existing one-argument
+state contract. STOP is a
 function of one argument (the current state) returning true once the loop
 should quit (e.g. a quit-key flag an ADVANCE function set from a decoded
 KEY-EVENT). INTERVAL is the target seconds between ticks (default 1/30);
@@ -103,13 +113,25 @@ always emits the frame that caused it to stop before returning."
   (%assert-tick-loop-function :advance advance)
   (%assert-tick-loop-function :render render)
   (%assert-tick-loop-function :stop stop)
+  (%assert-tick-loop-optional-function :poll poll)
   (%assert-tick-loop-interval interval)
   (loop
     (let ((tick-start-time (get-internal-real-time)))
-      (multiple-value-bind (new-state frame) (%tick-loop-advance state advance render)
+      (when poll
+        (setf state (funcall poll state)))
+      (multiple-value-bind (new-state frame output-written-p output-known-p)
+          (%tick-loop-advance state advance render)
         (setf state new-state)
-        (write-string frame stream)
-        (finish-output stream)
+        (let ((wrote-output-p
+                (cond
+                  ((null frame) nil)
+                  ((eq frame stream)
+                   (if output-known-p output-written-p t))
+                  (t
+                   (write-string frame stream)
+                   (plusp (length frame))))))
+          (when wrote-output-p
+            (finish-output stream)))
         (when (funcall stop state)
           (return state))
         (%tick-loop-sleep-remainder tick-start-time interval)))))

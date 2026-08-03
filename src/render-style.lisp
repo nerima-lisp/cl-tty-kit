@@ -28,36 +28,37 @@ rather than repainted: the character is a space and the style emits no SGR codes
   (defun %write-style-sgr-code (style stream wrote-p)
     (cond
       ((keywordp style)
-        (let ((code (cdr (assoc style +style-sgr-keywords+))))
-          (when code
-            (when wrote-p
-              (write-char #\; stream))
-            (write-string code stream)
-            t)))
+       (let ((code (cdr (assoc style +style-sgr-keywords+))))
+         (when code
+           (when wrote-p
+             (write-char #\; stream))
+           (write-string code stream)
+           t)))
       ((consp style)
-        (destructuring-bind (channel &rest values) style
-          (let ((prefix
-                (case channel
-                  (:fg "38")
-                  (:bg "48")
-                  (:underline-color "58")
-                  (otherwise nil))))
-            (when (and prefix (member (length values) '(1 3)))
-              (when wrote-p
-                (write-char #\; stream))
-              (write-string prefix stream)
-              (write-char #\; stream)
-              (case (length values)
-                (1
+       (destructuring-bind (channel &rest values) style
+         (let ((prefix (case channel
+                         (:fg "38")
+                         (:bg "48")
+                         (:underline-color "58")
+                         (otherwise nil))))
+           (let ((value-count (length values)))
+             (declare (type fixnum value-count))
+             (when (and prefix (or (= value-count 1) (= value-count 3)))
+               (when wrote-p
+                 (write-char #\; stream))
+               (write-string prefix stream)
+               (write-char #\; stream)
+               (case value-count
+                 (1
                   (write-char #\5 stream)
                   (write-char #\; stream)
                   (%write-style-sgr-number (first values) stream))
-                (3
+                 (3
                   (write-char #\2 stream)
                   (dolist (value values)
                     (write-char #\; stream)
                     (%write-style-sgr-number value stream))))
-              t))))
+               t)))))
       (t nil)))
   (defun %style-sgr-sequence (style-list)
     (let ((wrote-p nil))

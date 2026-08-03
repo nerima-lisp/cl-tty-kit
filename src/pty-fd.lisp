@@ -49,6 +49,30 @@ FD-READ-OCTETS / FD-WRITE-OCTETS."
   value)
 
 #+sbcl
+(define-validating-assert %assert-fd-wait-direction (direction)
+  (member direction '(:input :output))
+  "FD wait direction must be :INPUT or :OUTPUT, got ~S." direction)
+
+#+sbcl
+(define-validating-assert %assert-fd-wait-timeout (timeout)
+  (or (null timeout) (and (realp timeout) (not (minusp timeout))))
+  "FD wait timeout must be NIL or a non-negative real number of seconds, got ~S."
+  timeout)
+
+#+sbcl
+(defun fd-wait (fd direction &optional timeout)
+  "Wait until FD is usable for DIRECTION, returning true when ready.
+
+DIRECTION is :INPUT or :OUTPUT. TIMEOUT is a non-negative number of seconds;
+NIL waits without a timeout. A timeout returns NIL. This does not change the
+file descriptor's blocking mode."
+  (%with-pty-operation (:fd-wait nil)
+    (%assert-fd fd)
+    (%assert-fd-wait-direction direction)
+    (%assert-fd-wait-timeout timeout)
+    (sb-sys:wait-until-fd-usable fd direction timeout)))
+
+#+sbcl
 (defun %fd-would-block-errno-p (errno)
   "Return true when ERRNO means \"no data/space right now, try again\" rather
 than a hard failure. EWOULDBLOCK is checked separately from EAGAIN for POSIX
@@ -76,7 +100,11 @@ it with select(2)/poll(2)."
     (%assert-octet-vector buffer "FD read buffer")
     (unless (or (null limit) (and (integerp limit) (not (minusp limit))))
       (error "FD read limit must be a non-negative integer, got ~S." limit))
-    (let ((count (if (null limit) (length buffer) (min limit (length buffer)))))
+    (let* ((buffer-length (length buffer))
+           (count (if (null limit)
+                      buffer-length
+                      (if (< limit buffer-length) limit buffer-length))))
+      (declare (type fixnum buffer-length count))
       (if (zerop count)
           0
           (sb-sys:with-pinned-objects (buffer)

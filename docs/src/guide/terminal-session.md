@@ -152,6 +152,9 @@ The macro binds a stream variable and takes keyword options:
 | `:hide-cursor` | `t` | Hide the cursor for the session, restore on exit. |
 | `:bracketed-paste` | `nil` | Enable bracketed-paste markers, scoped to the session. |
 | `:keyboard-enhancements` | `nil` | Push kitty keyboard enhancement `<flags>`; auto-popped on cleanup. |
+| `:mouse` | `nil` | Enable mouse tracking (`:normal`, `:button`, or `:any`) for the session. |
+| `:focus-reporting` | `nil` | Report terminal focus-in/focus-out events. |
+| `:disable-line-wrap` | `nil` | Disable automatic line wrapping until teardown. |
 | `:raw-mode` | `nil` | Wrap the whole session in `with-raw-mode`. |
 | `:fd` | `0` | The fd used when `:raw-mode t`. |
 

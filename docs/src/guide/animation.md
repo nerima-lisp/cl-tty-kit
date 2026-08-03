@@ -62,7 +62,9 @@ rendered output.
 `tick-loop-run-realtime` repeatedly calls the same kind of `advance`
 function, but paces ticks to a target frame `:interval` (seconds, default
 `1/30`), writes each tick's rendered frame to a real `:stream`, and keeps
-going until a caller-supplied `stop` predicate returns true:
+going until a caller-supplied `stop` predicate returns true. An optional
+`:poll` function runs before each tick and returns the state to pass to
+`advance`; use it for bounded input waits and resize checks:
 
 ```lisp
 (tick-loop-run-realtime
@@ -73,6 +75,27 @@ going until a caller-supplied `stop` predicate returns true:
  :stream *standard-output*
  :interval 1/20)
 ```
+
+For a real resident application, `:poll` should wait no longer than the frame
+interval. On SBCL, `stream-fd` gives the descriptor, `fd-wait` avoids blocking
+the redraw loop indefinitely, and `fd-read-octets` preserves terminal bytes for
+`decode-input-chunk`:
+
+```lisp
+(let ((fd (stream-fd input)))
+  (when (fd-wait fd :input (/ 1.0 30))
+    (let ((count (fd-read-octets fd buffer)))
+      (dolist (event (decode-input-chunk decoder buffer))
+        (handle-event state event)))))
+```
+
+Poll `terminal-size` from the same function. When the dimensions change, call
+`renderer-resize`; it drops the old diff snapshot so the next frame is a full
+repaint. If code outside the renderer writes terminal output, call
+`renderer-invalidate` before the next render for the same reason. A complete
+bounded example is `interactive-dashboard.lisp` (see [Examples](examples.md)):
+load it for a non-interactive frame, or call `run-interactive-dashboard` from a
+TTY and press `q` to exit.
 
 `stop` is checked *after* a tick has been advanced and rendered, so the loop
 always emits the frame that caused it to stop rather than swallowing it.
@@ -85,14 +108,12 @@ bounded-mode tests carries over unchanged to the real-time driver — the
 bounded/real-time distinction is only in pacing and where output goes, never
 in what one tick does.
 
-!!! note "Resizing is not handled here"
+!!! note "Signals remain application policy"
 
     This repository polls `terminal-size` rather than trapping SIGWINCH (see
-    [Terminal Session and Raw Mode](terminal-session.md)), so
-    `tick-loop-run-realtime` does not invent a signal handler either. A
-    caller's own `advance`/`render` functions are the place to poll
-    `terminal-size` and react to a changed size, the same way they would
-    outside a tick loop.
+    [Terminal Session and Raw Mode](terminal-session.md)), so the caller owns
+    resize policy. The same applies to signals and shutdown: translate them to
+    the state consumed by the `stop` predicate.
 
 ## Transparent sprite blitting
 

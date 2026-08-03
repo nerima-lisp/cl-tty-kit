@@ -67,7 +67,7 @@ an integer in [0, 255]. Inverse of RGB-TO-HSV."
   (let* ((h (/ (mod hue 360) 60))
          (s (/ saturation 100))
          (v (/ value 100))
-         (i (floor h))
+         (i (truncate h))
          (f (- h i))
          (p (* v (- 1 s)))
          (q (* v (- 1 (* s f))))

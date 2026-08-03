@@ -6,7 +6,13 @@
 
 (document-function 'screen-height "Return the height of SCREEN.")
 
-(defun %screen-touch (screen &optional (start-y 0) (end-y (screen-height screen))) (let ((generation (the fixnum (1+ (screen-generation screen))))) (setf (screen-generation screen) generation) (fill (screen-row-generations screen) generation :start start-y :end end-y)) screen)
+(defun %screen-touch (screen &optional (start-y 0) (end-y (screen-height screen)))
+  (declare (type fixnum start-y end-y))
+  (let ((generation (the fixnum (1+ (screen-generation screen)))))
+    (declare (type fixnum generation))
+    (setf (screen-generation screen) generation)
+    (fill (screen-row-generations screen) generation :start start-y :end end-y))
+  screen)
 
 (define-validating-assert %assert-screen (screen)
   (screen-p screen)
@@ -114,21 +120,78 @@
        (length string))))
 
 (defun %screen-vector (width height &optional (cell (%blank-cell)))
+  (declare (type fixnum width height))
   (let* ((size (* width height))
          (template (%coerce-cell-template cell)))
+    (declare (type fixnum size))
     (make-array size :initial-element template)))
 
 (defun screen-cell (screen x y)
   "Return the CELL at X and Y in SCREEN."
   (%assert-screen-bounds screen x y)
-  (aref (screen-cells screen) (%screen-index screen x y)))
+  (let ((index (%screen-index screen x y)))
+    (declare (type fixnum index))
+    (aref (screen-cells screen) index)))
 
-(defun (setf screen-cell) (value screen x y) (%assert-screen-bounds screen x y) (setf (aref (screen-cells screen) (%screen-index screen x y)) (%coerce-cell-value value nil nil)) (%screen-touch screen y (1+ y)))
+(defun (setf screen-cell) (value screen x y)
+  (%assert-screen-bounds screen x y)
+  (let ((index (%screen-index screen x y)))
+    (declare (type fixnum index))
+    (setf (aref (screen-cells screen) index)
+          (%coerce-cell-value value nil nil)))
+  (%screen-touch screen y (1+ y)))
 
-(defun screen-put-cell (screen x y value &key (style nil style-supplied-p)) "Write VALUE into SCREEN at X and Y, optionally overriding style." (%assert-screen-bounds screen x y) (setf (aref (screen-cells screen) (%screen-index screen x y)) (%coerce-cell-value value style style-supplied-p)) (%screen-touch screen y (1+ y)) screen)
+(defun screen-put-cell (screen x y value &key (style nil style-supplied-p))
+  "Write VALUE into SCREEN at X and Y, optionally overriding style."
+  (%assert-screen-bounds screen x y)
+  (let ((index (%screen-index screen x y)))
+    (declare (type fixnum index))
+    (setf (aref (screen-cells screen) index)
+          (%coerce-cell-value value style style-supplied-p)))
+  (%screen-touch screen y (1+ y))
+  screen)
+
+(defun %screen-put-cell-normalized-style (screen x y char style)
+  "Write CHAR with an already normalized STYLE without normalizing it again.
+STYLE is owned by the caller and must not be mutated after this call."
+  (%assert-screen-bounds screen x y)
+  (let ((index (%screen-index screen x y)))
+    (declare (type fixnum index))
+    (setf (aref (screen-cells screen) index)
+          (%make-cell :char char :raw-style style)))
+  (%screen-touch screen y (1+ y))
+  screen)
 
 (defun make-screen (width height &key initial-cell) "Create a WIDTH by HEIGHT SCREEN initialized from INITIAL-CELL. INITIAL-CELL may be a CELL template, a character, or NIL for a blank cell. Screen mutation APIs replace cell values, so equal initial cells are shared safely. Invalid dimensions signal SCREEN-DIMENSIONS-INVALID." (%assert-screen-dimensions width height) (%make-screen :width width :height height :cells (%screen-vector width height initial-cell) :row-generations (make-array height :element-type (quote fixnum) :initial-element 0)))
 
 (defun screen-clear (screen &key cell) "Reset every cell in SCREEN to CELL, returning SCREEN. CELL may be a CELL template, a character, or NIL for a blank cell." (%assert-screen screen) (fill (screen-cells screen) (%coerce-cell-template cell)) (%screen-touch screen) screen)
 
-(defun screen-resize (screen width height &key initial-cell) "Resize SCREEN to WIDTH by HEIGHT in place, returning SCREEN. The overlapping top-left region is preserved and newly exposed cells use INITIAL-CELL." (%assert-screen-dimensions width height) (%assert-screen screen) (let* ((old-width (screen-width screen)) (old-height (screen-height screen)) (old-cells (screen-cells screen)) (new-cells (make-array (* width height) :initial-element (%coerce-cell-template initial-cell) :element-type (array-element-type old-cells))) (new-row-generations (make-array height :element-type (quote fixnum) :initial-element 0))) (loop for y fixnum below (min old-height height) do (replace new-cells old-cells :start1 (* y width) :start2 (* y old-width) :end2 (+ (* y old-width) (min old-width width)))) (setf (screen-width screen) width (screen-height screen) height (screen-cells screen) new-cells (screen-row-generations screen) new-row-generations) (%screen-touch screen) screen))
+(defun screen-resize (screen width height &key initial-cell)
+  "Resize SCREEN to WIDTH by HEIGHT in place, returning SCREEN. The overlapping top-left region is preserved and newly exposed cells use INITIAL-CELL."
+  (%assert-screen-dimensions width height)
+  (%assert-screen screen)
+  (let* ((old-width (screen-width screen))
+         (old-height (screen-height screen))
+         (old-cells (screen-cells screen))
+         (copy-width (if (> old-width width) width old-width))
+         (copy-height (if (> old-height height) height old-height))
+         (new-cells (make-array (* width height)
+                                :initial-element (%coerce-cell-template initial-cell)
+                                :element-type (array-element-type old-cells)))
+         (new-row-generations (make-array height
+                                          :element-type 'fixnum
+                                          :initial-element 0)))
+    (declare (type fixnum old-width old-height copy-width copy-height))
+    (loop for y fixnum below copy-height
+          for source-start fixnum = (* y old-width)
+          for destination-start fixnum = (* y width)
+          do (replace new-cells old-cells
+                      :start1 destination-start
+                      :start2 source-start
+                      :end2 (+ source-start copy-width)))
+    (setf (screen-width screen) width
+          (screen-height screen) height
+          (screen-cells screen) new-cells
+          (screen-row-generations screen) new-row-generations)
+    (%screen-touch screen)
+    screen))

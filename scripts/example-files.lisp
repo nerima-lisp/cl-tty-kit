@@ -29,6 +29,8 @@
      :summary "split a frame into bordered panels with a sparkline and a columns table")
     (:path "examples/renderer-loop.lisp"
      :summary "drive a double-buffered renderer, emitting a full paint then a diff-only update")
+    (:path "examples/interactive-dashboard.lisp"
+     :summary "run a resize-aware resident TUI with fd readiness and incremental input decoding")
     (:path "examples/color-report.lisp"
      :summary "render a color gradient bar and a table of named color indices and luminance")
     (:path "examples/layout-dashboard.lisp"

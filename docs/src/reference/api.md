@@ -172,7 +172,8 @@ Wraps the diff-render loop with an internal previous-frame buffer. See
 [Screen and Rendering](../guide/screen-and-rendering.md).
 
 `renderer`, `make-renderer`, `renderer-screen`, `renderer-width`,
-`renderer-height`, `renderer-render`, `renderer-clear`, `renderer-resize`.
+`renderer-height`, `renderer-render`, `renderer-clear`, `renderer-resize`,
+`renderer-invalidate`.
 
 ## Tick loop
 
@@ -180,6 +181,10 @@ Bounded and real-time drivers sharing one per-tick step. See
 [Animation](../guide/animation.md).
 
 `tick-loop-run`, `tick-loop-run-realtime`.
+
+`tick-loop-run-realtime` accepts an optional `poll` function for input and
+resize observation before each tick. A renderer may return `nil` to suppress a
+frame or write directly to the loop stream and return that stream.
 
 ## PTY
 
@@ -189,4 +194,4 @@ alongside the stream API. See [PTY](../guide/pty.md).
 | Category | Symbols |
 | --- | --- |
 | Struct / stream | `pty`, `make-pty`, `pty-process`, `pty-stream`, `pty-read`, `pty-write`, `pty-resize`, `pty-alive-p`, `pty-exit-code`, `close-pty` |
-| fd-centric layer | `pty-fd`, `pty-pid`, `fd-read-octets`, `fd-write-octets` |
+| fd-centric layer | `pty-fd`, `pty-pid`, `stream-fd`, `fd-read-octets`, `fd-write-octets`, `fd-wait` |

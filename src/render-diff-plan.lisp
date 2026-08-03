@@ -8,11 +8,13 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
   (operations #() :type vector))
 
 (defun %make-screen-diff-plan (screen)
-  (%make-diff-plan
-    (make-array
-      (* 2 (length (screen-cells screen)))
-      :element-type 'fixnum
-      :fill-pointer 0)))
+  (let ((cell-count (length (screen-cells screen))))
+    (declare (type fixnum cell-count))
+    (%make-diff-plan
+      (make-array
+        (* 2 cell-count)
+        :element-type 'fixnum
+        :fill-pointer 0))))
 
 (defun %clear-diff-plan (plan)
   (setf (fill-pointer (diff-plan-operations plan)) 0)
@@ -58,14 +60,19 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
   (declare (type fixnum x y)
            (optimize (speed 3) (safety 1)))
   (flet ((positive-decimal-digit-count (number)
-           (declare (type (integer 1 *) number))
-           (do ((digits 1 (1+ digits))
-             (remaining number (truncate remaining 10)))
-          ((< remaining 10) digits))))
-    (+
-      4
-      (positive-decimal-digit-count (1+ y))
-      (positive-decimal-digit-count (1+ x)))))
+           (declare (type fixnum number))
+           (let ((digits 1)
+                 (remaining number))
+             (declare (type fixnum digits remaining))
+             (loop while (>= remaining 10)
+                   do (incf digits)
+                      (setf remaining (truncate remaining 10)))
+             digits)))
+    (the fixnum
+      (+
+        4
+        (positive-decimal-digit-count (1+ y))
+        (positive-decimal-digit-count (1+ x))))))
 
 (defun %plan-diff-length (screen previous plan &optional changed-since)
     "Record sparse updates in PLAN and return their rendered length."
@@ -88,11 +95,12 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
                                 (<= (aref row-generations y) changed-since))
                            row-start
                            (+ row-start width)))
-              (blank-suffix-start nil))
-          (declare (type fixnum row-end))
-          (do ((index row-start))
-              ((>= index row-end))
-            (declare (type fixnum index))
+                (blank-suffix-start nil))
+            (declare (type fixnum row-end)
+                     (type fixnum width height length))
+            (do ((index row-start))
+                ((>= index row-end))
+              (declare (type fixnum index))
             (if (%cell-equal-p (aref cells index) (aref previous-cells index))
                 (incf index)
                 (let ((x (- index row-start)))

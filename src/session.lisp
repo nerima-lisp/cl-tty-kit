@@ -16,25 +16,36 @@ tests that need the rendered escape sequences as a return value."
                                         (alternate-screen t)
                                         (hide-cursor t)
                                         bracketed-paste
-                                        keyboard-enhancements)
+                                        keyboard-enhancements
+                                        mouse
+                                        focus-reporting
+                                        disable-line-wrap)
                                  &body body)
   "Execute BODY with terminal session state scoped to STREAM.
 
 The helper composes alternate-screen, cursor visibility, bracketed paste,
-keyboard enhancement, and optional raw mode setup with guaranteed cleanup."
+keyboard enhancement, mouse/focus reporting, line-wrap control, and optional
+raw mode setup with guaranteed cleanup. MOUSE is a tracking mode accepted by
+ANSI-ENABLE-MOUSE."
   (let ((fd-value (gensym "FD"))
         (raw-mode-value (gensym "RAW-MODE"))
         (alternate-screen-value (gensym "ALTERNATE-SCREEN"))
         (hide-cursor-value (gensym "HIDE-CURSOR"))
         (bracketed-paste-value (gensym "BRACKETED-PASTE"))
-        (keyboard-enhancements-value (gensym "KEYBOARD-ENHANCEMENTS")))
+        (keyboard-enhancements-value (gensym "KEYBOARD-ENHANCEMENTS"))
+        (mouse-value (gensym "MOUSE"))
+        (focus-reporting-value (gensym "FOCUS-REPORTING"))
+        (disable-line-wrap-value (gensym "DISABLE-LINE-WRAP")))
     `(let ((,stream-var ,stream)
            (,fd-value ,fd)
            (,raw-mode-value ,raw-mode)
            (,alternate-screen-value ,alternate-screen)
            (,hide-cursor-value ,hide-cursor)
            (,bracketed-paste-value ,bracketed-paste)
-           (,keyboard-enhancements-value ,keyboard-enhancements))
+           (,keyboard-enhancements-value ,keyboard-enhancements)
+           (,mouse-value ,mouse)
+           (,focus-reporting-value ,focus-reporting)
+           (,disable-line-wrap-value ,disable-line-wrap))
        (labels ((%emit (sequence)
                   (write-string sequence ,stream))
                 (%start-step (thunk)
@@ -64,8 +75,29 @@ keyboard enhancement, and optional raw mode setup with guaranteed cleanup."
                                      (%emit (ansi-push-keyboard-enhancements
                                              ,keyboard-enhancements-value))))))
                     (setf ,keyboard-enhancements-value nil))
+                  (when (and ,mouse-value
+                             (not (%start-step
+                                   (lambda ()
+                                     (%emit (ansi-enable-mouse ,mouse-value))))))
+                    (setf ,mouse-value nil))
+                  (when (and ,focus-reporting-value
+                             (not (%start-step
+                                   (lambda ()
+                                     (%emit (ansi-enable-focus-reporting))))))
+                    (setf ,focus-reporting-value nil))
+                  (when (and ,disable-line-wrap-value
+                             (not (%start-step
+                                   (lambda ()
+                                     (%emit (ansi-disable-line-wrap))))))
+                    (setf ,disable-line-wrap-value nil))
                   (finish-output ,stream))
                 (%end-session ()
+                  (when ,disable-line-wrap-value
+                    (%emit (ansi-enable-line-wrap)))
+                  (when ,focus-reporting-value
+                    (%emit (ansi-disable-focus-reporting)))
+                  (when ,mouse-value
+                    (%emit (ansi-disable-mouse ,mouse-value)))
                   (when ,keyboard-enhancements-value
                     (%emit (ansi-pop-keyboard-enhancements)))
                   (when ,bracketed-paste-value

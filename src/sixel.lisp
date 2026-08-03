@@ -86,11 +86,12 @@ indices instead of requantizing every color pass."
 (defun %sixel-band-state-flush (state)
   (when (%sixel-band-state-run-char state)
     (let ((runs (%sixel-band-state-runs state)))
-      (vector-push-extend
-       (logior (char-code (%sixel-band-state-run-char state))
-               (ash (%sixel-band-state-run-count state) 7))
-       runs
-       (max 16 (length runs))))
+        (vector-push-extend
+        (logior (char-code (%sixel-band-state-run-char state))
+                (ash (%sixel-band-state-run-count state) 7))
+        runs
+        (let ((capacity (length runs)))
+          (if (< capacity 16) 16 capacity))))
     (setf (%sixel-band-state-run-char state) nil
           (%sixel-band-state-run-count state) 0)))
 
@@ -128,14 +129,19 @@ indices instead of requantizing every color pass."
 The band is scanned once; blank columns are inserted lazily when a color appears
 again, which avoids rescanning WIDTH for every palette entry."
   (%sixel-band-workspace-reset workspace)
-  (let ((states (%sixel-band-workspace-states workspace))
+      (let ((states (%sixel-band-workspace-states workspace))
         (seen (%sixel-band-workspace-seen workspace))
         (colors nil)
         (column-bits (%sixel-band-workspace-column-bits workspace))
         (column-seen (%sixel-band-workspace-column-seen workspace))
         (column-colors (%sixel-band-workspace-column-colors workspace))
         (band-row-count
-          (max 0 (min +sixel-band-height+ (- height base-y))))
+          (let ((remaining (- height base-y)))
+            (if (minusp remaining)
+                0
+                (if (> remaining +sixel-band-height+)
+                    +sixel-band-height+
+                    remaining))))
         (column-index (* base-y width)))
     (dotimes (x width)
       (let ((column-color-count 0))

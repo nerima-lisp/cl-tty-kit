@@ -69,6 +69,45 @@
                :interval 1/1000)))
         (expect final-state :to-be 7)
         (expect (get-output-stream-string stream) :to-equal "987"))))
+  (it "polls before each tick and threads the polled state into advance"
+    (let ((poll-count 0)
+          (advance-count 0)
+          (stream (make-string-output-stream)))
+      (let ((final-state
+              (tick-loop-run-realtime
+               0
+               (lambda (state)
+                 (incf advance-count)
+                 (1+ state))
+               (lambda (state) (format nil "~D" state))
+               (lambda (state) (= state 2))
+               :stream stream
+               :interval 1/1000
+               :poll (lambda (state)
+                       (incf poll-count)
+                       state))))
+        (expect final-state :to-be 2)
+        (expect poll-count :to-be 2)
+        (expect advance-count :to-be 2)
+        (expect (get-output-stream-string stream) :to-equal "12"))))
+  (it "allows a render function to suppress output or write directly to the stream"
+    (let ((stream (make-string-output-stream))
+          (render-count 0))
+      (tick-loop-run-realtime
+       0 #'1+
+       (lambda (state)
+         (incf render-count)
+         (cond
+           ((= state 1) nil)
+           ((= state 2)
+            (write-string "direct" stream)
+            (values stream t t))
+           (t "framed")))
+       (lambda (state) (= state 3))
+       :stream stream
+       :interval 1/1000)
+      (expect render-count :to-be 3)
+      (expect (get-output-stream-string stream) :to-equal "directframed")))
   (it "signals a non-type-error for malformed arguments"
     (expect-non-type-error
      (tick-loop-run-realtime 0 :not-a-function (lambda (s) (declare (ignore s)) "") (lambda (s) t)))
@@ -80,4 +119,7 @@
      (tick-loop-run-realtime 0 #'1+
                              (lambda (s) (declare (ignore s)) "")
                              (lambda (s) (declare (ignore s)) t)
-                             :interval 0))))
+                             :interval 0))
+    (expect-non-type-error
+     (tick-loop-run-realtime 0 #'1+ (lambda (s) (declare (ignore s)) "")
+                             (lambda (s) t) :poll :not-a-function))))

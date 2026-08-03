@@ -141,3 +141,11 @@ synonym streams, or NIL when STREAM has no fd."
     ((typep stream 'synonym-stream)
      (%stream-fd (symbol-value (synonym-stream-symbol stream))))
     (t nil)))
+
+#+sbcl
+(defun stream-fd (stream)
+  "Return STREAM's underlying file descriptor, or NIL when it has none.
+
+Unwraps two-way and synonym streams so callers can connect ordinary terminal
+streams to the fd-centric input and wait APIs without using private helpers."
+  (%stream-fd stream))

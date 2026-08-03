@@ -54,7 +54,8 @@ regardless of the order or duplicates in which they were supplied."
         #'string< :key #'symbol-name))
 
 (defun modifiers-from-csi-number (number)
-  (let ((mask (max 0 (1- (or number 1)))))
+  (let* ((number (or number 1))
+         (mask (if (< number 1) 0 (1- number))))
     (normalize-modifiers
      (append (when (logtest mask 1) '(:shift))
              (when (logtest mask 2) '(:alt))

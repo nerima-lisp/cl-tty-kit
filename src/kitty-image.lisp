@@ -33,15 +33,16 @@ base64-encoded and split into APC chunks with m=1 on all but the last."
         expected-length)))
   (with-output-to-string (out)
     (let ((length (length pixels))
-          (bytes-per-chunk (* 3 (floor +kitty-chunk-size+ 4))))
+          (bytes-per-chunk (* 3 (ash +kitty-chunk-size+ -2))))
       (if (zerop length) (progn
           (format out "~C_Ga=T,f=~D,s=~D,v=~D,m=0;" +escape+ format width height)
           (write-char +escape+ out)
           (write-char #\\ out))
         (loop for start from 0 below length by bytes-per-chunk
               for index from 0
-              for
-              end = (min length (+ start bytes-per-chunk))
+              for end = (if (> (+ start bytes-per-chunk) length)
+                            length
+                            (+ start bytes-per-chunk))
               for more = (if (< end length) 1
             0)
               do (if (zerop index) (format out "~C_Ga=T,f=~D,s=~D,v=~D,m=~D;" +escape+ format width height more)

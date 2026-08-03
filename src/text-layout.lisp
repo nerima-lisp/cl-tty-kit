@@ -31,20 +31,24 @@ still within BUDGET. Characters are counted by CHAR-WIDTH, so a wide glyph is
 kept whole -- it is excluded rather than half-included when it would overflow."
   (let ((consumed 0)
         (result start))
+    (declare (type fixnum budget start end consumed result))
     (loop for index from start below end
-          for width = (%character-width (char string index))
+          for width fixnum = (%character-width (char string index))
           while (<= (+ consumed width) budget)
           do (incf consumed width)
              (setf result (1+ index)))
     result))
 
-(defun %string-cell-width (string &key (start 0) (end (length string)))
-
-  (loop for index from start below end
-        sum (max 1 (%character-width (char string index)))))
-
-
-
+  (defun %string-cell-width (string &key (start 0) (end (length string)))
+    (declare (type fixnum start end))
+    (let ((width 0))
+      (declare (type fixnum width))
+      (do ((index start (1+ index)))
+          ((>= index end) width)
+        (declare (type fixnum index))
+        (let ((cell-width (%character-width (char string index))))
+          (declare (type fixnum cell-width))
+          (incf width (if (zerop cell-width) 1 cell-width))))))
 
 
 (defmacro %cells-prefix-end (string budget)
@@ -53,12 +57,13 @@ kept whole -- it is excluded rather than half-included when it would overflow."
 check exactly so a clipped run never overflows its region. The second value is
 the cell cost of that prefix."
   `(let ((string ,string) (budget ,budget) (consumed 0) (result 0))
+     (declare (type fixnum budget consumed result))
      (loop for index from 0 below (length string)
-           for cost = (max 1 (%character-width (char string index)))
-           while (<= (+ consumed cost) budget)
-           do (incf consumed cost)
-              (setf result (1+ index)))
-     (values result consumed)))
+             for cost fixnum = (%character-width (char string index))
+             while (<= (+ consumed cost) budget)
+             do (incf consumed (if (zerop cost) 1 cost))
+                (setf result (1+ index)))
+      (values result consumed)))
 
 (defun truncate-string (string width &key (ellipsis ""))
   "Return STRING clipped so its terminal column width does not exceed WIDTH.
@@ -70,7 +75,7 @@ plain prefix is returned. A negative WIDTH is treated as zero."
   (%assert-layout-string "STRING" string)
   (%assert-layout-string "ELLIPSIS" ellipsis)
   (%assert-layout-width "WIDTH" width)
-  (let ((width (max 0 width)))
+  (let ((width (if (minusp width) 0 width)))
     (if (<= (string-width string) width)
         string
         (let* ((ellipsis-width (string-width ellipsis))
@@ -96,17 +101,18 @@ unchanged -- PAD-STRING never truncates. A negative WIDTH is treated as zero."
   (%assert-layout-character "PAD" pad)
   (%assert-layout-align align)
   (%assert (= 1 (char-width pad)) "PAD ~S must be a single-column character." pad)
-  (let* ((width (max 0 width))
+  (let* ((width (if (minusp width) 0 width))
          (current (string-width string))
          (deficit (- width current)))
+    (declare (type fixnum width current deficit))
     (if (<= deficit 0)
         string
-        (let* ((left-padding (ecase align
-                               (:left 0)
-                               (:right deficit)
-                               (:center (floor deficit 2))))
-               (result (make-string (+ (length string) deficit)
-                                    :initial-element pad)))
+         (let* ((left-padding (ecase align
+                                (:left 0)
+                                (:right deficit)
+                                (:center (ash deficit -1))))
+                (result (make-string (+ (length string) deficit)
+                                     :initial-element pad)))
           (replace result string :start1 left-padding)
           result))))
 
@@ -118,19 +124,24 @@ up the way a terminal renders them. TAB-WIDTH must be a positive integer."
   (%assert (and (integerp tab-width) (plusp tab-width))
            "TAB-WIDTH ~S must be a positive integer." tab-width)
   (with-output-to-string (out)
-    (let ((column 0))
-      (loop for char across string
+    (let ((column 0)
+          (limit (length string)))
+      (declare (type fixnum column limit))
+      (loop for index fixnum from 0 below limit
+            for char = (char string index)
             do (cond
                  ((char= char #\Tab)
                   (let ((spaces (- tab-width (mod column tab-width))))
                     (dotimes (index spaces) (write-char #\Space out))
                     (incf column spaces)))
-                 ((char= char #\Newline)
-                  (write-char char out)
-                  (setf column 0))
-                 (t
-                  (write-char char out)
-                  (incf column (max 1 (%character-width char)))))))))
+                   ((char= char #\Newline)
+                    (write-char char out)
+                    (setf column 0))
+                   (t
+                    (write-char char out)
+                    (let ((char-width (%character-width char)))
+                      (declare (type fixnum char-width))
+                      (incf column (if (zerop char-width) 1 char-width)))))))))
 
 (defun %skip-escape-sequence (string index limit)
   "Return the index just past the ANSI escape sequence starting at INDEX (an ESC)."
@@ -170,6 +181,7 @@ STRING-WIDTH on the result to get the visible column count of styled text."
   (with-output-to-string (out)
     (let ((index 0)
           (limit (length string)))
+      (declare (type fixnum index limit))
       (loop while (< index limit)
             do (if (char= (char string index) #\Esc)
                    (setf index (%skip-escape-sequence string index limit))

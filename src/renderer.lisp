@@ -56,12 +56,13 @@ frame into.")
        :visible
        (cursor-visible-p cursor))))
 
-  (defun %snapshot-renderer-cursor (renderer cursor)
+(defun %snapshot-renderer-cursor (renderer cursor)
   "Store CURSOR in RENDERER without replacing an existing private snapshot."
   (let ((snapshot (renderer-cursor renderer)))
-    (if snapshot (setf (cursor-x snapshot) (cursor-x cursor)
-            (cursor-y snapshot) (cursor-y cursor)
-            (cursor-visible-p snapshot) (cursor-visible-p cursor))
+    (if snapshot
+        (setf (cursor-x snapshot) (cursor-x cursor)
+              (cursor-y snapshot) (cursor-y cursor)
+              (cursor-visible-p snapshot) (cursor-visible-p cursor))
       (setf (renderer-cursor renderer) (%snapshot-cursor cursor)))))
 
 (defun %snapshot-renderer-screen (renderer back &key full-repaint-p)
@@ -70,17 +71,20 @@ frame into.")
            (type screen back))
   (let ((front (renderer-front renderer))
         (plan (renderer-diff-plan renderer)))
+    (declare (type (or null screen) front)
+             (type (or null diff-plan) plan))
     (cond
-      ((or
-          (null front)
-          (/= (screen-width front) (screen-width back))
-          (/= (screen-height front) (screen-height back)))
-        (setf (renderer-front renderer) (screen-copy back)))
+      ((or (null front)
+           (/= (screen-width front) (screen-width back))
+           (/= (screen-height front) (screen-height back)))
+       (setf (renderer-front renderer) (screen-copy back)))
       (full-repaint-p
-        (replace (screen-cells front) (screen-cells back))
-        front)
-      ((zerop (fill-pointer (diff-plan-operations plan))) front)
-      (t (%copy-diff-plan-cells front back plan)))))
+       (replace (screen-cells front) (screen-cells back))
+       front)
+      ((zerop (fill-pointer (diff-plan-operations plan)))
+       front)
+      (t
+       (%copy-diff-plan-cells front back plan)))))
 
 (defun renderer-render (renderer &key stream cursor)
   "Emit the changes needed to bring the terminal to the RENDERER back buffer. Diffs the back buffer against the previous frame and returns the ANSI string (or writes it to STREAM and returns STREAM). When CURSOR is supplied the frame also finishes in that cursor state, diffed against the previous frame cursor. After emitting, RENDERER snapshots the current screen and cursor as the new previous frame, so the next call diffs against this one. An uncursored render invalidates the saved cursor because rendering output may move the terminal cursor without restoring it."
@@ -88,39 +92,58 @@ frame into.")
   (when cursor
     (%assert-render-cursor cursor))
   (let* ((back (renderer-screen renderer))
-         (front (renderer-front renderer)))
-    (if (and
-        (null cursor)
-        front
-        (eql (renderer-rendered-generation renderer) (screen-generation back))) (progn
-        (setf (renderer-cursor renderer) nil)
-        (or stream ""))
-      (multiple-value-bind (output diff-output-p full-repaint-p) (if cursor (%render-frame-diff-output
-            back
-            front
-            cursor
-            (renderer-cursor renderer)
-            stream
-            (renderer-diff-plan renderer)
-            (renderer-rendered-generation renderer))
-          (%render-diff-output
-            back
-            front
-            stream
-            (renderer-diff-plan renderer)
-            (renderer-rendered-generation renderer)))
-        (declare (ignore diff-output-p))
-        (%snapshot-renderer-screen renderer back :full-repaint-p full-repaint-p)
-        (setf (renderer-rendered-generation renderer) (screen-generation back))
-        (if cursor (%snapshot-renderer-cursor renderer cursor)
-          (setf (renderer-cursor renderer) nil))
-        output))))
+         (front (renderer-front renderer))
+         (back-generation (screen-generation back)))
+    (declare (type screen back)
+             (type (or null screen) front)
+             (type fixnum back-generation))
+    (if (and (null cursor)
+             front
+             (eql (renderer-rendered-generation renderer)
+                  back-generation))
+        (progn
+          (setf (renderer-cursor renderer) nil)
+          (or stream ""))
+        (multiple-value-bind (output diff-output-p full-repaint-p)
+            (if cursor
+                (%render-frame-diff-output
+                  back
+                  front
+                  cursor
+                  (renderer-cursor renderer)
+                  stream
+                  (renderer-diff-plan renderer)
+                  (renderer-rendered-generation renderer))
+                (%render-diff-output
+                  back
+                  front
+                  stream
+                  (renderer-diff-plan renderer)
+                  (renderer-rendered-generation renderer)))
+          (declare (ignore diff-output-p))
+          (%snapshot-renderer-screen renderer back :full-repaint-p full-repaint-p)
+          (setf (renderer-rendered-generation renderer) back-generation)
+          (if cursor
+              (%snapshot-renderer-cursor renderer cursor)
+              (setf (renderer-cursor renderer) nil))
+          output))))
 
 (defun renderer-clear (renderer &key cell)
   "Reset RENDERER's back buffer to CELL (a template, character, or NIL for
 blank), returning RENDERER. The change is emitted by the next RENDERER-RENDER."
   (%assert-renderer renderer)
   (screen-clear (renderer-screen renderer) :cell cell)
+  renderer)
+
+(defun renderer-invalidate (renderer)
+  "Drop RENDERER's previous-frame snapshot and return RENDERER.
+
+The next RENDERER-RENDER emits a full repaint. Use this after the terminal may
+have been modified outside the renderer, such as after suspend/resume."
+  (%assert-renderer renderer)
+  (setf (renderer-front renderer) nil
+        (renderer-cursor renderer) nil
+        (renderer-rendered-generation renderer) nil)
   renderer)
 
 (defun renderer-resize (renderer width height &key initial-cell)
@@ -132,8 +155,6 @@ blank), returning RENDERER. The change is emitted by the next RENDERER-RENDER."
     height
     :initial-cell
     initial-cell)
-  (setf (renderer-front renderer) nil
-        (renderer-cursor renderer) nil
-        (renderer-rendered-generation renderer) nil
-        (renderer-diff-plan renderer) (%make-screen-diff-plan (renderer-screen renderer)))
+  (renderer-invalidate renderer)
+  (setf (renderer-diff-plan renderer) (%make-screen-diff-plan (renderer-screen renderer)))
   renderer)

@@ -77,7 +77,8 @@ second copy for the usual LF-only paste."
 
 (defun %decode-next-event (string index)
   (multiple-value-bind (event consumed) (decode-key-sequence string :start index)
-    (values event (max 1 consumed))))
+    (declare (type (integer 0 *) consumed))
+    (values event (if (plusp consumed) consumed 1))))
 
 (declaim (notinline
     %collect-plain-events
@@ -121,11 +122,16 @@ top of it."
          (capacity (array-dimension pending-paste 0)))
     (%assert-decoder-buffer-size decoder new-length)
     (when (> new-length capacity)
-      (setf pending-paste (adjust-array
-          pending-paste
-          (max new-length (* 2 (max 1 capacity)))
-          :fill-pointer
-          old-length)))
+      (let ((new-capacity (if (zerop capacity)
+                              new-length
+                              (* 2 capacity))))
+        (when (< new-capacity new-length)
+          (setf new-capacity new-length))
+        (setf pending-paste (adjust-array
+            pending-paste
+            new-capacity
+            :fill-pointer
+            old-length))))
     (setf (fill-pointer pending-paste) new-length)
     (replace pending-paste chunk :start1 old-length :start2 start :end2 end))
   pending-paste)
@@ -134,19 +140,23 @@ top of it."
   (concatenate 'string +bracketed-paste-start-sequence+ pending-paste suffix))
 
 (defun %bracketed-paste-suffix-length (string start eof)
-  (if eof 0
-    (loop for size from (min (- (length string) start) (1- (length +bracketed-paste-end-sequence+))) downto 1
-          when (string=
-        string
-        +bracketed-paste-end-sequence+
-        :start1
-        (- (length string) size)
-        :start2
-        0
-        :end2
-        size)
-            do (return size)
-          finally (return 0))))
+  (if eof
+      0
+      (let* ((limit (length string))
+             (end-sequence-length (length +bracketed-paste-end-sequence+))
+             (remaining (- limit start))
+             (max-size (if (< remaining (1- end-sequence-length))
+                           remaining
+                           (1- end-sequence-length))))
+        (loop for size fixnum from max-size downto 1
+              when (string=
+                    string
+                    +bracketed-paste-end-sequence+
+                    :start1 (- limit size)
+                    :start2 0
+                    :end2 size)
+                do (return size)
+              finally (return 0)))))
 
 (defun %flush-pending-paste-events (decoder suffix)
   "Fall back to ordinary decoding of an unterminated paste, clearing the buffer.
@@ -166,7 +176,9 @@ same contract %DECODE-PLAIN-EVENTS documents -- %COLLECT-PASTE-EVENTS is the
 list-collecting policy built on top of it, the paste-aware sibling of
 %COLLECT-PLAIN-EVENTS/%DECODE-PLAIN-EVENTS."
   (let ((index 0)
-        (limit (length string)))
+        (limit (length string))
+        (end-sequence-length (length +bracketed-paste-end-sequence+)))
+    (declare (type fixnum index limit end-sequence-length))
     (flet ((finish-paste ()
              (let ((text (%copy-paste-buffer-string (input-decoder-pending-paste decoder))))
                (setf (input-decoder-pending-paste decoder) nil)
@@ -191,7 +203,7 @@ list-collecting policy built on top of it, the paste-aware sibling of
                             (%append-paste-string decoder (input-decoder-pending-paste decoder)
                                                    string index end-index)))
                     (funcall continuation (finish-paste))
-                    (setf index (+ end-index (length +bracketed-paste-end-sequence+))))
+                    (setf index (+ end-index end-sequence-length)))
                   (let* ((suffix-length (%bracketed-paste-suffix-length string index eof))
                          (payload-end (- limit suffix-length)))
                     (if eof
@@ -207,11 +219,11 @@ list-collecting policy built on top of it, the paste-aware sibling of
             (let ((pending (%pending-escape-fragment string index eof)))
               (if pending
                   (return pending)
-                  (multiple-value-bind (event consumed) (%decode-next-event string index)
-                    (if (%paste-marker-event-p event :paste-start)
-                        (setf (input-decoder-pending-paste decoder) (%make-paste-buffer))
-                        (funcall continuation event))
-                    (incf index consumed)))))))))
+                (multiple-value-bind (event consumed) (%decode-next-event string index)
+                  (if (%paste-marker-event-p event :paste-start)
+                      (setf (input-decoder-pending-paste decoder) (%make-paste-buffer))
+                      (funcall continuation event))
+                  (incf index consumed)))))))))
 
 (defun %collect-paste-events (decoder string eof)
   (let* ((events '())

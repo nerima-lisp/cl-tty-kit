@@ -44,12 +44,15 @@ is a binary search instead of a linear scan of the source list.")
 (defun %code-point-in-sorted-ranges-p (code ranges)
   "Return true when CODE lies inside one of the sorted, non-overlapping
 (START . END) ranges in the simple-vector RANGES, using binary search."
-  (declare (type simple-vector ranges))
+  (declare (type simple-vector ranges)
+           (type fixnum code))
   (let ((low 0)
-        (high (1- (length ranges))))
+        (high (the fixnum (1- (length ranges)))))
+    (declare (type fixnum low high))
     (loop while (<= low high) do
-      (let* ((mid (ash (+ low high) -1))
+      (let* ((mid (the fixnum (ash (+ low high) -1)))
              (range (svref ranges mid)))
+        (declare (type fixnum mid))
         (cond ((< code (car range)) (setf high (1- mid)))
               ((> code (cdr range)) (setf low (1+ mid)))
               (t (return-from %code-point-in-sorted-ranges-p t)))))
@@ -109,14 +112,19 @@ since the ambiguous check runs only when this is true.")
   "Return the terminal column width of CHARACTER or a Unicode code point."
   (%code-point-width (%validate-code-point-designator character)))
 
-(defun string-width (string &key (start 0) (end (length string)))
-  "Return the total terminal column width of STRING between START and END.
-The width is the sum of CHAR-WIDTH over the selected characters, so callers
-can align text that mixes ASCII, CJK, combining marks, and emoji."
-  (check-type string string)
-  (%validate-string-bounds string start end)
-  (loop for index from start below end
-        sum (%character-width (char string index))))
+  (defun string-width (string &key (start 0) (end (length string)))
+    "Return the total terminal column width of STRING between START and END.
+  The width is the sum of CHAR-WIDTH over the selected characters, so callers
+  can align text that mixes ASCII, CJK, combining marks, and emoji."
+    (%validate-string-bounds string start end)
+    (locally
+        (declare (type fixnum start end))
+      (let ((width 0))
+        (declare (type fixnum width))
+        (do ((index start (1+ index)))
+            ((>= index end) width)
+          (declare (type fixnum index))
+          (incf width (%character-width (char string index)))))))
 
 (defun string-graphemes (string)
   "Return STRING split into a list of grapheme-cluster strings.
@@ -135,12 +143,15 @@ per-code-point iteration."
   "Return the number of grapheme clusters in STRING (see STRING-GRAPHEMES)."
   (length (string-graphemes string)))
 
-(defun grapheme-width (grapheme)
-  "Return the terminal column width of the grapheme cluster GRAPHEME (a string).
-The width is the maximum width of its code points, so a base plus combining
-marks is the base width and a wide emoji cluster is two columns. Honors
-*EAST-ASIAN-AMBIGUOUS-WIDE* through CHAR-WIDTH."
-  (let ((width 0))
-    (loop for char across grapheme
-          do (setf width (max width (%character-width char))))
-    width))
+  (defun grapheme-width (grapheme)
+    "Return the terminal column width of the grapheme cluster GRAPHEME (a string).
+  The width is the maximum width of its code points, so a base plus combining
+  marks is the base width and a wide emoji cluster is two columns. Honors
+  *EAST-ASIAN-AMBIGUOUS-WIDE* through CHAR-WIDTH."
+    (let ((width 0))
+      (declare (type fixnum width))
+      (loop for char across grapheme
+            for char-width fixnum = (%character-width char)
+            do (when (> char-width width)
+                 (setf width char-width)))
+      width))

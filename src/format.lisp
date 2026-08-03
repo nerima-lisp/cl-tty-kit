@@ -57,10 +57,11 @@ integer)."
   (let ((ratio (clamp ratio 0 1))
         (result (make-string width :initial-element empty)))
     (if fractional
-        (let* ((eighths (round (* ratio width 8)))
-               (complete (floor eighths 8))
-               (remainder (mod eighths 8))
-               (partial-p (and (plusp remainder) (< complete width))))
+      (let* ((eighths (round (* ratio width 8)))
+             (complete (ash eighths -3))
+             (remainder (logand eighths 7))
+             (partial-p (and (plusp remainder) (< complete width))))
+          (declare (type fixnum eighths complete remainder))
           (loop for index fixnum below complete
                 do (setf (schar result index) full))
           (when partial-p
@@ -94,19 +95,26 @@ VALUES yields an empty string."
         (map nil (lambda (value)
                    (%assert-real "Sparkline value" value))
              values)
-        (let* ((low (or min (reduce #'min values)))
-               (high (or max (reduce #'max values)))
-               (range (- high low))
-               (result (make-string (length values))))
-          (map-into result
-                    (lambda (value)
-                      (let ((level (if (<= range 0)
-                                       0
-                                       (round (* (/ (- (clamp value low high) low) range)
-                                                 (1- +sparkline-levels+))))))
-                        (%sparkline-char level)))
-                    values)
-          result))))
+        (let ((low min)
+              (high max))
+          (when (or (null low) (null high))
+            (map nil (lambda (value)
+                       (when (or (null low) (< value low))
+                         (setf low value))
+                       (when (or (null high) (> value high))
+                         (setf high value)))
+                 values))
+          (let* ((range (- high low))
+                 (result (make-string (length values))))
+            (map-into result
+                      (lambda (value)
+                        (let ((level (if (<= range 0)
+                                         0
+                                         (round (* (/ (- (clamp value low high) low) range)
+                                                   (1- +sparkline-levels+))))))
+                          (%sparkline-char level)))
+                      values)
+            result)))))
 
 (defparameter +spinner-frame-sets+
   (list (cons :dots (map 'vector #'code-char
@@ -190,44 +198,46 @@ SCREEN-WRITE-LINES to place a table, or print the lines directly."
       (%assert-string-field "Table field" field)))
   (if (null rows)
       (quote ())
-      (let* ((columns (reduce (function max) rows :key (function length) :initial-value 0))
-             (widths (make-array columns :initial-element 0))
-             (row-widths
-              (mapcar
-               (lambda (row)
-                 (let ((current-widths (make-array (length row))))
-                   (loop for field in row
-                         for index from 0
-                         for width = (string-width field)
-                         do (setf (aref current-widths index) width)
-                         (when (> width (aref widths index))
-                           (setf (aref widths index) width)))
-                   current-widths))
-               rows)))
-        (when (plusp columns)
-          (%assert (= 1 (char-width pad)) "PAD ~S must be a single-column character." pad))
-        (mapcar
-         (lambda (row current-widths)
-           (with-output-to-string (out)
-                                  (loop for index below columns
-                                        for field-tail = row then (cdr field-tail)
-                                        for align-tail = aligns then (cdr align-tail)
-                                        for field = (if field-tail (car field-tail) "")
-                                        for current-width = (if field-tail (aref current-widths index) 0)
-                                        for deficit = (- (aref widths index) current-width)
-                                        for align = (if align-tail (car align-tail) :left)
-                                        for left-padding = (ecase align
-                                                             (:left 0)
-                                                             (:right deficit)
-                                                             (:center (floor deficit 2)))
-                                        do (unless (zerop index)
-                                             (write-string separator out))
-                                        (dotimes (padding left-padding)
-                                          (declare (ignore padding))
-                                          (write-char pad out))
-                                        (write-string field out)
-                                        (dotimes (padding (- deficit left-padding))
-                                          (declare (ignore padding))
-                                          (write-char pad out)))))
-         rows
-         row-widths))))
+      (let ((columns 0))
+        (dolist (row rows)
+          (let ((row-length (length row)))
+            (when (> row-length columns)
+              (setf columns row-length))))
+        (let* ((widths (make-array columns :initial-element 0))
+               (row-widths
+                (mapcar
+                 (lambda (row)
+                   (let ((current-widths (make-array (length row))))
+                     (loop for field in row
+                           for index from 0
+                           for width = (string-width field)
+                           do (setf (aref current-widths index) width)
+                              (when (> width (aref widths index))
+                                (setf (aref widths index) width)))
+                     current-widths))
+                 rows)))
+          (when (plusp columns)
+            (%assert (= 1 (char-width pad)) "PAD ~S must be a single-column character." pad))
+          (mapcar
+           (lambda (row current-widths)
+             (with-output-to-string (out)
+                                    (loop for index below columns
+                                          for field-tail = row then (cdr field-tail)
+                                          for align-tail = aligns then (cdr align-tail)
+                                          for field = (if field-tail (car field-tail) "")
+                                          for current-width = (if field-tail (aref current-widths index) 0)
+                                          for deficit = (- (aref widths index) current-width)
+                                          for align = (if align-tail (car align-tail) :left)
+                                          for left-padding = (ecase align
+                                                               (:left 0)
+                                                               (:right deficit)
+                                                               (:center (ash deficit -1)))
+                                          do (unless (zerop index)
+                                               (write-string separator out))
+                                             (dotimes (i left-padding)
+                                               (write-char pad out))
+                                             (write-string field out)
+                                             (dotimes (i (- deficit left-padding))
+                                               (write-char pad out)))))
+           rows
+           row-widths)))))

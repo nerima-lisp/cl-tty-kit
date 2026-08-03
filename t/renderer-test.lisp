@@ -191,3 +191,9 @@
       (expect (renderer-height renderer) :to-be 3)
       (screen-write-string (renderer-screen renderer) 0 0 "x")
       (expect (renderer-render renderer) :to-equal (render-screen (renderer-screen renderer))))))
+  (it "renderer-invalidate forces a full repaint after external terminal output"
+    (let ((renderer (make-renderer 2 1)))
+      (renderer-render renderer)
+      (expect (renderer-invalidate renderer) :to-be renderer)
+      (expect (renderer-render renderer)
+              :to-equal (render-screen (renderer-screen renderer)))))

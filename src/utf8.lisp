@@ -6,10 +6,13 @@
 ;;; (INVALID-UTF8-SEQUENCE, tested by t/utf8-test.lisp) predates it and must
 ;;; not change shape for existing callers:
 ;;;
-;;;   1. %VALIDATE-OCTET-VECTOR rejects a non-(INTEGER 0 255) element with
-;;;      :NON-OCTET before decoding -- CL-CODEC-KIT assumes its input already
-;;;      satisfies that type and has no such guard of its own.
-;;;   2. %TRANSLATE-CODEC-ERROR re-signals a CL-CODEC-KIT decode error as
+;;;   1. %COERCE-OCTET-VECTOR normalizes generic octet vectors to a specialized
+;;;      `(vector (unsigned-byte 8))` before decoding -- CL-CODEC-KIT assumes
+;;;      its input already satisfies that type and has no such guard of its own.
+;;;      The specialized fast path stays zero-copy.
+;;;   2. %VALIDATE-OCTET-VECTOR rejects a non-(INTEGER 0 255) element with
+;;;      :NON-OCTET before decoding.
+;;;   3. %TRANSLATE-CODEC-ERROR re-signals a CL-CODEC-KIT decode error as
 ;;;      INVALID-UTF8-SEQUENCE. Every CL-CODEC-KIT:DECODE-ERROR's POSITION
 ;;;      names where the failing character *starts* (see
 ;;;      cl-codec-kit/src/conditions.lisp), which already matches this
@@ -54,6 +57,7 @@ valid UTF-8 continuation byte (80-BF)."
 
 (defmacro %utf8-octets-to-string (octets)
   `(let ((octets ,octets))
+     (setf octets (%coerce-octet-vector octets))
      (%validate-octet-vector octets)
      (handler-case (cl-codec-kit:octets-to-string octets :encoding :utf-8)
        (cl-codec-kit:decode-error (c) (%translate-codec-error c octets)))))
@@ -65,9 +69,33 @@ incomplete trailing multibyte sequence (empty when VECTOR ends on a
 boundary). Genuinely invalid octets in the prefix still signal
 INVALID-UTF8-SEQUENCE."
   `(let ((octets ,octets))
+     (setf octets (%coerce-octet-vector octets))
      (%validate-octet-vector octets)
      (handler-case (cl-codec-kit:decode-prefix octets :encoding :utf-8)
        (cl-codec-kit:decode-error (c) (%translate-codec-error c octets)))))
+
+(defmacro %octet-vector-p (input)
+  "Return true when INPUT is a vector whose elements are octets."
+  `(let ((input ,input))
+     (and (vectorp input)
+          (or (subtypep (array-element-type input) '(unsigned-byte 8))
+              (loop for element across input
+                    always (typep element '(unsigned-byte 8)))))))
+
+(defmacro %coerce-octet-vector (input)
+  "Coerce INPUT to a specialized octet vector when needed."
+  `(let ((input ,input))
+     (cond
+       ((not (vectorp input))
+        (error "Unsupported input type: ~S" (type-of input)))
+       ((subtypep (array-element-type input) '(unsigned-byte 8))
+        input)
+       ((loop for element across input
+              always (typep element '(unsigned-byte 8)))
+        (coerce input '(vector (unsigned-byte 8))))
+       (t
+        ;; Let %VALIDATE-OCTET-VECTOR report the library-specific condition.
+        input))))
 
 (defmacro %octet-input-p (input)
   "Return true when INPUT should be decoded as UTF-8 octets, not characters.
@@ -77,9 +105,7 @@ vectors do not."
   `(let ((input ,input))
      (and (vectorp input)
           (not (stringp input))
-          (or (subtypep (array-element-type input) '(unsigned-byte 8))
-              (and (plusp (length input))
-                   (integerp (aref input 0)))))))
+          (%octet-vector-p input))))
 
 (defmacro %coerce-character-vector (input)
   "Coerce a non-octet vector INPUT to a string when every element is a

@@ -83,11 +83,14 @@ that leaves the screen signals SCREEN-INDEX-OUT-OF-BOUNDS."
   "Return the starting column for a TITLE-CELLS-wide title on a box's top edge,
 inset one cell from each corner and placed by ALIGN."
   `(let ((x ,x) (width ,width) (title-cells ,title-cells) (align ,align))
-     (let ((inner-width (- width 2)))
+     (let* ((inner-width (- width 2))
+            (remaining (- inner-width title-cells))
+            (half (ash remaining -1)))
+       (declare (type fixnum inner-width remaining half))
        (ecase align
          (:left (1+ x))
-         (:right (+ x 1 (max 0 (- inner-width title-cells))))
-         (:center (+ x 1 (max 0 (floor (- inner-width title-cells) 2))))))))
+         (:right (if (minusp remaining) (1+ x) (+ x 1 remaining)))
+         (:center (+ x 1 (if (minusp half) 0 half)))))))
 
 (defmacro %draw-box-title (screen x y width title align style style-supplied-p title-style)
   "Write TITLE into the top border row of a box, clipped to the space between

@@ -54,6 +54,7 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:with-terminal-session
    #:terminal-size
    #:set-terminal-size
+   #:stream-fd
    ;; ansi
    #:ansi-move-cursor
    #:ansi-clear-screen
@@ -275,6 +276,7 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:renderer-height
    #:renderer-render
    #:renderer-clear
+   #:renderer-invalidate
    #:renderer-resize
    ;; tick loop
    #:tick-loop-run
@@ -293,5 +295,6 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    ;; pty fd-centric layer
    #:pty-fd
    #:pty-pid
+   #:fd-wait
    #:fd-read-octets
    #:fd-write-octets))

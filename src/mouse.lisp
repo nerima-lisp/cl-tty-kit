@@ -157,10 +157,10 @@ or a fragment still missing its terminator -- returns NIL and 0 so a caller can
                       (values (%make-mouse-event
                                :button button
                                :action action
-                               :x (max 0 (1- cx))
-                               :y (max 0 (1- cy))
+                               :x (if (< cx 1) 0 (1- cx))
+                               :y (if (< cy 1) 0 (1- cy))
                                :modifiers modifiers)
-                              (- (1+ final-index) start)))
+                               (- (1+ final-index) start)))
                     (values nil 0)))
               (values nil 0)))
         (values nil 0))))

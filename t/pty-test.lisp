@@ -608,3 +608,25 @@ asserts BODY signals a SIMPLE-ERROR whose report contains MESSAGE."
   (it "rejects a fractional LIMIT before attempting I/O"
     (expect-pty-operation-failed (:fd-read nil "PTY operation FD-READ failed")
       (fd-read-octets 0 (make-array 1 :element-type '(unsigned-byte 8)) 1.5))))
+
+#+sbcl
+(describe "fd-wait"
+  (it "reports a timeout and then input readiness for a pipe"
+    (multiple-value-bind (rfd wfd) (sb-unix:unix-pipe)
+      (unwind-protect
+           (progn
+             (expect (fd-wait rfd :input 0) :to-be-falsy)
+             (expect (fd-write-octets wfd
+                                      (make-array 1 :element-type '(unsigned-byte 8)
+                                                        :initial-element 65))
+                     :to-be 1)
+             (expect (fd-wait rfd :input 1) :to-be-truthy))
+        (sb-unix:unix-close wfd)
+        (sb-unix:unix-close rfd))))
+  (it "validates direction, timeout, and descriptor before waiting"
+    (expect-pty-operation-failed (:fd-wait nil "PTY operation FD-WAIT failed")
+      (fd-wait -1 :input 0))
+    (expect-pty-operation-failed (:fd-wait nil "PTY operation FD-WAIT failed")
+      (fd-wait 0 :bad 0))
+    (expect-pty-operation-failed (:fd-wait nil "PTY operation FD-WAIT failed")
+      (fd-wait 0 :input -1))))

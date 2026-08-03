@@ -1,8 +1,11 @@
 (in-package #:cl-tty-kit)
 
+(defparameter +empty-octet-vector+ (make-array 0 :element-type '(unsigned-byte 8)))
+
 (defstruct (input-decoder (:constructor %make-input-decoder) (:copier nil)) "Incremental decoder state for split terminal input."
   (pending-string "")
-  (pending-octets #())
+  (pending-octets +empty-octet-vector+
+   :type (vector (unsigned-byte 8)))
   (collect-bracketed-paste-p nil)
   (normalize-paste-line-endings-p nil)
   (pending-paste nil)

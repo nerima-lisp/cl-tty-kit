@@ -12,18 +12,22 @@
        (ecase kind
          (:length
           (%assert-constraint-real :length (first args) constraint)
-          (max 0 (first args)))
+          (let ((value (first args)))
+            (if (minusp value) 0 value)))
          (:percentage
           (%assert-constraint-real :percentage (first args) constraint)
-          (max 0 (floor (* (first args) available) 100)))
+          (let ((value (truncate (* (first args) available) 100)))
+            (if (minusp value) 0 value)))
          (:ratio (let ((denominator (second args)))
                    (%assert-constraint-real :numerator (first args) constraint)
                    (unless (and (integerp denominator) (plusp denominator))
                      (error "Invalid ratio denominator in layout constraint: ~S" constraint))
-                   (max 0 (floor (* (first args) available) denominator))))
+                   (let ((value (truncate (* (first args) available) denominator)))
+                     (if (minusp value) 0 value))))
          (:min
           (%assert-constraint-real :min (first args) constraint)
-          (max 0 (first args)))
+          (let ((value (first args)))
+            (if (minusp value) 0 value)))
          (:fill 0)))))
 
 (defun %constraint-weight (constraint)
@@ -34,7 +38,8 @@ CONSTRAINT's shape is already validated by %CONSTRAINT-BASELINE, which
     (case kind
       (:fill
        (%assert-constraint-real :fill (first args) constraint)
-       (max 0 (first args)))
+       (let ((value (first args)))
+         (if (minusp value) 0 value)))
       (:min 1)
       (otherwise 0))))
 
@@ -42,7 +47,9 @@ CONSTRAINT's shape is already validated by %CONSTRAINT-BASELINE, which
   "Clip SIZES cumulatively so their running sum never exceeds AVAILABLE."
   `(let ((%clip-sizes-list ,sizes) (%clip-sizes-remaining ,available))
      (mapcar (lambda (size)
-               (let ((take (max 0 (min size %clip-sizes-remaining))))
+               (let ((take (cond ((minusp size) 0)
+                                 ((> size %clip-sizes-remaining) %clip-sizes-remaining)
+                                 (t size))))
                  (decf %clip-sizes-remaining take)
                  take))
              %clip-sizes-list)))
@@ -52,26 +59,26 @@ CONSTRAINT's shape is already validated by %CONSTRAINT-BASELINE, which
 leftover being distributed), sorted by descending fractional remainder and
 skipping any index whose WEIGHT is zero -- the order the largest-remainder
 method hands out leftover whole units in."
-  `(let ((shares ,shares) (weights ,weights))
+     `(let ((shares ,shares) (weights ,weights))
      (mapcar #'car
              (sort (loop for share in shares
                          for weight in weights
                          for index from 0
                          when (plusp weight)
-                           collect (cons index (- share (floor share))))
+                           collect (cons index (- share (truncate share))))
                    #'> :key #'cdr))))
 
 (defmacro %distribute-remaining (sizes weights remaining)
   "Add REMAINING cells to SIZES in proportion to WEIGHTS, using the
 largest-remainder method so the integer sizes still sum exactly."
   `(let ((sizes ,sizes) (weights ,weights) (remaining ,remaining))
-     (let ((total-weight (reduce #'+ weights)))
+     (let ((total-weight (loop for weight in weights sum weight)))
        (if (or (<= remaining 0) (zerop total-weight))
            sizes
            (let* ((shares (mapcar (lambda (weight) (/ (* remaining weight) total-weight))
                                   weights))
-                  (floors (mapcar #'floor shares))
-                  (leftover (- remaining (reduce #'+ floors)))
+                  (floors (mapcar #'truncate shares))
+                  (leftover (- remaining (loop for floor in floors sum floor)))
                   (order (%largest-remainder-order shares weights))
                   ;; Incrementing selected list elements with NTH is quadratic.
                   ;; Keep the public list result while updating a transient vector.
@@ -89,7 +96,7 @@ largest-remainder method so the integer sizes still sum exactly."
                                (%constraint-baseline constraint available))
                              constraints))
           (weights (mapcar #'%constraint-weight constraints))
-          (remaining (- available (reduce #'+ baselines))))
+          (remaining (- available (loop for baseline in baselines sum baseline))))
      (%clip-sizes (%distribute-remaining baselines weights remaining) available)))
 
 (defun layout-split (rect direction constraints &key (spacing 0))
@@ -106,8 +113,12 @@ empty list -- this is the constraint layout primitive TUIs build panels from."
   (let* ((axis-total (ecase direction
                        (:horizontal (rect-width rect))
                        (:vertical (rect-height rect))))
-         (gaps (* (max 0 spacing) (max 0 (1- (length constraints)))))
-         (available (max 0 (- axis-total gaps)))
+         (spacing (if (minusp spacing) 0 spacing))
+         (gap-count (let ((count (1- (length constraints))))
+                      (if (minusp count) 0 count)))
+         (gaps (* spacing gap-count))
+         (raw-available (- axis-total gaps))
+         (available (if (minusp raw-available) 0 raw-available))
          (sizes (%layout-solve-sizes available constraints))
          (offset 0)
          (rects '()))
@@ -122,4 +133,4 @@ empty list -- this is the constraint layout primitive TUIs build panels from."
                                      :width (rect-width rect)
                                      :height size)))
             rects)
-      (incf offset (+ size (max 0 spacing))))))
+      (incf offset (+ size spacing)))))

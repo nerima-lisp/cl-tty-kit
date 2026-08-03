@@ -62,18 +62,6 @@
   (unless (and (integerp rows) (plusp rows))
     (error "PTY rows must be a positive integer, got ~S." rows)))
 
-(defun %valid-pty-write-octets-p (data)
-  (and (vectorp data)
-       (every (lambda (octet)
-                (typep octet '(unsigned-byte 8)))
-              data)))
-
-(defun %validate-pty-write-data (data)
-  (unless (or (stringp data)
-              (%valid-pty-write-octets-p data))
-    (error "PTY write data must be a string or a vector of octets, got ~S."
-           data)))
-
 #+sbcl
 (defun make-pty (&key (program "/bin/sh") args environment directory)
   "Spawn PROGRAM under a PTY on SBCL, returning a PTY object."
@@ -101,11 +89,12 @@
 (defun pty-write (pty data)
   "Write DATA to PTY and return PTY."
   (%with-pty-operation (:write pty)
-    (%validate-pty-write-data data)
     (let ((stream (%pty-stream-or-error pty)))
       (typecase data
         (string (write-string data stream))
-        (vector (write-string (%utf8-octets-to-string data) stream)))
+        (vector (write-string (%utf8-octets-to-string data) stream))
+        (t (error "PTY write data must be a string or a vector of octets, got ~S."
+                  data)))
       (finish-output stream)
       pty)))
 

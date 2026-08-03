@@ -88,7 +88,8 @@ case below.")
               :to-be (cl-tty-kit::%stream-fd *standard-output*)))
     (let ((*terminal-size-synonym-target* *standard-output*))
       (expect (cl-tty-kit::%stream-fd (make-synonym-stream '*terminal-size-synonym-target*))
-              :to-be (cl-tty-kit::%stream-fd *standard-output*)))))
+              :to-be (cl-tty-kit::%stream-fd *standard-output*)))
+    (expect (stream-fd *standard-output*) :to-be (cl-tty-kit::%stream-fd *standard-output*))))
 
 #+sbcl
 (describe "set-terminal-size"
@@ -169,6 +170,25 @@ case below.")
                     (write-string "BODY" stream))))
       (%expect-terminal-session-output output :body "BODY"
                                        :bracketed-paste t :keyboard-enhancements 5)))
+  (it "adds mouse, focus reporting, and line-wrap control with reverse teardown"
+    (let ((output (%capture-terminal-session-output (:mouse :button
+                                                      :focus-reporting t
+                                                      :disable-line-wrap t)
+                    (write-string "BODY" stream))))
+      (expect output
+              :to-equal
+              (concatenate 'string
+                           (ansi-enter-alternate-screen)
+                           (ansi-hide-cursor)
+                           (ansi-enable-mouse :button)
+                           (ansi-enable-focus-reporting)
+                           (ansi-disable-line-wrap)
+                           "BODY"
+                           (ansi-enable-line-wrap)
+                           (ansi-disable-focus-reporting)
+                           (ansi-disable-mouse :button)
+                           (ansi-show-cursor)
+                           (ansi-exit-alternate-screen)))))
   (it "omits the alternate screen and cursor-hide bracket when disabled"
     (let ((output (%capture-terminal-session-output (:alternate-screen nil :hide-cursor nil)
                     (write-string "BODY" stream))))

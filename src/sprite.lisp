@@ -34,11 +34,20 @@
   "Return (VALUES COLUMN-START COLUMN-END ROW-START ROW-END), the sprite-local
 bounds (see the file header) at which a WIDTH by HEIGHT sprite placed at
 (X, Y) overlaps SCREEN."
-  `(let ((x ,x) (y ,y) (width ,width) (height ,height) (screen ,screen))
-     (values (max 0 (- x))
-             (min width (- (screen-width screen) x))
-             (max 0 (- y))
-             (min height (- (screen-height screen) y)))))
+  `(let* ((x ,x)
+          (y ,y)
+          (width ,width)
+          (height ,height)
+          (screen ,screen)
+          (screen-width (screen-width screen))
+          (screen-height (screen-height screen))
+          (column-start (if (minusp x) (- x) 0))
+          (row-start (if (minusp y) (- y) 0))
+          (column-limit (- screen-width x))
+          (row-limit (- screen-height y))
+          (column-end (if (> column-limit width) width column-limit))
+          (row-end (if (> row-limit height) height row-limit)))
+     (values column-start column-end row-start row-end)))
 
 (defun sprite-blit (screen text x y &key (transparent #\Space) style)
   "Composite the multi-line TEXT onto SCREEN at (X, Y), returning SCREEN.
@@ -67,38 +76,45 @@ lines) is a no-op."
          (screen-width (screen-width screen))
          (screen-height (screen-height screen))
          (cells (screen-cells screen))
+         (column-start (if (minusp x) (- x) 0))
+         (column-limit (- screen-width x))
          (normalized-style nil)
          (style-ready-p (null style))
          (line-start 0)
          (row 0)
          (first-changed-row nil)
          (last-changed-row nil))
-    (loop
-      for newline-position = (position #\Newline text :start line-start)
-      for line-end = (or newline-position text-length)
-      for destination-y = (+ y row)
-      when (and (<= 0 destination-y) (< destination-y screen-height))
-        do (loop with column-start = (max 0 (- x))
-                 with column-end = (min (- line-end line-start)
-                                        (- screen-width x))
-                 for column from column-start below column-end
-                 for char = (char text (+ line-start column))
-                 unless (char= char transparent)
-                   do (unless style-ready-p
-                        (setf normalized-style (%normalize-cell-style style)
-                              style-ready-p t))
-                      (setf (aref cells (+ (* destination-y screen-width)
-                                           x column))
-                            (%make-cell :char char
-                                        :raw-style (and normalized-style
-                                                        (copy-tree normalized-style))))
-                      (unless first-changed-row
-                        (setf first-changed-row destination-y))
-                      (setf last-changed-row destination-y))
-      if newline-position
-        do (setf line-start (1+ newline-position))
-           (incf row)
-      else
+      (loop
+        for newline-position = (position #\Newline text :start line-start)
+        for line-end = (or newline-position text-length)
+        for line-length fixnum = (- line-end line-start)
+        for destination-y = (+ y row)
+        when (and (<= 0 destination-y) (< destination-y screen-height))
+          do (let* ((column-end (if (> column-limit line-length)
+                                    line-length
+                                    column-limit))
+                    (destination-row-start (* destination-y screen-width))
+                    (source-start (+ line-start column-start)))
+               (declare (type fixnum column-start column-limit line-length column-end
+                                     destination-row-start source-start))
+               (loop for column fixnum from column-start below column-end
+                     for source-index fixnum from source-start
+                     for char = (char text source-index)
+                     unless (char= char transparent)
+                       do (unless style-ready-p
+                            (setf normalized-style (%normalize-cell-style style)
+                                  style-ready-p t))
+                          (setf (aref cells (+ destination-row-start x column))
+                                (%make-cell :char char
+                                            :raw-style (and normalized-style
+                                                            (copy-list normalized-style))))
+                          (unless first-changed-row
+                            (setf first-changed-row destination-y))
+                          (setf last-changed-row destination-y)))
+        if newline-position
+          do (setf line-start (1+ newline-position))
+             (incf row)
+        else
         do (return))
     (when first-changed-row
       (%screen-touch screen first-changed-row (1+ last-changed-row))))

@@ -57,10 +57,17 @@ box (inset by 1 on every side)."
   (%assert-rect-integer :top top)
   (%assert-rect-integer :right right)
   (%assert-rect-integer :bottom bottom)
-  (%make-rect :x (+ (rect-x rect) (max 0 left))
-              :y (+ (rect-y rect) (max 0 top))
-              :width (max 0 (- (rect-width rect) (max 0 left) (max 0 right)))
-              :height (max 0 (- (rect-height rect) (max 0 top) (max 0 bottom)))))
+  (let* ((left (if (minusp left) 0 left))
+         (top (if (minusp top) 0 top))
+         (right (if (minusp right) 0 right))
+         (bottom (if (minusp bottom) 0 bottom))
+         (width (- (rect-width rect) left right))
+         (height (- (rect-height rect) top bottom)))
+    (declare (type fixnum left top right bottom width height))
+    (%make-rect :x (+ (rect-x rect) left)
+                :y (+ (rect-y rect) top)
+                :width (if (minusp width) 0 width)
+                :height (if (minusp height) 0 height))))
 
 (defmacro %define-rect-split (name doc extent-accessor first-part second-part)
   "Define a RECT-splitting function NAME with DOC that partitions RECT along one
@@ -74,8 +81,12 @@ forms see FIRST-EXTENT, SECOND-OFFSET, and SECOND-EXTENT bound in scope."
      (%assert-rect-integer :gap gap)
      (let* ((extent (,extent-accessor rect))
             (first-extent (clamp at 0 extent))
-            (second-offset (min extent (+ first-extent (max 0 gap))))
+            (gap (if (minusp gap) 0 gap))
+            (second-offset (if (> (+ first-extent gap) extent)
+                               extent
+                               (+ first-extent gap)))
             (second-extent (- extent second-offset)))
+       (declare (type fixnum first-extent second-offset second-extent))
        (values ,first-part ,second-part))))
 
 (%define-rect-split rect-split-horizontal
@@ -120,13 +131,20 @@ zero-height. The columns are unchanged."
 When they do not overlap the result is an empty rect (RECT-EMPTY-P true). This is
 the clipping primitive: intersect a draw region with the screen bounds before
 writing."
-  (let* ((x (max (rect-x a) (rect-x b)))
-         (y (max (rect-y a) (rect-y b)))
-         (right (min (rect-right a) (rect-right b)))
-         (bottom (min (rect-bottom a) (rect-bottom b))))
+  (let* ((x (if (> (rect-x a) (rect-x b)) (rect-x a) (rect-x b)))
+         (y (if (> (rect-y a) (rect-y b)) (rect-y a) (rect-y b)))
+         (right (if (< (rect-right a) (rect-right b))
+                    (rect-right a)
+                    (rect-right b)))
+         (bottom (if (< (rect-bottom a) (rect-bottom b))
+                     (rect-bottom a)
+                     (rect-bottom b)))
+         (width (- right x))
+         (height (- bottom y)))
+    (declare (type fixnum x y right bottom width height))
     (%make-rect :x x :y y
-                :width (max 0 (- right x))
-                :height (max 0 (- bottom y)))))
+                :width (if (minusp width) 0 width)
+                :height (if (minusp height) 0 height))))
 
 (defun rect-union (a b)
   "Return the smallest RECT that contains both A and B.
@@ -135,8 +153,15 @@ over a set of damaged regions yields their bounding box."
   (cond
     ((rect-empty-p a) b)
     ((rect-empty-p b) a)
-    (t (let* ((x (min (rect-x a) (rect-x b)))
-              (y (min (rect-y a) (rect-y b)))
-              (right (max (rect-right a) (rect-right b)))
-              (bottom (max (rect-bottom a) (rect-bottom b))))
-         (%make-rect :x x :y y :width (- right x) :height (- bottom y))))))
+    (t (let* ((x (if (< (rect-x a) (rect-x b)) (rect-x a) (rect-x b)))
+              (y (if (< (rect-y a) (rect-y b)) (rect-y a) (rect-y b)))
+              (right (if (> (rect-right a) (rect-right b))
+                         (rect-right a)
+                         (rect-right b)))
+              (bottom (if (> (rect-bottom a) (rect-bottom b))
+                          (rect-bottom a)
+                          (rect-bottom b)))
+              (width (- right x))
+              (height (- bottom y)))
+         (declare (type fixnum x y right bottom width height))
+         (%make-rect :x x :y y :width width :height height)))))

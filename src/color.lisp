@@ -63,8 +63,8 @@ grayscale ramp. An out-of-range INDEX signals an error."
        (values (first rgb) (second rgb) (third rgb))))
     ((< index 232)
      (let ((n (- index 16)))
-       (values (aref +xterm-cube-levels+ (floor n 36))
-               (aref +xterm-cube-levels+ (mod (floor n 6) 6))
+       (values (aref +xterm-cube-levels+ (truncate n 36))
+               (aref +xterm-cube-levels+ (mod (truncate n 6) 6))
                (aref +xterm-cube-levels+ (mod n 6)))))
     (t
      (let ((gray (+ 8 (* 10 (- index 232)))))
