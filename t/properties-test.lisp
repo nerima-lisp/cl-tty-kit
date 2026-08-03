@@ -25,6 +25,29 @@
            (once (cl-tty-kit::clamp value lo hi)))
       (expect (= once (cl-tty-kit::clamp once lo hi))))))
 
+(describe "clamp's body has no surviving mutant"
+  (it "kills every arithmetic/comparison/branch mutation of CLAMP's definition"
+    (let ((cases '((5 0 10) (0 0 10) (10 0 10) (-5 0 10) (15 0 10)
+                   (5 10 0) (7 7 7) (0 -100 100) (-100 -100 100)
+                   (100 -100 100) (-1000 -1000 1000) (1000 -1000 1000) (0 0 0))))
+      (flet ((mutant-matches-clamp-p (mutant-form)
+               (let ((sb-ext:*evaluator-mode* :interpret))
+                 (every (lambda (case)
+                          (destructuring-bind (value min max) case
+                            (ignore-errors
+                              (= (eval (sublis (list (cons 'value value)
+                                                      (cons 'min min)
+                                                      (cons 'max max))
+                                                mutant-form))
+                                 (cl-tty-kit::clamp value min max)))))
+                        cases))))
+        (let ((results (cl-weave:run-mutations
+                        '(if (> min max) min (min max (max min value)))
+                        (lambda (mutant-form mutation)
+                          (declare (ignore mutation))
+                          (mutant-matches-clamp-p mutant-form)))))
+          (expect (cl-weave:mutation-score-passes-p results 1.0) :to-be-truthy))))))
+
 (describe "hex colour parsing inverts formatting"
   (it-property "#RRGGBB round-trips through parse-hex-color"
       ((r (cl-weave:gen-integer :min 0 :max 255))
