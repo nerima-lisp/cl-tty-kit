@@ -25,7 +25,7 @@
             (previous-char nil)
             (column x)
             (row-start (* y screen-width)))
-        (declare (type fixnum screen-width column row-start))
+        (declare (type fixnum screen-width column row-start x y start end))
         (loop for offset fixnum from start below end
               for char = (char string offset)
               for width fixnum = (if all-width-one-p 1 (%character-width char))
@@ -59,12 +59,12 @@ no-op."
            (run-length (progn
                          (%assert-string-bounds string start end)
                          (- end start))))
-      (declare (type fixnum run-length))
+      (declare (type fixnum run-length start end))
       (when (plusp run-length)
         (let ((total-width 0)
               (all-width-one-p t))
           (declare (type fixnum total-width))
-          (loop for offset from start below end
+          (loop for offset fixnum from start below end
                 for width fixnum = (%character-width (char string offset))
                 do (incf total-width (if (= width 2) 2 1))
                    (unless (= width 1)
@@ -97,19 +97,12 @@ VALUE is a CELL template or a character; STYLE overrides its style when supplied
 This is SCREEN-FILL-RECT applied to the whole grid, so an empty screen is a
 no-op."
   (%assert-screen screen)
-  (if style-supplied-p (screen-fill-rect
-      screen
-      0
-      0
-      (screen-width screen)
-      (screen-height screen)
-      value
-      :style
-      style)
-    (let ((width (screen-width screen))
-          (height (screen-height screen)))
-      (declare (type fixnum width height))
-      (screen-fill-rect screen 0 0 width height value)))
+  (let ((width (screen-width screen))
+        (height (screen-height screen)))
+    (declare (type fixnum width height))
+    (if style-supplied-p
+        (screen-fill-rect screen 0 0 width height value :style style)
+        (screen-fill-rect screen 0 0 width height value)))
   screen)
 
 (defun screen-copy (screen) "Return a new SCREEN with an independent backing vector and shared cells." (%assert-screen screen) (%make-screen :width (screen-width screen) :height (screen-height screen) :cells (copy-seq (screen-cells screen)) :generation (screen-generation screen) :row-generations (copy-seq (screen-row-generations screen))))
@@ -120,10 +113,9 @@ A double-width glyph appears once followed by the blank spacer cell that
 SCREEN-WRITE-STRING writes after it, matching the grid's column layout. An
 out-of-range row or column span signals SCREEN-INDEX-OUT-OF-BOUNDS."
   (%assert-screen screen)
-  (let ((end
-          (if end-supplied-p
-              end
-              (screen-width screen))))
+  (let* ((screen-width (screen-width screen))
+         (end (if end-supplied-p end screen-width)))
+    (declare (type fixnum screen-width))
     (unless (and (integerp y)
                  (integerp start)
                  (integerp end)
@@ -131,17 +123,17 @@ out-of-range row or column span signals SCREEN-INDEX-OUT-OF-BOUNDS."
                  (< y (screen-height screen))
                  (<= 0 start)
                  (<= start end)
-                 (<= end (screen-width screen)))
+                 (<= end screen-width))
       (error 'screen-index-out-of-bounds
              :screen screen
              :x start
              :y y
-             :width (screen-width screen)
+             :width screen-width
              :height (screen-height screen)))
     (let* ((length (- end start))
            (result (make-string length))
            (cells (screen-cells screen))
-           (cell-index (+ (* y (screen-width screen)) start)))
+           (cell-index (+ (* y screen-width) start)))
       (declare (type simple-vector cells)
                (type fixnum length cell-index))
       (loop for result-index fixnum from 0 below length
@@ -207,9 +199,9 @@ out-of-range row or column span signals SCREEN-INDEX-OUT-OF-BOUNDS."
            (result-cells (screen-cells result)))
      (declare (type fixnum rect-x rect-y screen-width screen-height rect-right rect-bottom
                            start-x start-y end-x end-y width height source-width))
-      (loop for row from 0 below height
-            for source-start = (+ (* (+ start-y row) source-width) start-x)
-            for result-start = (* row width)
+      (loop for row fixnum from 0 below height
+            for source-start fixnum = (+ (* (+ start-y row) source-width) start-x)
+            for result-start fixnum = (* row width)
             do (replace
         result-cells
         source-cells

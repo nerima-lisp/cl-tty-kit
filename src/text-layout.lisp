@@ -1,5 +1,7 @@
 (in-package #:cl-tty-kit)
 
+(declaim (inline %string-cell-width %skip-escape-sequence))
+
 ;;; --------------------------------------------------------------------------
 ;;; Display-width-aware text layout
 ;;;
@@ -29,27 +31,27 @@
   "Return the largest index E in [START, END] whose column span from START is
 still within BUDGET. Characters are counted by CHAR-WIDTH, so a wide glyph is
 kept whole -- it is excluded rather than half-included when it would overflow."
+  (declare (type fixnum start end budget))
   (let ((consumed 0)
         (result start))
-    (declare (type fixnum budget start end consumed result))
-    (loop for index from start below end
+    (declare (type fixnum consumed result))
+    (loop for index fixnum from start below end
           for width fixnum = (%character-width (char string index))
           while (<= (+ consumed width) budget)
           do (incf consumed width)
              (setf result (1+ index)))
     result))
 
-  (defun %string-cell-width (string &key (start 0) (end (length string)))
-    (declare (type fixnum start end))
-    (let ((width 0))
-      (declare (type fixnum width))
-      (do ((index start (1+ index)))
-          ((>= index end) width)
-        (declare (type fixnum index))
-        (let ((cell-width (%character-width (char string index))))
-          (declare (type fixnum cell-width))
-          (incf width (if (zerop cell-width) 1 cell-width))))))
-
+(defun %string-cell-width (string &key (start 0) (end (length string)))
+  (declare (type fixnum start end))
+  (let ((width 0))
+    (declare (type fixnum width))
+    (do ((index start (1+ index)))
+        ((>= index end) width)
+      (declare (type fixnum index))
+      (let ((cell-width (%character-width (char string index))))
+        (declare (type fixnum cell-width))
+        (incf width (if (zerop cell-width) 1 cell-width))))))
 
 (defmacro %cells-prefix-end (string budget)
   "Return the largest prefix length of STRING whose cell cost (per
@@ -58,12 +60,12 @@ check exactly so a clipped run never overflows its region. The second value is
 the cell cost of that prefix."
   `(let ((string ,string) (budget ,budget) (consumed 0) (result 0))
      (declare (type fixnum budget consumed result))
-     (loop for index from 0 below (length string)
-             for cost fixnum = (%character-width (char string index))
-             while (<= (+ consumed cost) budget)
-             do (incf consumed (if (zerop cost) 1 cost))
-                (setf result (1+ index)))
-      (values result consumed)))
+     (loop for index fixnum from 0 below (length string)
+           for cost fixnum = (%character-width (char string index))
+           while (<= (+ consumed cost) budget)
+           do (incf consumed (if (zerop cost) 1 cost))
+              (setf result (1+ index)))
+     (values result consumed)))
 
 (defun truncate-string (string width &key (ellipsis ""))
   "Return STRING clipped so its terminal column width does not exceed WIDTH.
@@ -132,7 +134,10 @@ up the way a terminal renders them. TAB-WIDTH must be a positive integer."
             do (cond
                  ((char= char #\Tab)
                   (let ((spaces (- tab-width (mod column tab-width))))
-                    (dotimes (index spaces) (write-char #\Space out))
+                    (declare (type fixnum spaces))
+                    (dotimes (index spaces)
+                      (declare (type fixnum index))
+                      (write-char #\Space out))
                     (incf column spaces)))
                    ((char= char #\Newline)
                     (write-char char out)
@@ -145,12 +150,14 @@ up the way a terminal renders them. TAB-WIDTH must be a positive integer."
 
 (defun %skip-escape-sequence (string index limit)
   "Return the index just past the ANSI escape sequence starting at INDEX (an ESC)."
+  (declare (type fixnum index limit))
   (if (>= (1+ index) limit)
       (1+ index)
       (let ((next (char string (1+ index))))
         (cond
           ((char= next #\[)
            (let ((cursor (+ index 2)))
+             (declare (type fixnum cursor))
              (loop while (and (< cursor limit)
                               (not (<= #x40 (char-code (char string cursor)) #x7E)))
                    when (char= (char string cursor) #\Esc)
@@ -159,6 +166,7 @@ up the way a terminal renders them. TAB-WIDTH must be a positive integer."
              (if (< cursor limit) (1+ cursor) cursor)))
           ((char= next #\])
            (let ((cursor (+ index 2)))
+             (declare (type fixnum cursor))
              (loop while (< cursor limit)
                    do (cond
                         ((char= (char string cursor) (code-char 7))

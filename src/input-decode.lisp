@@ -50,6 +50,8 @@ it signals a TTY-KIT-ERROR."
              (pending-octets-length (length pending-octets))
              (pending-paste-length (if pending-paste (length pending-paste)
                                      0)))
+         (declare (type fixnum pending-string-length pending-octets-length
+                        pending-paste-length))
          (%assert-decoder-buffer-size
            decoder
            (+ pending-string-length
@@ -70,11 +72,13 @@ its decode signals INVALID-UTF8-SEQUENCE instead."
   `(let ((decoder ,decoder) (octets ,octets) (eof ,eof))
      (setf octets (%coerce-octet-vector octets))
      (let ((octet-count (length octets)))
+       (declare (type fixnum octet-count))
        (if (and (not eof) (zerop octet-count))
           ""
          (with-input-decoder-state
            (decoder)
            (let ((pending-octets-length (length pending-octets)))
+             (declare (type fixnum pending-octets-length))
              (let ((combined
                     (if (plusp pending-octets-length)
                         (let ((size (+ pending-octets-length octet-count)))
@@ -117,6 +121,7 @@ rules."
     (decoder)
     (let* ((decoded (%decoder-decode-chunk-string decoder input eof))
            (decoded-length (length decoded)))
+      (declare (type fixnum decoded-length))
       (if (and (not eof) (zerop decoded-length))
           nil
           (let* ((pending-string-length (length pending-string))
@@ -127,6 +132,7 @@ rules."
                                (+ pending-string-length decoded-length))
                              (concatenate 'string pending-string decoded))
                            decoded)))
+            (declare (type fixnum pending-string-length))
             (setf pending-string "")
             (multiple-value-bind (events pending) (%decoder-collect-events decoder full eof)
               (setf pending-string (or pending ""))
@@ -140,10 +146,12 @@ A buffered partial UTF-8 sequence signals INVALID-UTF8-SEQUENCE with reason
 had been reached. Returns the flushed events and leaves DECODER empty."
   (with-input-decoder-state
     (decoder)
-    (when (plusp (length pending-octets))
-      (let ((octets pending-octets))
-        (setf pending-octets +empty-octet-vector+)
-        (%utf8-octets-to-string octets)))
+    (let ((pending-octets-length (length pending-octets)))
+      (declare (type fixnum pending-octets-length))
+      (when (plusp pending-octets-length)
+        (let ((octets pending-octets))
+          (setf pending-octets +empty-octet-vector+)
+          (%utf8-octets-to-string octets))))
     (let ((string pending-string))
       (setf pending-string "")
       (values (%decoder-collect-events decoder string t)))))

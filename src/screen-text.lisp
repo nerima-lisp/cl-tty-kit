@@ -81,24 +81,18 @@ signals. STYLE, when non-NIL, applies to every written cell."
   (%assert-screen-text-lines lines)
   (let ((width (screen-width screen))
         (height (screen-height screen))
-        (normalized-style nil)
-        (style-normalized-p nil))
+        (normalized-style (and style (%coerce-cell-style style))))
+    (declare (type fixnum width height))
     (when (and (<= 0 x) (< x width))
       (let ((available (- width x)))
+        (declare (type fixnum available))
         (loop for line in lines
-              for row from y
+              for row fixnum from y
               when (and (<= 0 row) (< row height))
                 do (let ((end (%cells-prefix-end line available)))
                      (when (plusp end)
-                       (if style
-                           (progn
-                             (unless style-normalized-p
-                               (setf normalized-style (%coerce-cell-style style)
-                                     style-normalized-p t))
-                             (%screen-write-string-normalized
-                              screen x row line 0 end normalized-style nil))
-                           (%screen-write-string-normalized
-                            screen x row line 0 end nil nil)))))))
+                        (%screen-write-string-normalized
+                         screen x row line 0 end normalized-style nil))))))
   screen))
 
 (defun screen-write-wrapped (screen x y width text &key style)
@@ -115,15 +109,17 @@ preserved, as with SCREEN-WRITE-LINES."
            "WIDTH ~S must be a positive integer." width)
   (let ((screen-width (screen-width screen))
         (screen-height (screen-height screen)))
+    (declare (type fixnum screen-width screen-height))
     (if (or (minusp x) (>= x screen-width) (>= y screen-height))
         (values screen 0)
         (let ((available (- screen-width x))
-              (normalized-style nil)
-              (style-normalized-p nil)
+              (normalized-style (and style (%coerce-cell-style style)))
               (visible-count 0))
+          (declare (type fixnum available visible-count))
           (%call-with-wrapped-lines
            text width
            (let ((row y))
+             (declare (type fixnum row))
              (lambda (line)
                (cond
                  ((minusp row))
@@ -132,15 +128,8 @@ preserved, as with SCREEN-WRITE-LINES."
                  (t
                   (let ((end (%cells-prefix-end line available)))
                     (when (plusp end)
-                      (if style
-                          (progn
-                            (unless style-normalized-p
-                              (setf normalized-style (%coerce-cell-style style)
-                                    style-normalized-p t))
-                            (%screen-write-string-normalized
-                             screen x row line 0 end normalized-style nil))
-                          (%screen-write-string-normalized
-                           screen x row line 0 end nil nil)))
+                      (%screen-write-string-normalized
+                       screen x row line 0 end normalized-style nil))
                     (incf visible-count))))
                (incf row)
                (< row screen-height))))

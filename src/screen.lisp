@@ -65,31 +65,40 @@
   'screen-dimensions-invalid :width width :height height)
 
 (defmacro %screen-index (screen x y)
-  `(let ((screen ,screen) (x ,x) (y ,y))
-     (+ (* y (screen-width screen)) x)))
+  `(let ((screen ,screen)
+         (x ,x)
+         (y ,y))
+     (let ((screen-width (screen-width screen)))
+       (declare (type fixnum screen-width x y))
+       (+ (* y screen-width) x))))
 
 (defmacro %assert-screen-bounds (screen x y)
-  `(let ((screen ,screen) (x ,x) (y ,y))
-     (%assert-screen screen)
-     (%assert
-       (and
-         (integerp x)
-         (integerp y)
-         (<= 0 x)
-         (< x (screen-width screen))
-         (<= 0 y)
-         (< y (screen-height screen)))
-       'screen-index-out-of-bounds
-       :screen
-       screen
-       :x
-       x
-       :y
-       y
-       :width
-       (screen-width screen)
-       :height
-       (screen-height screen))))
+  `(let ((screen ,screen)
+         (x ,x)
+         (y ,y))
+     (let ((screen-width (screen-width screen))
+           (screen-height (screen-height screen)))
+       (declare (type fixnum screen-width screen-height))
+       (%assert-screen screen)
+       (%assert
+         (and
+           (integerp x)
+           (integerp y)
+           (<= 0 x)
+           (< x screen-width)
+           (<= 0 y)
+           (< y screen-height))
+         'screen-index-out-of-bounds
+         :screen
+         screen
+         :x
+         x
+         :y
+         y
+         :width
+         screen-width
+         :height
+         screen-height))))
 
 (define-validating-assert %assert-screen-offset (name value)
   (integerp value)
@@ -128,6 +137,7 @@
 
 (defun screen-cell (screen x y)
   "Return the CELL at X and Y in SCREEN."
+  (%assert-screen screen)
   (%assert-screen-bounds screen x y)
   (let ((index (%screen-index screen x y)))
     (declare (type fixnum index))

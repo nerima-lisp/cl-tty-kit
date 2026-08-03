@@ -55,6 +55,23 @@ valid UTF-8 continuation byte (80-BF)."
          (cl-codec-kit:truncated-sequence
           (%signal-invalid-utf8-sequence position (aref octets position) :truncated-sequence))))))
 
+(defmacro %coerce-octet-vector (input)
+  "Coerce INPUT to a specialized octet vector when needed.
+Leaves input carrying a non-octet element unchanged rather than signalling --
+that is %VALIDATE-OCTET-VECTOR's job, called separately by every caller here."
+  `(let ((input ,input))
+     (cond
+       ((not (vectorp input))
+        (error "Unsupported input type: ~S" (type-of input)))
+       ((subtypep (array-element-type input) '(unsigned-byte 8))
+        input)
+       ((loop for element across input
+              always (typep element '(unsigned-byte 8)))
+        (coerce input '(vector (unsigned-byte 8))))
+       (t
+        ;; Let %VALIDATE-OCTET-VECTOR report the library-specific condition.
+        input))))
+
 (defmacro %utf8-octets-to-string (octets)
   `(let ((octets ,octets))
      (setf octets (%coerce-octet-vector octets))
@@ -81,21 +98,6 @@ INVALID-UTF8-SEQUENCE."
           (or (subtypep (array-element-type input) '(unsigned-byte 8))
               (loop for element across input
                     always (typep element '(unsigned-byte 8)))))))
-
-(defmacro %coerce-octet-vector (input)
-  "Coerce INPUT to a specialized octet vector when needed."
-  `(let ((input ,input))
-     (cond
-       ((not (vectorp input))
-        (error "Unsupported input type: ~S" (type-of input)))
-       ((subtypep (array-element-type input) '(unsigned-byte 8))
-        input)
-       ((loop for element across input
-              always (typep element '(unsigned-byte 8)))
-        (coerce input '(vector (unsigned-byte 8))))
-       (t
-        ;; Let %VALIDATE-OCTET-VECTOR report the library-specific condition.
-        input))))
 
 (defmacro %octet-input-p (input)
   "Return true when INPUT should be decoded as UTF-8 octets, not characters.

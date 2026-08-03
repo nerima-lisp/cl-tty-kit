@@ -69,6 +69,19 @@ checks both of those slots, never just that some error was signaled."
       (it message
         (expect (%event-signatures-of (decode-input input)) :to-equal expected)))))
 
+(describe "decode-input accepts general octet vectors"
+  (it "decodes a general vector of octets"
+    (expect (%event-signatures-of (decode-input #(97 98 99)))
+            :to-equal '((:character #\a nil)
+                        (:character #\b nil)
+                        (:character #\c nil))))
+  (it "decodes a general vector of octets in streaming mode"
+    (let ((decoder (make-input-decoder)))
+      (expect (%event-signatures-of (decode-input-chunk decoder #(97 98 99) :eof t))
+              :to-equal '((:character #\a nil)
+                          (:character #\b nil)
+                          (:character #\c nil))))))
+
 (describe "unsupported-code-point condition"
   (it "stores the code point and reports it in the condition message"
     (let ((condition (make-condition 'unsupported-code-point :code-point #x110000)))

@@ -18,6 +18,8 @@
 (describe "decoding UTF-8 octets to a string"
   (it "decodes plain ASCII"
     (expect (cl-tty-kit::%utf8-octets-to-string (%u8 97 98 99)) :to-equal "abc"))
+  (it "decodes a general octet vector"
+    (expect (cl-tty-kit::%utf8-octets-to-string #(97 98 99)) :to-equal "abc"))
   (it "decodes a 2-byte sequence"
     (expect (cl-tty-kit::%utf8-octets-to-string (%u8 #xC2 #xA2)) :to-equal "¢"))
   (it "decodes a 3-byte sequence"

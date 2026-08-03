@@ -3,12 +3,12 @@
 (defparameter +empty-octet-vector+ (make-array 0 :element-type '(unsigned-byte 8)))
 
 (defstruct (input-decoder (:constructor %make-input-decoder) (:copier nil)) "Incremental decoder state for split terminal input."
-  (pending-string "")
+  (pending-string "" :type string)
   (pending-octets +empty-octet-vector+
    :type (vector (unsigned-byte 8)))
   (collect-bracketed-paste-p nil)
   (normalize-paste-line-endings-p nil)
-  (pending-paste nil)
+  (pending-paste nil :type (or null string))
   (max-pending 4194304 :type (integer 0 *)))
 
 (defparameter +bracketed-paste-start-sequence+ (concatenate 'string (string #\Esc) "[200~"))

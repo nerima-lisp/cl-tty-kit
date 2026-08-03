@@ -93,14 +93,17 @@ frame into.")
     (%assert-render-cursor cursor))
   (let* ((back (renderer-screen renderer))
          (front (renderer-front renderer))
+         (plan (renderer-diff-plan renderer))
+         (rendered-generation (renderer-rendered-generation renderer))
          (back-generation (screen-generation back)))
     (declare (type screen back)
              (type (or null screen) front)
+             (type (or null diff-plan) plan)
+             (type (or null fixnum) rendered-generation)
              (type fixnum back-generation))
     (if (and (null cursor)
              front
-             (eql (renderer-rendered-generation renderer)
-                  back-generation))
+             (eql rendered-generation back-generation))
         (progn
           (setf (renderer-cursor renderer) nil)
           (or stream ""))
@@ -112,14 +115,14 @@ frame into.")
                   cursor
                   (renderer-cursor renderer)
                   stream
-                  (renderer-diff-plan renderer)
-                  (renderer-rendered-generation renderer))
+                  plan
+                  rendered-generation)
                 (%render-diff-output
                   back
                   front
                   stream
-                  (renderer-diff-plan renderer)
-                  (renderer-rendered-generation renderer)))
+                  plan
+                  rendered-generation))
           (declare (ignore diff-output-p))
           (%snapshot-renderer-screen renderer back :full-repaint-p full-repaint-p)
           (setf (renderer-rendered-generation renderer) back-generation)

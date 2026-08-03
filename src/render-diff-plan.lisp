@@ -1,5 +1,7 @@
 (in-package #:cl-tty-kit)
 
+(declaim (inline %row-blank-suffix-start %diff-cursor-length))
+
 (defstruct (diff-plan (:constructor %make-diff-plan (operations)) (:copier nil))
   "Reusable pairs of inclusive diff starts and exclusive ends.
 
@@ -42,19 +44,25 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
   (and (char= (cell-char cell) #\Space) (null (%cell-style-sequence cell))))
 
 (defun %same-screen-dimensions-p (screen previous)
-  (and
-    previous
-    (= (screen-width screen) (screen-width previous))
-    (= (screen-height screen) (screen-height previous))))
+  (and previous
+       (let ((screen-width (screen-width screen))
+             (screen-height (screen-height screen))
+             (previous-width (screen-width previous))
+             (previous-height (screen-height previous)))
+         (declare (type fixnum screen-width screen-height previous-width previous-height))
+         (and (= screen-width previous-width)
+              (= screen-height previous-height)))))
 
 (defun %row-blank-suffix-start (cells row-start width)
   (declare (type simple-vector cells)
            (type fixnum row-start width))
   (do ((offset (1- width) (1- offset))
        (start width))
-    ((minusp offset) start)
-    (if (%render-blank-cell-p (aref cells (+ row-start offset))) (setf start offset)
-      (return start))))
+      ((minusp offset) start)
+    (declare (type fixnum offset start))
+    (if (%render-blank-cell-p (aref cells (+ row-start offset)))
+        (setf start offset)
+        (return start))))
 
 (defun %diff-cursor-length (x y)
   (declare (type fixnum x y)
