@@ -17,6 +17,23 @@
         "type": "github"
       }
     },
+    "cl-concurrent-kit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785673216,
+        "narHash": "sha256-uOjDTOTCs6LtdkEoyV5rNkR5SYtWxGjPehXOyBSJd7k=",
+        "owner": "nerima-lisp",
+        "repo": "cl-concurrent-kit",
+        "rev": "2dc7bdcdb8c342e104fda63ab027f5331b02bbee",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nerima-lisp",
+        "ref": "v0.5.0",
+        "repo": "cl-concurrent-kit",
+        "type": "github"
+      }
+    },
     "cl-nix-forge": {
       "inputs": {
         "nixpkgs": [
@@ -255,6 +272,7 @@
     "root": {
       "inputs": {
         "cl-codec-kit": "cl-codec-kit",
+        "cl-concurrent-kit": "cl-concurrent-kit",
         "cl-nix-forge": "cl-nix-forge",
         "cl-parser-kit": "cl-parser-kit",
         "cl-prolog": "cl-prolog",

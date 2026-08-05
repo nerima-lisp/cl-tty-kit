@@ -68,8 +68,11 @@
   ;; UTF-8 codec. SB-POSIX is still bundled with SBCL and loaded directly by
   ;; the SBCL-only raw-mode implementation, so it stays out of :DEPENDS-ON to
   ;; avoid an ASDF source-registry scan merely to locate an already installed
-  ;; contrib.
-  :depends-on ("cl-codec-kit")
+  ;; contrib. cl-concurrent-kit: src/raw-mode.lisp takes its mutex from it
+  ;; instead of calling SB-THREAD directly, for the same reason -- one named
+  ;; vocabulary for the wrapper this package exists to provide rather than
+  ;; reaching past it.
+  :depends-on ("cl-codec-kit" "cl-concurrent-kit")
   :serial t
   :components ((:file "src/package")
                (:file "src/conditions")

@@ -6,7 +6,7 @@
 
 #+sb-thread
 (defvar *raw-mode-states-lock*
-  (sb-thread:make-mutex :name "cl-tty-kit raw-mode states"))
+  (cl-concurrent-kit:make-lock :name "cl-tty-kit raw-mode states"))
 
 (defmacro %with-raw-mode-states-lock (&body body)
   "Serialize a raw-mode state transition (check-then-act on
@@ -15,7 +15,7 @@ against other threads sharing the same process. Raw-mode transitions are
 infrequent, so one global lock -- rather than one per FD -- keeps this
 simple without a measurable cost."
   #+sb-thread
-  `(sb-thread:with-mutex (*raw-mode-states-lock*) ,@body)
+  `(cl-concurrent-kit:with-lock-held (*raw-mode-states-lock*) ,@body)
   #-sb-thread
   `(progn ,@body))
 
