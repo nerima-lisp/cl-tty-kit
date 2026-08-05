@@ -283,7 +283,22 @@ CELLS are literal specifications, so callers write them inline without quoting."
         (expect (plusp (fill-pointer (cl-tty-kit::diff-plan-operations plan))))
         (expect (zerop (cl-tty-kit::%plan-diff-length
                         new old plan (cl-tty-kit::screen-generation new))))
-        (expect (zerop (fill-pointer (cl-tty-kit::diff-plan-operations plan))))))))
+        (expect (zerop (fill-pointer (cl-tty-kit::diff-plan-operations plan)))))))
+  (it "%plan-diff-length matches grouped styled output without per-cell SGR overcounting"
+      (let ((old (make-screen 20 1))
+            (new (make-screen 20 1))
+            (style (make-style (style-fg (named-color :bright-cyan)) :bold)))
+        (dotimes (x 20)
+          (screen-put-cell new x 0 #\X :style style))
+        (let* ((plan (cl-tty-kit::%make-screen-diff-plan new))
+               (diff-length (cl-tty-kit::%plan-diff-length new old plan))
+               (stream (make-string-output-stream)))
+          (multiple-value-bind (result wrote-output-p)
+              (cl-tty-kit::%write-diff-plan new plan stream)
+            (declare (ignore result))
+            (expect wrote-output-p)
+            (expect diff-length :to-be
+                    (length (get-output-stream-string stream))))))))
 
 (describe "%diff-render-length's length estimate"
   (it "matches render-diff's actual length and reports too-long-p correctly, before and after a further change"

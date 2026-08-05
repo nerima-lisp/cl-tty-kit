@@ -89,7 +89,12 @@
         "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
-      pkgsFor = system: nixpkgs.legacyPackages.${system};
+      pkgsFor =
+        system:
+        import nixpkgs {
+          inherit system;
+          overlays = [ paredit-cli.overlays.default ];
+        };
 
       # treefmt drives `nix fmt` and the checks.formatting gate. Scope is Nix
       # only: nixfmt is a low-diff, no-footgun formatter, whereas a YAML
@@ -288,10 +293,12 @@
 
           # Structural parse gate over every tracked Lisp source: fails if
           # any .lisp/.asd file is not a balanced S-expression document.
-          paredit-lint = paredit-cli.lib.${system}.mkLintCheck {
-            inherit src;
-            name = "cl-tty-kit-paredit-lint";
-          };
+          paredit-lint = pkgs.runCommand "cl-tty-kit-paredit-lint" {
+            nativeBuildInputs = [ pkgs.paredit-lint ];
+          } ''
+            paredit-lint ${src}
+            touch $out
+          '';
 
           # Fails `nix flake check` when any tracked Nix file is unformatted,
           # which is what turns `nix fmt` from a suggestion into a gate.
@@ -321,7 +328,7 @@
               pkgs.sbcl
               pkgs.git
               treefmtEval.${system}.config.build.wrapper
-              paredit-cli.packages.${system}.default
+              pkgs.paredit-cli
             ];
             # The only place cl-prolog/cl-weave come from: cl-tty-kit.asd's
             # :depends-on cannot resolve either without this.

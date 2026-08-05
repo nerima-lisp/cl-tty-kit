@@ -9,11 +9,7 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
 (defun %make-screen-diff-plan (screen)
   (let ((cell-count (length (screen-cells screen))))
     (declare (type fixnum cell-count))
-    (%make-diff-plan
-      (make-array
-        (* 2 cell-count)
-        :element-type 'fixnum
-        :fill-pointer 0))))
+    (%make-diff-plan (make-array (* 2 cell-count) :element-type 'fixnum :fill-pointer 0))))
 
 (defun %clear-diff-plan (plan)
   (setf (fill-pointer (diff-plan-operations plan)) 0)
@@ -41,25 +37,24 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
   (and (char= (cell-char cell) #\Space) (null (%cell-style-sequence cell))))
 
 (defun %same-screen-dimensions-p (screen previous)
-  (and previous
-       (let ((screen-width (screen-width screen))
-             (screen-height (screen-height screen))
-             (previous-width (screen-width previous))
-             (previous-height (screen-height previous)))
-         (declare (type fixnum screen-width screen-height previous-width previous-height))
-         (and (= screen-width previous-width)
-              (= screen-height previous-height)))))
+  (and
+    previous
+    (let ((screen-width (screen-width screen))
+          (screen-height (screen-height screen))
+          (previous-width (screen-width previous))
+          (previous-height (screen-height previous)))
+      (declare (type fixnum screen-width screen-height previous-width previous-height))
+      (and (= screen-width previous-width) (= screen-height previous-height)))))
 
 (defun %row-blank-suffix-start (cells row-start width)
   (declare (type simple-vector cells)
            (type fixnum row-start width))
   (do ((offset (1- width) (1- offset))
        (start width))
-      ((minusp offset) start)
+    ((minusp offset) start)
     (declare (type fixnum offset start))
-    (if (%render-blank-cell-p (aref cells (+ row-start offset)))
-        (setf start offset)
-        (return start))))
+    (if (%render-blank-cell-p (aref cells (+ row-start offset))) (setf start offset)
+      (return start))))
 
 (defun %diff-cursor-length (x y)
   (declare (type fixnum x y)
@@ -67,17 +62,31 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
   (flet ((positive-decimal-digit-count (number)
            (declare (type fixnum number))
            (let ((digits 1)
-                 (remaining number))
-             (declare (type fixnum digits remaining))
-             (loop while (>= remaining 10)
-                   do (incf digits)
-                      (setf remaining (truncate remaining 10)))
-             digits)))
-    (the fixnum
-      (+
-        4
-        (positive-decimal-digit-count (1+ y))
-        (positive-decimal-digit-count (1+ x))))))
+              (remaining number))
+          (declare (type fixnum digits remaining))
+          (loop while (>= remaining 10)
+                do (incf digits) (setf remaining (truncate remaining 10)))
+          digits)))
+    (the fixnum (+ 4 (positive-decimal-digit-count (1+ y)) (positive-decimal-digit-count (1+ x))))))
+
+(defun %diff-plan-rendered-length (screen plan)
+  "Return the exact output length for PLAN using grouped style runs."
+  (let ((cells (screen-cells screen))
+        (width (screen-width screen))
+        (operations (diff-plan-operations plan))
+        (length 0))
+    (declare (type simple-vector cells)
+             (type (vector fixnum) operations)
+             (type fixnum width length))
+    (do ((operation-index 0 (+ operation-index 2))
+         (operation-limit (fill-pointer operations)))
+      ((>= operation-index operation-limit) length)
+      (let ((start (aref operations operation-index))
+            (end (aref operations (1+ operation-index))))
+        (declare (type fixnum start end))
+        (incf length (%diff-cursor-length (mod start width) (floor start width)))
+        (if (minusp end) (incf length 4)
+          (incf length (%cell-range-rendered-length cells start end)))))))
 
 (defun %plan-diff-length (screen previous plan &optional changed-since)
   "Record sparse updates in PLAN and return their rendered length."
@@ -91,14 +100,13 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
             (row-dirty-ends (screen-row-dirty-ends screen))
             (row-dirty-bits (screen-row-dirty-bits screen))
             (width (screen-width screen))
-            (height (screen-height screen))
-            (length 0))
+            (height (screen-height screen)))
         (declare (type simple-vector cells previous-cells row-dirty-bits)
                  (type (simple-array fixnum (*))
                        row-generations row-dirty-starts row-dirty-ends))
         (do ((y 0 (1+ y))
              (row-start 0 (+ row-start width)))
-            ((>= y height) length)
+            ((>= y height) (%diff-plan-rendered-length screen plan))
           (declare (type fixnum y row-start))
           (let* ((full-row-start row-start)
                  (row-start
@@ -141,21 +149,17 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
                                                                (if (and blank-suffix-start (>= x blank-suffix-start))
                                                                    (progn
                                                                      (%record-diff-operation plan index -1)
-                                                                     (incf length (+ (%diff-cursor-length x y) 4))
                                                                      (setf index row-end))
                                                                    (let ((start index))
                                                                      (declare (type fixnum start))
-                                                                     (incf length (%cell-rendered-length (aref cells index)))
                                                                      (incf index)
                                                                      (loop
                                                                       (do ()
                                                                           ((or (>= index row-end) (same-cell-p index)))
-                                                                        (incf length (%cell-rendered-length (aref cells index)))
                                                                         (incf index))
                                                                       (if (>= index row-end)
                                                                           (progn
                                                                             (%record-diff-operation plan start index)
-                                                                            (incf length (%diff-cursor-length x y))
                                                                             (return))
                                                                           (let ((gap-start index)
                                                                                 (gap-length 0))
@@ -183,10 +187,9 @@ these plans, avoiding a second cell comparison pass for its steady-state path."
                                                                                      (- index full-row-start) y)))
                                                                                 (progn
                                                                                   (%record-diff-operation plan start gap-start)
-                                                                                  (incf length (%diff-cursor-length x y))
-                                                                                  (return))
-                                                                                (incf length gap-length)))))))))))))))
+                                                                                  (return))))))))))))))))
       ))
+
 (defun %copy-diff-plan-cells (front back plan)
   "Apply PLANs changed cells from BACK to FRONT without allocating."
   (let ((front-cells (screen-cells front))

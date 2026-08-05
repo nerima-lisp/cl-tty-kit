@@ -177,53 +177,28 @@
               (%write-ansi-clear-line stream)
               (%write-cell-range cells start end stream)))))))
 
-(progn
-  (defun %diff-plan-rendered-length (screen plan)
-    "Return the exact output length for PLAN using grouped style runs."
-    (let ((cells (screen-cells screen))
-          (width (screen-width screen))
-          (operations (diff-plan-operations plan))
-          (length 0))
-      (declare (type simple-vector cells)
-               (type (vector fixnum) operations)
-               (type fixnum width length))
-      (do ((operation-index 0 (+ operation-index 2))
-           (operation-limit (fill-pointer operations)))
-          ((>= operation-index operation-limit) length)
-        (let ((start (aref operations operation-index))
-              (end (aref operations (1+ operation-index))))
-          (declare (type fixnum start end))
-          (incf length
-                (%diff-cursor-length (mod start width)
-                                     (floor start width)))
-          (if (minusp end)
-              (incf length 4)
-              (incf length
-                    (%cell-range-rendered-length cells start end)))))))
+(defun %write-preferred-diff (screen previous stream &optional plan changed-since)
+  "Write the smaller valid screen update and report its rendering strategy."
+  (if (not (%same-screen-dimensions-p screen previous))
+      (values (%write-screen screen stream) t t)
+      (if plan
+          (let ((diff-length (%plan-diff-length screen previous plan changed-since)))
+            (if (or (< diff-length (%minimum-screen-render-length screen))
+                    (%screen-render-length-exceeds-p screen diff-length))
+                (multiple-value-bind (result wrote-output-p)
+                    (%write-diff-plan screen plan stream)
+                  (values result wrote-output-p nil))
+                (values (%write-screen screen stream) t t)))
+          (multiple-value-bind (diff-length too-long-p)
+              (%diff-render-length screen previous most-positive-fixnum)
+            (declare (ignore too-long-p))
+            (if (or (< diff-length (%minimum-screen-render-length screen))
+                    (%screen-render-length-exceeds-p screen diff-length))
+                (multiple-value-bind (result wrote-output-p)
+                    (%write-diff screen previous stream)
+                  (values result wrote-output-p nil))
+                (values (%write-screen screen stream) t t))))))
 
-  (defun %write-preferred-diff (screen previous stream &optional plan changed-since)
-    "Write the smaller valid screen update and report its rendering strategy."
-    (if (not (%same-screen-dimensions-p screen previous))
-        (values (%write-screen screen stream) t t)
-        (if plan
-            (progn
-              (%plan-diff-length screen previous plan changed-since)
-              (let ((diff-length (%diff-plan-rendered-length screen plan)))
-                (if (or (< diff-length (%minimum-screen-render-length screen))
-                        (%screen-render-length-exceeds-p screen diff-length))
-                    (multiple-value-bind (result wrote-output-p)
-                        (%write-diff-plan screen plan stream)
-                      (values result wrote-output-p nil))
-                    (values (%write-screen screen stream) t t))))
-            (multiple-value-bind (diff-length too-long-p)
-                (%diff-render-length screen previous most-positive-fixnum)
-              (declare (ignore too-long-p))
-              (if (or (< diff-length (%minimum-screen-render-length screen))
-                      (%screen-render-length-exceeds-p screen diff-length))
-                  (multiple-value-bind (result wrote-output-p)
-                      (%write-diff screen previous stream)
-                    (values result wrote-output-p nil))
-                  (values (%write-screen screen stream) t t)))))))
 (defun %render-diff-output (screen previous stream &optional plan changed-since)
   (%with-style-sgr-sequence-cache
     (if stream
@@ -239,8 +214,6 @@
               (get-output-stream-string output)
               diff-output-p
               full-repaint-p))))))
-
-
 
 (defun %render-frame-diff-output (screen previous cursor previous-cursor stream &optional plan changed-since) (%with-style-sgr-sequence-cache (if stream (%write-frame-diff screen previous cursor previous-cursor stream plan changed-since) (let ((output (make-string-output-stream))) (multiple-value-bind (result diff-output-p full-repaint-p) (%write-frame-diff screen previous cursor previous-cursor output plan changed-since) (declare (ignore result)) (values (get-output-stream-string output) diff-output-p full-repaint-p))))))
 

@@ -72,7 +72,7 @@
          (current (make-screen width height))
          (plan (%make-screen-diff-plan current))
          (stream (make-broadcast-stream))
-         (style (make-style :fg :bright-cyan :bold t)))
+         (style (make-style (style-fg (named-color :bright-cyan)) :bold)))
     (screen-fill previous #\A)
     (screen-fill current #\A)
     (loop for y below height
@@ -382,7 +382,7 @@
             (error "FORMAT-TABLE mutated its input rows.")))
         (reduce #'+ rows :key #'length))))
   (let ((iterations (benchmark-iterations))
-        (style (make-style :fg :yellow :underline t))
+        (style (make-style (style-fg (named-color :yellow)) :underline))
         (ascii "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUV")
         (mixed "aあbいcうdえeおfかgきhくiけjこkさlしmすnせoそpた"))
     (unless (plusp iterations)

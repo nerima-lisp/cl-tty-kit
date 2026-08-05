@@ -15,9 +15,37 @@
 
 (in-package #:cl-tty-kit/bootstrap)
 
-(defparameter *project-root* (uiop:ensure-directory-pathname
-    (truename
-      (merge-pathnames #P"../" (uiop:pathname-directory-pathname *load-truename*)))))
+(progn
+  (defparameter *project-root*
+    (uiop:ensure-directory-pathname
+      (truename
+        (merge-pathnames #P"../" (uiop:pathname-directory-pathname *load-truename*)))))
+  (defparameter *local-dependency-specs*
+    (quote (("cl-codec-kit" "cl-codec-kit/" "cl-codec-kit.asd")
+            ("cl-prolog" "cl-prolog/" "cl-prolog.asd")
+            ("cl-weave" "cl-weave/" "cl-weave.asd"))))
+  (defun worktree-project-root-p (project-root)
+    (let* ((checkout-parent (uiop:pathname-parent-directory-pathname project-root))
+           (parent-name (car (last (pathname-directory checkout-parent)))))
+      (and (stringp parent-name)
+           (string= ".worktrees" parent-name))))
+  (defun repository-root (project-root)
+    (if (worktree-project-root-p project-root)
+        (uiop:pathname-parent-directory-pathname
+          (uiop:pathname-parent-directory-pathname project-root))
+        project-root))
+  (defun sibling-root (project-root)
+    (uiop:pathname-parent-directory-pathname (repository-root project-root)))
+  (defun register-local-dependencies (&rest system-names)
+    (let ((root (sibling-root *project-root*)))
+      (dolist (spec *local-dependency-specs*)
+        (destructuring-bind (system-name directory system-file) spec
+          (when (and (member system-name system-names :test (function string=))
+                     (not (asdf:find-system system-name nil)))
+            (let ((candidate (merge-pathnames directory root)))
+              (when (probe-file (merge-pathnames system-file candidate))
+                (pushnew candidate asdf:*central-registry* :test (function equal))))))))
+    t))
 
 ;; Register the local definition directly so ASDF need not scan every source
 ;; registry before a project script can load the core system.
@@ -69,6 +97,7 @@
        (error "~A timed out after ~D seconds" ,label ,seconds))))
 
 (defun load-core-system (&key force)
+  (register-local-dependencies "cl-codec-kit")
   (when force
     (setf *core-loaded-p* nil))
   (unless *core-loaded-p*
@@ -84,6 +113,7 @@
   t)
 
 (defun load-test-system (&key force)
+  (register-local-dependencies "cl-codec-kit" "cl-prolog" "cl-weave")
   (when force
     (setf *test-loaded-p* nil))
   (unless *test-loaded-p*
