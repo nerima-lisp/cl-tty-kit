@@ -19,12 +19,12 @@
   # distributed by Quicklisp, and this project keeps no vendored copy of any:
   # these flake inputs are the only source of all three, put on
   # CL_SOURCE_REGISTRY by every app/check/devShell below.
-  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.3.0";
+  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.4.3";
   inputs.cl-prolog.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-prolog.inputs.cl-weave.follows = "cl-weave";
   inputs.cl-prolog.inputs.paredit-cli.follows = "paredit-cli";
 
-  inputs.cl-weave.url = "github:nerima-lisp/cl-weave/v1.1.4";
+  inputs.cl-weave.url = "github:nerima-lisp/cl-weave/v1.3.0";
   inputs.cl-weave.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-weave.inputs.paredit-cli.follows = "paredit-cli";
 
@@ -34,30 +34,53 @@
   # own flake outputs, so `flake = false` and no `inputs.nixpkgs.follows`:
   # only the source tree is needed, not cl-codec-kit's own transitive flake
   # graph (cl-nix-forge, its own cl-weave, treefmt-nix).
-  inputs.cl-codec-kit.url = "github:nerima-lisp/cl-codec-kit/v0.4.0";
+  inputs.cl-codec-kit.url = "github:nerima-lisp/cl-codec-kit/v0.5.0";
   inputs.cl-codec-kit.flake = false;
 
   # cl-concurrent-kit: cl-tty-kit.asd's other REAL (non-test) sibling
   # dependency -- src/raw-mode.lisp takes its mutex from it instead of
-  # SB-THREAD directly. Built directly from source via buildASDFSystem below
+  # SB-THREAD directly, and src/sixel.lisp / src/kitty-image.lisp use its
+  # EXECUTOR-MAP to parallelize image encoding when a caller opts in. Built
+  # directly from source via buildASDFSystem below
   # (see cl-concurrent-kit-lib), not through its own flake outputs, so
-  # `flake = false` and no `inputs.nixpkgs.follows`: cl-concurrent-kit.asd's
-  # own :depends-on is (), so there is no transitive flake graph to
-  # propagate `.follows` into.
-  inputs.cl-concurrent-kit.url = "github:nerima-lisp/cl-concurrent-kit/v0.5.0";
+  # `flake = false`, which also rules out any `.follows` here: a
+  # `flake = false` input is never evaluated as a flake, so it has no inputs
+  # to redirect. Its ASDF dependencies are carried instead by
+  # `cl-concurrent-kit-lib`'s `lispLibs` at build time and by
+  # `clSourceRegistryFor` at script time, both of which must list the same
+  # closure.
+  inputs.cl-concurrent-kit.url = "github:nerima-lisp/cl-concurrent-kit/v0.6.1";
   inputs.cl-concurrent-kit.flake = false;
+
+  # cl-concurrent-kit's own ASDF dependency closure, new as of its v0.6.1:
+  # `:depends-on ("cl-boundary-kit" "cl-date-kit")` where v0.5.0 had `()`.
+  # ASDF must load both to load cl-concurrent-kit at all, so they are needed
+  # here even though no cl-tty-kit source references either directly.
+  # cl-boundary-kit then pulls cl-host-kit (`:depends-on (:asdf
+  # :cl-host-kit)`); cl-host-kit's own `:depends-on (#:sb-posix)` is an SBCL
+  # contrib, not a sibling, so the closure terminates there. All three are
+  # `flake = false` source trees for the same reason cl-codec-kit and
+  # cl-concurrent-kit are.
+  inputs.cl-boundary-kit.url = "github:nerima-lisp/cl-boundary-kit/v2.3.0";
+  inputs.cl-boundary-kit.flake = false;
+
+  inputs.cl-date-kit.url = "github:nerima-lisp/cl-date-kit/v1.0.0";
+  inputs.cl-date-kit.flake = false;
+
+  inputs.cl-host-kit.url = "github:nerima-lisp/cl-host-kit/v0.3.1";
+  inputs.cl-host-kit.flake = false;
 
   # paredit-cli provides structural S-expression tooling for this repo's
   # Lisp sources: a dev-shell binary for agent-driven refactors and a
   # structural-parse lint gate reused in `checks`.
-  inputs.paredit-cli.url = "github:nerima-lisp/paredit-cli/v1.4.0";
+  inputs.paredit-cli.url = "github:nerima-lisp/paredit-cli/v1.5.0";
   inputs.paredit-cli.inputs.nixpkgs.follows = "nixpkgs";
 
   # contrib/cl-parser-kit-csi-grammar.lisp's dependency: an opt-in second,
   # independent declarative specification of the ECMA-48 CSI byte-class
   # grammar (see contrib/cl-prolog-csi-grammar.lisp for the first, built on
   # cl-prolog's DCG support instead). Never part of the core build/CI.
-  inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit/v1.0.3";
+  inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit/v1.1.1";
   inputs.cl-parser-kit.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-parser-kit.inputs.cl-prolog.follows = "cl-prolog";
   inputs.cl-parser-kit.inputs.cl-weave.follows = "cl-weave";
@@ -69,7 +92,7 @@
 
   # `crane` for Common Lisp/ASDF; used here for FROMASDSYSTEM's tested
   # `:version` extraction, replacing this flake's own hand-rolled regex.
-  inputs.cl-nix-forge.url = "github:nerima-lisp/cl-nix-forge/v0.4.0";
+  inputs.cl-nix-forge.url = "github:nerima-lisp/cl-nix-forge/v0.5.0";
   inputs.cl-nix-forge.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-nix-forge.inputs.treefmt-nix.follows = "treefmt-nix";
 
@@ -81,6 +104,9 @@
       cl-weave,
       cl-codec-kit,
       cl-concurrent-kit,
+      cl-boundary-kit,
+      cl-date-kit,
+      cl-host-kit,
       paredit-cli,
       cl-parser-kit,
       treefmt-nix,
@@ -123,20 +149,29 @@
 
       sourceFor = pkgs: pkgs.lib.cleanSource ./.;
 
-      # cl-codec-kit, cl-concurrent-kit, cl-prolog, cl-weave, and
-      # cl-parser-kit as raw ASDF-loadable source trees (not the `packages`
-      # outputs above, which are shaped for `lispLibs` composition rather
-      # than for CL_SOURCE_REGISTRY directly). This -- not any vendored copy
-      # -- is the only place any app/check/devShell below gets any of the
-      # five from. cl-codec-kit and cl-concurrent-kit are the two REAL
-      # (non-test) dependencies here, needed at every script entry point
-      # exactly as much as at build time (raw-mode.lisp is loaded as part of
-      # ordinary system loading, not an optional contrib layer); cl-prolog
-      # and cl-weave are test-only; cl-parser-kit is only a contrib/
-      # dependency, but sharing one registry string keeps every entry point
-      # able to load contrib/ interactively without a separate
-      # CL_SOURCE_REGISTRY variant to track.
-      clSourceRegistryFor = "${cl-codec-kit}//:${cl-concurrent-kit}//:${cl-prolog}//:${cl-weave}//:${cl-parser-kit}//:";
+      # Every sibling source tree any entry point can need, as raw
+      # ASDF-loadable directories (not the `packages` outputs above, which
+      # are shaped for `lispLibs` composition rather than for
+      # CL_SOURCE_REGISTRY directly). This -- not any vendored copy -- is the
+      # only place any app/check/devShell below gets any of them from.
+      #
+      # cl-codec-kit and cl-concurrent-kit are cl-tty-kit.asd's two REAL
+      # (non-test) dependencies, needed at every script entry point exactly
+      # as much as at build time (raw-mode.lisp is loaded as part of ordinary
+      # system loading, not an optional contrib layer). cl-boundary-kit,
+      # cl-date-kit and cl-host-kit are here only because ASDF must load
+      # cl-concurrent-kit's own closure to load cl-concurrent-kit -- no
+      # cl-tty-kit source references any of the three. cl-prolog and cl-weave
+      # are test-only; cl-parser-kit is only a contrib/ dependency, but
+      # sharing one registry string keeps every entry point able to load
+      # contrib/ interactively without a separate CL_SOURCE_REGISTRY variant
+      # to track.
+      #
+      # This must stay in step with the `lispLibs` edges below: the two
+      # express the same ASDF closure to two different consumers, and a
+      # dependency added to one and not the other fails only at whichever
+      # entry point the other serves.
+      clSourceRegistryFor = "${cl-codec-kit}//:${cl-concurrent-kit}//:${cl-boundary-kit}//:${cl-date-kit}//:${cl-host-kit}//:${cl-prolog}//:${cl-weave}//:${cl-parser-kit}//:";
 
       # cl-codec-kit as a buildASDFSystem lib for cl-tty-kit's own :depends-on
       # (see cl-tty-kit.asd). Built directly from the flake = false source
@@ -145,22 +180,68 @@
         pkgs:
         pkgs.sbcl.buildASDFSystem {
           pname = "cl-codec-kit";
-          version = "0.3.1";
+          version = "0.5.0";
           src = cl-codec-kit;
           systems = [ "cl-codec-kit" ];
+        };
+
+      # cl-host-kit as a buildASDFSystem lib. Not a cl-tty-kit dependency:
+      # it is here only as cl-boundary-kit's own :depends-on. Its remaining
+      # dependency, #:sb-posix, is an SBCL contrib resolved by `require`, so
+      # it needs no lispLibs of its own.
+      cl-host-kit-lib =
+        pkgs:
+        pkgs.sbcl.buildASDFSystem {
+          pname = "cl-host-kit";
+          version = "0.3.1";
+          src = cl-host-kit;
+          systems = [ "cl-host-kit" ];
+        };
+
+      # cl-date-kit as a buildASDFSystem lib. Not a cl-tty-kit dependency:
+      # it is here only as one half of cl-concurrent-kit's own :depends-on.
+      # Its own :depends-on is (), so it needs no lispLibs.
+      cl-date-kit-lib =
+        pkgs:
+        pkgs.sbcl.buildASDFSystem {
+          pname = "cl-date-kit";
+          version = "1.0.0";
+          src = cl-date-kit;
+          systems = [ "cl-date-kit" ];
+        };
+
+      # cl-boundary-kit as a buildASDFSystem lib. Not a cl-tty-kit
+      # dependency: it is here only as the other half of cl-concurrent-kit's
+      # own :depends-on, which is (:asdf :cl-host-kit) -- :asdf is always
+      # present, cl-host-kit is carried by lispLibs.
+      cl-boundary-kit-lib =
+        pkgs:
+        pkgs.sbcl.buildASDFSystem {
+          pname = "cl-boundary-kit";
+          version = "2.3.0";
+          src = cl-boundary-kit;
+          systems = [ "cl-boundary-kit" ];
+          lispLibs = [ (cl-host-kit-lib pkgs) ];
         };
 
       # cl-concurrent-kit as a buildASDFSystem lib for cl-tty-kit's own
       # :depends-on (see cl-tty-kit.asd). Built directly from the
       # flake = false source input above rather than through
-      # cl-concurrent-kit's own flake outputs.
+      # cl-concurrent-kit's own flake outputs. `lispLibs` carries its own
+      # :depends-on, which became ("cl-boundary-kit" "cl-date-kit") at
+      # v0.6.1 and was () before: without these two edges the cl-tty-kit
+      # package below cannot load it at all.
       cl-concurrent-kit-lib =
         pkgs:
         pkgs.sbcl.buildASDFSystem {
           pname = "cl-concurrent-kit";
-          version = "0.5.0";
+          version = "0.6.1";
           src = cl-concurrent-kit;
           systems = [ "cl-concurrent-kit" ];
+          lispLibs = [
+            (cl-boundary-kit-lib pkgs)
+            (cl-date-kit-lib pkgs)
+          ];
         };
 
       # Runs a repository script against the current working directory (so
