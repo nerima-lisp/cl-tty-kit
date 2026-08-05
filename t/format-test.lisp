@@ -350,7 +350,89 @@
             #(255 0 0 0 0 255 255 0 0 255 0 0 0 0 255 0 0 255 255 0 0 0 0 255 255 0 0))
              (encoded (format-sixel pixels 3 3)))
         (expect encoded :to-equal (reference-format-sixel pixels 3 3))
-        (expect (search "#196F?D" encoded))))))
+        (expect (search "#196F?D" encoded)))))
+  (it
+    "matches the serial encoding when :EXECUTOR is supplied, across several chunk counts"
+    (let* ((width 97)
+           (height 101)
+           (pixels
+             (make-array (* width height 3) :element-type (quote (unsigned-byte 8)))))
+      (dotimes (pixel-index (* width height))
+        (let ((offset (* pixel-index 3))
+              (channel (mod pixel-index 3)))
+          (setf (aref pixels offset) (if (= channel 0) 255 0)
+                (aref pixels (+ offset 1)) (if (= channel 1) 255 0)
+                (aref pixels (+ offset 2)) (if (= channel 2) 255 0))))
+      (let ((serial (format-sixel pixels width height)))
+        (cl-concurrent-kit:with-executor (executor :size 3)
+          (dolist (chunk-count (list 1 2 3 4 8 16))
+            (expect
+              (format-sixel pixels width height :executor executor :chunk-count chunk-count)
+              :to-equal
+              serial))))))
+  (it
+    "ignores a shut-down :EXECUTOR below the parallel pixel threshold"
+    (let* ((width 8)
+           (height 8)
+           (pixels
+             (make-array
+               (* width height 3)
+               :element-type (quote (unsigned-byte 8))
+               :initial-element 100))
+           (serial (format-sixel pixels width height))
+           (executor (cl-concurrent-kit:make-executor :size 1)))
+      (cl-concurrent-kit:shutdown-executor executor :wait t)
+      (expect
+        (format-sixel pixels width height :executor executor :chunk-count 4)
+        :to-equal
+        serial)))
+  (it
+    "rejects non-integer dimensions"
+    (expect-non-type-error (format-sixel #() 1.5 1))
+    (expect-non-type-error (format-sixel #() 1 "2")))
+  (it
+    "a zero height or a zero width alone yields an empty sixel"
+    (expect (format-sixel #() 4 0) :to-equal (format nil "~CPq~C\\" #\Esc #\Esc))
+    (expect (format-sixel #() 0 4) :to-equal (format nil "~CPq~C\\" #\Esc #\Esc)))
+  (it
+    "encodes a band whose per-color run vector outgrows its initial 16 entries"
+    (let ((pixels (make-array 192 :element-type (quote (unsigned-byte 8)))))
+      (dotimes (x 64)
+        (let ((offset (* x 3)))
+          (if (evenp x) (setf (aref pixels offset) 255
+                    (aref pixels (+ offset 1)) 0
+                    (aref pixels (+ offset 2)) 0)
+            (setf (aref pixels offset) 0
+                  (aref pixels (+ offset 1)) 0
+                  (aref pixels (+ offset 2)) 255))))
+      (flet ((repeated (unit count)
+               (with-output-to-string (out)
+            (loop repeat count
+                  do (write-string unit out)))))
+        (expect
+          (format-sixel pixels 64 1)
+          :to-equal
+          (format
+            nil
+            "~CPq#21;2;0;0;100#196;2;100;0;0#21~A$#196~A~C\\"
+            #\Esc
+            (repeated "?@" 32)
+            (repeated "@?" 32)
+            #\Esc)))))
+  (it
+    "a run of zero or fewer columns emits nothing"
+    (expect
+      (with-output-to-string (out)
+        (cl-tty-kit::%sixel-emit-run out #\@ 0)
+        (cl-tty-kit::%sixel-emit-run out #\@ -3))
+      :to-equal
+      ""))
+  (it
+    "a band starting past the last pixel row contributes no colors"
+    (let ((workspace (cl-tty-kit::%make-sixel-band-workspace))
+          (color-indices
+            (make-array 4 :element-type (quote (unsigned-byte 8)) :initial-element 196)))
+      (expect (cl-tty-kit::%sixel-band-runs workspace color-indices 2 2 12) :to-be-null))))
 
 (describe
   "ansi-kitty-image"
@@ -429,7 +511,42 @@
     "starts a continuation only after the 4096-character boundary"
     (let ((image (ansi-kitty-image (make-array 3075 :initial-element 0) 1025 1)))
       (expect (search "m=1;" image))
-      (expect (search "Gm=0;AAAA" image)))))
+      (expect (search "Gm=0;AAAA" image))))
+  (it
+    "matches the serial encoding when :EXECUTOR is supplied, across several chunk counts"
+    (let* ((width 97)
+           (height 101)
+           (pixels
+             (make-array (* width height 3) :element-type (quote (unsigned-byte 8)))))
+      (dotimes (pixel-index (* width height))
+        (let ((offset (* pixel-index 3))
+              (channel (mod pixel-index 3)))
+          (setf (aref pixels offset) (if (= channel 0) 255 0)
+                (aref pixels (+ offset 1)) (if (= channel 1) 255 0)
+                (aref pixels (+ offset 2)) (if (= channel 2) 255 0))))
+      (let ((serial (ansi-kitty-image pixels width height)))
+        (cl-concurrent-kit:with-executor (executor :size 3)
+          (dolist (chunk-count (list 1 2 3 4 8 16))
+            (expect
+              (ansi-kitty-image pixels width height :executor executor :chunk-count chunk-count)
+              :to-equal
+              serial))))))
+  (it
+    "ignores a shut-down :EXECUTOR below the parallel pixel threshold"
+    (let* ((width 8)
+           (height 8)
+           (pixels
+             (make-array
+               (* width height 3)
+               :element-type (quote (unsigned-byte 8))
+               :initial-element 100))
+           (serial (ansi-kitty-image pixels width height))
+           (executor (cl-concurrent-kit:make-executor :size 1)))
+      (cl-concurrent-kit:shutdown-executor executor :wait t)
+      (expect
+        (ansi-kitty-image pixels width height :executor executor :chunk-count 4)
+        :to-equal
+        serial))))
 
 (describe
   "format-sixel and ansi-kitty-image over a typed octet buffer"

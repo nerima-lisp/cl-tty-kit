@@ -71,7 +71,11 @@
   ;; contrib. cl-concurrent-kit: src/raw-mode.lisp takes its mutex from it
   ;; instead of calling SB-THREAD directly, for the same reason -- one named
   ;; vocabulary for the wrapper this package exists to provide rather than
-  ;; reaching past it.
+  ;; reaching past it. src/sixel.lisp and src/kitty-image.lisp also use it
+  ;; directly (EXECUTOR-MAP) to parallelize color quantization, sixel band
+  ;; encoding, and kitty APC-chunk base64 encoding across worker threads when
+  ;; a caller opts in with FORMAT-SIXEL's or ANSI-KITTY-IMAGE's :EXECUTOR
+  ;; argument.
   :depends-on ("cl-codec-kit" "cl-concurrent-kit")
   :serial t
   :components ((:file "src/package")
