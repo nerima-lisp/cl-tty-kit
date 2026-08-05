@@ -285,16 +285,47 @@ CELLS are literal specifications, so callers write them inline without quoting."
                         new old plan (cl-tty-kit::screen-generation new))))
         (expect (zerop (fill-pointer (cl-tty-kit::diff-plan-operations plan))))))))
 
-(describe "%diff-render-length's length estimate"
-  (it "matches render-diff's actual length and reports too-long-p correctly, before and after a further change"
+(describe "%diff-render-length length estimate"
+  (it "matches render-diff output before and after a change"
     (let ((old (make-screen 80 24))
           (new (make-screen 80 24)))
       (multiple-value-bind (estimated-length too-long-p)
-          (cl-tty-kit::%diff-render-length new old (cl-tty-kit::%screen-render-length new))
+          (cl-tty-kit::%diff-render-length
+           new old (cl-tty-kit::%screen-render-length new))
         (expect (not too-long-p))
         (expect estimated-length :to-be (length (render-diff new old))))
       (screen-put-cell new 79 23 #\X)
       (multiple-value-bind (estimated-length too-long-p)
-          (cl-tty-kit::%diff-render-length new old (cl-tty-kit::%screen-render-length new))
+          (cl-tty-kit::%diff-render-length
+           new old (cl-tty-kit::%screen-render-length new))
         (expect (not too-long-p))
-        (expect estimated-length :to-be (length (render-diff new old)))))))
+        (expect estimated-length :to-be (length (render-diff new old))))))
+
+  (it "uses max-length as an exclusive cutoff"
+    (let* ((old (make-screen 4 2))
+           (new (make-screen 4 2)))
+      (screen-put-cell new 3 1 #\X)
+      (let* ((output
+               (with-output-to-string (stream)
+                 (cl-tty-kit::%write-diff new old stream)))
+             (output-length (length output)))
+        (multiple-value-bind (estimated-length too-long-p)
+            (cl-tty-kit::%diff-render-length new old output-length)
+          (declare (ignore estimated-length))
+          (expect too-long-p))
+        (multiple-value-bind (estimated-length too-long-p)
+            (cl-tty-kit::%diff-render-length new old (1+ output-length))
+          (expect (not too-long-p))
+          (expect estimated-length :to-be output-length)))))
+
+  (it "matches raw multi-row output with gaps and a blank suffix"
+    (let* ((old (%screen-from-rows "ABCDEF" "UVWXYZ"))
+           (new (%screen-from-rows "AXC   " "UVQXYZ"))
+           (output
+             (with-output-to-string (stream)
+               (cl-tty-kit::%write-diff new old stream)))
+           (output-length (length output)))
+      (multiple-value-bind (estimated-length too-long-p)
+          (cl-tty-kit::%diff-render-length new old (1+ output-length))
+        (expect (not too-long-p))
+        (expect estimated-length :to-be output-length)))))

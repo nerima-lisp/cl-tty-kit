@@ -286,13 +286,6 @@
             touch $out
           '';
 
-          # Structural parse gate over every tracked Lisp source: fails if
-          # any .lisp/.asd file is not a balanced S-expression document.
-          paredit-lint = paredit-cli.lib.${system}.mkLintCheck {
-            inherit src;
-            name = "cl-tty-kit-paredit-lint";
-          };
-
           # Fails `nix flake check` when any tracked Nix file is unformatted,
           # which is what turns `nix fmt` from a suggestion into a gate.
           formatting = treefmtEval.${system}.config.build.check self;
@@ -303,6 +296,15 @@
           # main - so such a break surfaces as a failed deploy rather than as
           # a failed pull request.
           docs = self.packages.${system}.docs;
+        }
+        // nixpkgs.lib.optionalAttrs (builtins.hasAttr system paredit-cli.lib) {
+          # paredit-cli currently publishes only x86_64-linux outputs. Keep
+          # the structural gate there without making Darwin flake evaluation
+          # depend on an output that upstream intentionally does not expose.
+          paredit-lint = paredit-cli.lib.${system}.mkLintCheck {
+            inherit src;
+            name = "cl-tty-kit-paredit-lint";
+          };
         }
       );
 
@@ -321,6 +323,8 @@
               pkgs.sbcl
               pkgs.git
               treefmtEval.${system}.config.build.wrapper
+            ]
+            ++ nixpkgs.lib.optionals (builtins.hasAttr system paredit-cli.packages) [
               paredit-cli.packages.${system}.default
             ];
             # The only place cl-prolog/cl-weave come from: cl-tty-kit.asd's

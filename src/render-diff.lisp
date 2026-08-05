@@ -16,54 +16,56 @@
 (defun %diff-render-length (screen previous max-length)
   "Return the diff output length and whether it loses to a full repaint."
   (block too-long
-    (let ((cells (screen-cells screen))
-          (previous-cells (screen-cells previous))
-          (width (screen-width screen))
-          (height (screen-height screen))
-          (length 0))
-      (declare (type simple-vector cells previous-cells)
-               (type fixnum max-length)
-               (type fixnum width height length))
-      (flet ((count-output (amount)
-               (declare (type fixnum amount))
-               (let ((next-length (+ length amount)))
-                 (declare (type fixnum next-length))
-                 (when (>= next-length max-length)
-                   (return-from too-long (values next-length t)))
-                 (setf length next-length))))
-        (do ((y 0 (1+ y))
-             (row-start 0 (+ row-start width)))
-          ((>= y height) (values length nil))
-          (declare (type fixnum y row-start))
-          (let ((row-end (+ row-start width))
-                (blank-suffix-start nil))
-            (declare (type fixnum row-end)
-                     (type (or null fixnum) blank-suffix-start))
-            (do ((index row-start))
-              ((>= index row-end))
-              (declare (type fixnum index))
-              (if (%cell-equal-p (aref cells index) (aref previous-cells index))
-                  (incf index)
-                  (let ((x (- index row-start)))
-                    (declare (type fixnum x))
-                    (when (and (null blank-suffix-start)
-                               (%render-blank-cell-p (aref cells index)))
-                      (setf blank-suffix-start
-                            (%row-blank-suffix-start cells row-start width)))
-                    (if (and blank-suffix-start (>= x blank-suffix-start))
-                        (progn
-                          (count-output (%diff-cursor-length x y))
-                          (count-output 4)
-                          (setf index row-end))
-                        (progn
-                          (count-output (%diff-cursor-length x y))
-                          (do ()
-                              ((or (>= index row-end)
-                                   (%cell-equal-p
-                                     (aref cells index)
-                                     (aref previous-cells index))))
-                            (count-output (%cell-rendered-length (aref cells index)))
-                            (incf index)))))))))))))
+         (let ((cells (screen-cells screen))
+               (previous-cells (screen-cells previous))
+               (width (screen-width screen))
+               (height (screen-height screen))
+               (length 0))
+           (declare (type simple-vector cells previous-cells)
+                    (type fixnum max-length)
+                    (type fixnum width height length))
+           (flet ((count-output (amount)
+                                (declare (type fixnum amount))
+                                (let ((next-length (+ length amount)))
+                                  (declare (type fixnum next-length))
+                                  (when (>= next-length max-length)
+                                    (return-from too-long (values next-length t)))
+                                  (setf length next-length))))
+             (do ((y 0 (1+ y))
+                  (row-start 0 (+ row-start width)))
+                 ((>= y height) (values length nil))
+               (declare (type fixnum y row-start))
+               (let ((row-end (+ row-start width))
+                     (blank-suffix-start nil))
+                 (declare (type fixnum row-end)
+                          (type (or null fixnum) blank-suffix-start))
+                 (do ((index row-start))
+                     ((>= index row-end))
+                   (declare (type fixnum index))
+                   (let ((cell (aref cells index))
+                         (previous-cell (aref previous-cells index)))
+                     (if (%cell-equal-p cell previous-cell)
+                         (incf index)
+                         (let ((x (- index row-start)))
+                           (declare (type fixnum x))
+                           (when (and (null blank-suffix-start)
+                                      (%render-blank-cell-p cell))
+                             (setf blank-suffix-start
+                                   (%row-blank-suffix-start cells row-start width)))
+                           (if (and blank-suffix-start (>= x blank-suffix-start))
+                               (progn
+                                 (count-output (%diff-cursor-length x y))
+                                 (count-output 4)
+                                 (setf index row-end))
+                               (progn
+                                 (count-output (%diff-cursor-length x y))
+                                 (do ()
+                                     ((or (>= index row-end)
+                                          (%cell-equal-p
+                                           (aref cells index)
+                                           (aref previous-cells index))))
+                                   (count-output (%cell-rendered-length (aref cells index)))
+                                   (incf index))))))))))))))
 
 (defun %write-diff (screen previous stream)
   "Write the sparse changes from PREVIOUS to SCREEN to STREAM."
@@ -86,22 +88,24 @@
         (do ((index row-start))
             ((>= index row-end))
           (declare (type fixnum index))
-          (if (%cell-equal-p (aref cells index) (aref previous-cells index))
-              (incf index)
-              (let ((x (- index row-start)))
-                (declare (type fixnum x))
-                (when (and (null blank-suffix-start)
-                           (%render-blank-cell-p (aref cells index)))
-                  (setf blank-suffix-start
-                        (%row-blank-suffix-start cells row-start width)))
-                (%write-ansi-move-cursor (1+ y) (1+ x) stream)
-                (setf wrote-output-p t)
-                (if (and blank-suffix-start (>= x blank-suffix-start))
-                    (progn
-                      (%write-ansi-clear-line stream)
-                      (setf index row-end))
-                    (setf index
-                          (%write-diff-run cells previous-cells index row-end stream))))))))))
+          (let ((cell (aref cells index))
+                (previous-cell (aref previous-cells index)))
+            (if (%cell-equal-p cell previous-cell)
+                (incf index)
+                (let ((x (- index row-start)))
+                  (declare (type fixnum x))
+                  (when (and (null blank-suffix-start)
+                             (%render-blank-cell-p cell))
+                    (setf blank-suffix-start
+                          (%row-blank-suffix-start cells row-start width)))
+                  (%write-ansi-move-cursor (1+ y) (1+ x) stream)
+                  (setf wrote-output-p t)
+                  (if (and blank-suffix-start (>= x blank-suffix-start))
+                      (progn
+                        (%write-ansi-clear-line stream)
+                        (setf index row-end))
+                      (setf index
+                            (%write-diff-run cells previous-cells index row-end stream)))))))))))
 
 (defun %screen-render-length (screen)
   (let ((length 10)
@@ -177,53 +181,53 @@
               (%write-ansi-clear-line stream)
               (%write-cell-range cells start end stream)))))))
 
-(progn
-  (defun %diff-plan-rendered-length (screen plan)
-    "Return the exact output length for PLAN using grouped style runs."
-    (let ((cells (screen-cells screen))
-          (width (screen-width screen))
-          (operations (diff-plan-operations plan))
-          (length 0))
-      (declare (type simple-vector cells)
-               (type (vector fixnum) operations)
-               (type fixnum width length))
-      (do ((operation-index 0 (+ operation-index 2))
-           (operation-limit (fill-pointer operations)))
-          ((>= operation-index operation-limit) length)
-        (let ((start (aref operations operation-index))
-              (end (aref operations (1+ operation-index))))
-          (declare (type fixnum start end))
-          (incf length
-                (%diff-cursor-length (mod start width)
-                                     (floor start width)))
-          (if (minusp end)
-              (incf length 4)
-              (incf length
-                    (%cell-range-rendered-length cells start end)))))))
+(defun %diff-plan-rendered-length (screen plan)
+  "Return the exact output length for PLAN using grouped style runs."
+  (let ((cells (screen-cells screen))
+        (width (screen-width screen))
+        (operations (diff-plan-operations plan))
+        (length 0))
+    (declare (type simple-vector cells)
+             (type (vector fixnum) operations)
+             (type fixnum width length))
+    (do ((operation-index 0 (+ operation-index 2))
+         (operation-limit (fill-pointer operations)))
+        ((>= operation-index operation-limit) length)
+      (let ((start (aref operations operation-index))
+            (end (aref operations (1+ operation-index))))
+        (declare (type fixnum start end))
+        (incf length
+              (%diff-cursor-length (mod start width)
+                                   (floor start width)))
+        (if (minusp end)
+            (incf length 4)
+            (incf length
+                  (%cell-range-rendered-length cells start end)))))))
 
-  (defun %write-preferred-diff (screen previous stream &optional plan changed-since)
-    "Write the smaller valid screen update and report its rendering strategy."
-    (if (not (%same-screen-dimensions-p screen previous))
-        (values (%write-screen screen stream) t t)
-        (if plan
-            (progn
-              (%plan-diff-length screen previous plan changed-since)
-              (let ((diff-length (%diff-plan-rendered-length screen plan)))
-                (if (or (< diff-length (%minimum-screen-render-length screen))
-                        (%screen-render-length-exceeds-p screen diff-length))
-                    (multiple-value-bind (result wrote-output-p)
-                        (%write-diff-plan screen plan stream)
-                      (values result wrote-output-p nil))
-                    (values (%write-screen screen stream) t t))))
-            (multiple-value-bind (diff-length too-long-p)
-                (%diff-render-length screen previous most-positive-fixnum)
-              (declare (ignore too-long-p))
+(defun %write-preferred-diff (screen previous stream &optional plan changed-since)
+  "Write the smaller valid screen update and report its rendering strategy."
+  (if (not (%same-screen-dimensions-p screen previous))
+      (values (%write-screen screen stream) t t)
+      (if plan
+          (progn
+            (%plan-diff-length screen previous plan changed-since)
+            (let ((diff-length (%diff-plan-rendered-length screen plan)))
               (if (or (< diff-length (%minimum-screen-render-length screen))
                       (%screen-render-length-exceeds-p screen diff-length))
                   (multiple-value-bind (result wrote-output-p)
-                      (%write-diff screen previous stream)
+                      (%write-diff-plan screen plan stream)
                     (values result wrote-output-p nil))
-                  (values (%write-screen screen stream) t t)))))))
+                  (values (%write-screen screen stream) t t))))
+          (multiple-value-bind (diff-length too-long-p)
+              (%diff-render-length screen previous most-positive-fixnum)
+            (declare (ignore too-long-p))
+            (if (or (< diff-length (%minimum-screen-render-length screen))
+                    (%screen-render-length-exceeds-p screen diff-length))
+                (multiple-value-bind (result wrote-output-p)
+                    (%write-diff screen previous stream)
+                  (values result wrote-output-p nil))
+                (values (%write-screen screen stream) t t))))))
+
 (defun %render-diff-output (screen previous stream &optional plan changed-since)
   (%with-style-sgr-sequence-cache
     (if stream
@@ -242,6 +246,29 @@
 
 
 
-(defun %render-frame-diff-output (screen previous cursor previous-cursor stream &optional plan changed-since) (%with-style-sgr-sequence-cache (if stream (%write-frame-diff screen previous cursor previous-cursor stream plan changed-since) (let ((output (make-string-output-stream))) (multiple-value-bind (result diff-output-p full-repaint-p) (%write-frame-diff screen previous cursor previous-cursor output plan changed-since) (declare (ignore result)) (values (get-output-stream-string output) diff-output-p full-repaint-p))))))
+(defun %render-frame-diff-output
+    (screen previous cursor previous-cursor stream &optional plan changed-since)
+  (%with-style-sgr-sequence-cache
+    (if stream
+        (%write-frame-diff
+          screen previous cursor previous-cursor stream plan changed-since)
+        (let ((output (make-string-output-stream)))
+          (multiple-value-bind (result diff-output-p full-repaint-p)
+              (%write-frame-diff
+                screen previous cursor previous-cursor output plan changed-since)
+            (declare (ignore result))
+            (values
+              (get-output-stream-string output)
+              diff-output-p
+              full-repaint-p))))))
 
-(defun %write-frame-diff (screen previous cursor previous-cursor stream &optional plan changed-since) (multiple-value-bind (result diff-output-p full-repaint-p) (%write-preferred-diff screen previous stream plan changed-since) (declare (ignore result)) (if (or diff-output-p (null previous-cursor) (not (%cursor-equal-p cursor previous-cursor))) (values (%write-cursor cursor stream) t full-repaint-p) (values stream nil full-repaint-p))))
+(defun %write-frame-diff
+    (screen previous cursor previous-cursor stream &optional plan changed-since)
+  (multiple-value-bind (result diff-output-p full-repaint-p)
+      (%write-preferred-diff screen previous stream plan changed-since)
+    (declare (ignore result))
+    (if (or diff-output-p
+            (null previous-cursor)
+            (not (%cursor-equal-p cursor previous-cursor)))
+        (values (%write-cursor cursor stream) t full-repaint-p)
+        (values stream nil full-repaint-p))))
