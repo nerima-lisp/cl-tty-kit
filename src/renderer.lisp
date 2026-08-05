@@ -73,35 +73,40 @@ frame into.")
       :visible
       (cursor-visible-p cursor))))
 
-(defun %snapshot-renderer-cursor (renderer cursor)
+(defmacro %snapshot-renderer-cursor (renderer cursor)
   "Store CURSOR in RENDERER without replacing an existing private snapshot."
-  (let ((snapshot (renderer-cursor renderer)))
-    (if snapshot
-        (setf (cursor-x snapshot) (cursor-x cursor)
-              (cursor-y snapshot) (cursor-y cursor)
-              (cursor-visible-p snapshot) (cursor-visible-p cursor))
-      (setf (renderer-cursor renderer) (%snapshot-cursor cursor)))))
+  `(let ((renderer ,renderer)
+         (cursor ,cursor))
+     (let ((snapshot (renderer-cursor renderer)))
+       (if snapshot
+           (setf (cursor-x snapshot) (cursor-x cursor)
+                 (cursor-y snapshot) (cursor-y cursor)
+                 (cursor-visible-p snapshot) (cursor-visible-p cursor))
+         (setf (renderer-cursor renderer) (%snapshot-cursor cursor))))))
 
-(defun %snapshot-renderer-screen (renderer back &key full-repaint-p)
+(defmacro %snapshot-renderer-screen (renderer back &key full-repaint-p)
   "Update RENDERER's front screen after a successful render of BACK."
-  (declare (type renderer renderer)
-           (type screen back))
-  (let ((front (renderer-front renderer))
-        (plan (renderer-diff-plan renderer)))
-    (declare (type (or null screen) front)
-             (type (or null diff-plan) plan))
-    (cond
-      ((or (null front)
-           (/= (screen-width front) (screen-width back))
-           (/= (screen-height front) (screen-height back)))
-       (setf (renderer-front renderer) (screen-copy back)))
-      (full-repaint-p
-       (replace (screen-cells front) (screen-cells back))
-       front)
-      ((zerop (fill-pointer (diff-plan-operations plan)))
-       front)
-      (t
-       (%copy-diff-plan-cells front back plan)))))
+  `(let ((renderer ,renderer)
+         (back ,back)
+         (full-repaint-p ,full-repaint-p))
+     (declare (type renderer renderer)
+              (type screen back))
+     (let ((front (renderer-front renderer))
+           (plan (renderer-diff-plan renderer)))
+       (declare (type (or null screen) front)
+                (type (or null diff-plan) plan))
+       (cond
+         ((or (null front)
+              (/= (screen-width front) (screen-width back))
+              (/= (screen-height front) (screen-height back)))
+          (setf (renderer-front renderer) (screen-copy back)))
+         (full-repaint-p
+          (replace (screen-cells front) (screen-cells back))
+          front)
+         ((zerop (fill-pointer (diff-plan-operations plan)))
+          front)
+         (t
+          (%copy-diff-plan-cells front back plan))))))
 
 (defun renderer-render (renderer &key stream cursor)
   "Emit the changes needed to bring the terminal to the RENDERER back buffer. Diffs the back buffer against the previous frame and returns the ANSI string (or writes it to STREAM and returns STREAM) as its primary value. Its secondary value is true exactly when it wrote terminal output. When CURSOR is supplied the frame also finishes in that cursor state, diffed against the previous frame cursor. After emitting, RENDERER snapshots the current screen and cursor as the new previous frame, so the next call diffs against this one. An uncursored render invalidates the saved cursor because rendering output may move the terminal cursor without restoring it."
