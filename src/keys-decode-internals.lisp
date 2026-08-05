@@ -3,8 +3,10 @@
 (defmacro %csi-modifiers (number)
   `(modifiers-from-csi-number ,number))
 
-(defun %lookup-event-code (key table &key (test #'eql))
-  (cdr (assoc key table :test test)))
+(defmacro %lookup-event-code (key table &key (test nil test-supplied-p))
+  `(let ((key ,key) (table ,table)
+         (test ,(if test-supplied-p test '#'eql)))
+     (cdr (assoc key table :test test))))
 
 (defmacro %event-kind (event)
   "Map a kitty CSI-u event-type number to a KEY-EVENT kind keyword.
@@ -14,12 +16,13 @@
      (3 :release)
      (otherwise :press)))
 
-(defun %csi-event (final modifiers &optional (kind :press))
-  (%key-event :special
-              (or (%lookup-event-code final +csi-final-events+ :test #'char=)
-                  :unknown-csi)
-              modifiers
-              kind))
+(defmacro %csi-event (final modifiers &optional (kind :press))
+  `(let ((final ,final) (modifiers ,modifiers) (kind ,kind))
+     (%key-event :special
+                 (or (%lookup-event-code final +csi-final-events+ :test #'char=)
+                     :unknown-csi)
+                 modifiers
+                 kind)))
 
 (defmacro %code-point-character (code)
   "Return the character for CODE, an integer in [0, #x10FFFF] (the only range
@@ -33,27 +36,29 @@ guard against a CL implementation whose CODE-CHAR is stricter."
        (error 'unsupported-code-point :code-point code))
      char))
 
-(defun %csi-tilde-event (code modifiers &optional (kind :press))
-  (%key-event :special
-              (or (%lookup-event-code code +csi-tilde-events+)
-                  :unknown-csi)
-              modifiers
-              kind))
+(defmacro %csi-tilde-event (code modifiers &optional (kind :press))
+  `(let ((code ,code) (modifiers ,modifiers) (kind ,kind))
+     (%key-event :special
+                 (or (%lookup-event-code code +csi-tilde-events+)
+                     :unknown-csi)
+                 modifiers
+                 kind)))
 
 (defmacro %kitty-function-key (code)
   `(%lookup-event-code ,code +kitty-function-keys+))
 
-(defun %plain-key-event (ch &optional modifiers)
+(defmacro %plain-key-event (ch &optional modifiers)
   "Decode a single non-escape character CH into a KEY-EVENT plus consumed count.
 Control bytes map to their named special keys (:ENTER, :TAB, :BACKSPACE, ...) or
 Ctrl-letter events (:CONTROL-A ... :CONTROL-Z); everything else becomes a
 :CHARACTER event. MODIFIERS are attached to the resulting event."
-  (let* ((code (char-code ch))
-         (special (or (%lookup-event-code code +control-key-codes+)
-                      (%lookup-event-code code +control-letter-events+))))
-    (if special
-        (values (%key-event :special special modifiers) 1)
-        (values (%key-event :character ch modifiers) 1))))
+  `(let ((ch ,ch) (modifiers ,modifiers))
+     (let* ((code (char-code ch))
+            (special (or (%lookup-event-code code +control-key-codes+)
+                         (%lookup-event-code code +control-letter-events+))))
+       (if special
+           (values (%key-event :special special modifiers) 1)
+           (values (%key-event :character ch modifiers) 1)))))
 
 (defmacro %esc-o-event (final)
   `(%lookup-event-code ,final +esc-o-events+ :test #'char=))
@@ -107,28 +112,30 @@ incomplete or its final byte is unrecognized."
              (unsupported-code-point ()
                (values nil nil))))))))
 
-(defun %csi-u-event (code modifier &optional (kind :press) text shifted base)
-  ;; An empty CSI-u parameter body (e.g. the sequence `ESC [ u`) yields a NIL
-  ;; CODE. Return NIL so the caller falls back to ordinary decoding instead of
-  ;; letting a comparison against NIL raise an uncaught TYPE-ERROR on untrusted
-  ;; input.
-  (let* ((modifiers (%csi-modifiers modifier))
-         (special (and (integerp code) (%kitty-function-key code)))
-         (shifted-char (%safe-code-char shifted))
-         (base-char (%safe-code-char base)))
-    (cond
-      (special
-       (make-key-event :type :special :code special :modifiers modifiers
-                       :kind kind :text text
-                       :shifted-key shifted-char :base-key base-char))
-      ((and (integerp code) (<= 0 code #x10FFFF))
-       (make-key-event :type :character :code (%code-point-character code)
-                       :modifiers modifiers :kind kind :text text
-                       :shifted-key shifted-char :base-key base-char))
-      ((integerp code)
-       (error 'unsupported-code-point :code-point code))
-      (t
-       nil))))
+(defmacro %csi-u-event (code modifier &optional (kind :press) text shifted base)
+  `(let ((code ,code) (modifier ,modifier) (kind ,kind) (text ,text)
+         (shifted ,shifted) (base ,base))
+     ;; An empty CSI-u parameter body (e.g. the sequence `ESC [ u`) yields a NIL
+     ;; CODE. Return NIL so the caller falls back to ordinary decoding instead of
+     ;; letting a comparison against NIL raise an uncaught TYPE-ERROR on untrusted
+     ;; input.
+     (let* ((modifiers (%csi-modifiers modifier))
+            (special (and (integerp code) (%kitty-function-key code)))
+            (shifted-char (%safe-code-char shifted))
+            (base-char (%safe-code-char base)))
+       (cond
+         (special
+          (make-key-event :type :special :code special :modifiers modifiers
+                          :kind kind :text text
+                          :shifted-key shifted-char :base-key base-char))
+         ((and (integerp code) (<= 0 code #x10FFFF))
+          (make-key-event :type :character :code (%code-point-character code)
+                          :modifiers modifiers :kind kind :text text
+                          :shifted-key shifted-char :base-key base-char))
+         ((integerp code)
+          (error 'unsupported-code-point :code-point code))
+         (t
+          nil)))))
 
 (defmacro %csi-paste-marker-event (code final)
   `(when (char= ,final #\~)
@@ -137,15 +144,17 @@ incomplete or its final byte is unrecognized."
        (201 (%key-event :special :paste-end))
        (otherwise nil))))
 
-(defun %decode-csi-event (code modifier final &optional event text shifted base)
-  (let ((kind (%event-kind event)))
-    (or (%csi-paste-marker-event code final)
-      (cond
-        ((char= final #\~)
-         (%csi-tilde-event code (%csi-modifiers modifier) kind))
-        ((char= final #\u)
-         (%csi-u-event code modifier kind text shifted base))
-        ((and code modifier)
-         (%csi-event final (%csi-modifiers modifier) kind))
-        (t
-         (%csi-event final nil))))))
+(defmacro %decode-csi-event (code modifier final &optional event text shifted base)
+  `(let ((code ,code) (modifier ,modifier) (final ,final) (event ,event)
+         (text ,text) (shifted ,shifted) (base ,base))
+     (let ((kind (%event-kind event)))
+       (or (%csi-paste-marker-event code final)
+         (cond
+           ((char= final #\~)
+            (%csi-tilde-event code (%csi-modifiers modifier) kind))
+           ((char= final #\u)
+            (%csi-u-event code modifier kind text shifted base))
+           ((and code modifier)
+            (%csi-event final (%csi-modifiers modifier) kind))
+           (t
+            (%csi-event final nil)))))))
