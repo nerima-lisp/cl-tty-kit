@@ -86,20 +86,31 @@ future streaming consumer does not need a second walk.
 
 Every internal helper that is never passed as a first-class value (never
 `#'name`, never handed to `mapcar`/`funcall`/`apply`) and never recursive is a
-`defmacro`, not a `defun`: `clamp.lisp`, `color.lisp`, `color-space.lisp`,
-`layout.lisp`, `text-layout.lisp`, `text-wrap.lisp`, and the CSI-parameter
-validators in `ansi.lisp`/`ansi-style.lisp` follow this. Each such macro
-wraps its original body in a `let` that binds its parameters to the
-(unevaluated, backquote-spliced) argument forms -- evaluated once, in the
-same left-to-right order a function call already used, so this changes
-nothing about calling behavior. What it does *not* apply to: any of `src/`'s
-132 exported functions (breaking `#'name`/`funcall` for public API is a
-compatibility break other `nerima-lisp` repositories that depend on this
-library would hit), anything passed as a value even internally (there are 8
-of these, found by scanning every `#'name`/`(function name)` occurrence
-across `src/`, `t/`, and `examples/`), and anything recursive or using
-`return-from` against its own name (a `defmacro`'s expansion has no implicit
-block the way `defun` does).
+`defmacro`, not a `defun`. This is a standing policy for all of `src/` going
+forward, not a closed list of past conversions: `clamp.lisp`, `color.lisp`,
+`color-space.lisp`, `layout.lisp`, `text-layout.lisp`, `text-wrap.lisp`, and
+the CSI-parameter validators in `ansi.lisp`/`ansi-style.lisp` are where it
+has already been applied, and the rest of `src/` is expected to follow the
+same rule as it is touched. Each such macro wraps its original body in a
+`let` that binds its parameters to the (unevaluated, backquote-spliced)
+argument forms -- evaluated once, in the same left-to-right order a function
+call already used, so this changes nothing about calling behavior. What it
+does *not* apply to: any of `src/`'s 132 exported functions (breaking
+`#'name`/`funcall` for public API is a compatibility break other
+`nerima-lisp` repositories that depend on this library would hit), anything
+passed as a value even internally (there are 8 of these, found by scanning
+every `#'name`/`(function name)` occurrence across `src/`, `t/`, and
+`examples/`), and anything recursive or using `return-from` against its own
+name (a `defmacro`'s expansion has no implicit block the way `defun` does).
+
+Before landing a new conversion, run the three-hazard verification
+documented in
+[Quality Gates](../project/quality-gates.md#macro-usage-and-file-organization):
+compile-time-literal risk on a typed struct slot, hygiene/capture risk in
+the macro's own bindings, and `:serial t` load-order risk. These are not
+optional -- skipping them is how a prior broad conversion sweep introduced
+5 bugs that only running the test suite caught, none of them at
+`compile-file` time.
 
 ## See also
 

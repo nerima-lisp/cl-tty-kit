@@ -10,7 +10,8 @@
 ;; and t/sgr-prolog-oracle-test.lisp) are both used only by :CL-TTY-KIT/TEST below --
 ;; cl-prolog as a differential-testing oracle cross-checking the hand-written
 ;; SGR/CSI decoders, cl-weave as the test framework -- never by :CL-TTY-KIT
-;; itself, which stays dependency-free (see its :DEPENDS-ON). Neither is
+;; itself; those two stay test-only regardless of what :CL-TTY-KIT's own
+;; :DEPENDS-ON grows to (see the note on its :DEPENDS-ON below). Neither is
 ;; distributed by Quicklisp; `nix develop`/`nix build`/`nix flake check`
 ;; resolve both from this project's flake inputs onto CL_SOURCE_REGISTRY (see
 ;; flake.nix), which :INHERIT-CONFIGURATION below picks up. This system
@@ -58,11 +59,16 @@
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
   ;; cl-codec-kit: src/utf8.lisp delegates its UTF-8 codec to it instead of
-  ;; hand-rolling the decode/encode algorithms itself, so this is no longer
-  ;; the dependency-free package it once was. SB-POSIX is still bundled with
-  ;; SBCL and loaded directly by the SBCL-only raw-mode implementation, so it
-  ;; stays out of :DEPENDS-ON to avoid an ASDF source-registry scan merely to
-  ;; locate an already installed contrib.
+  ;; hand-rolling the decode/encode algorithms itself, so this was already no
+  ;; longer a dependency-free package before this note was written. This
+  ;; :DEPENDS-ON is not held to an unconditional dependency-free constraint --
+  ;; other nerima-lisp org packages (siblings under the nerima-lisp GitHub
+  ;; org) may be added here deliberately, when one genuinely replaces
+  ;; hand-rolled logic in this codebase, the same way cl-codec-kit did for the
+  ;; UTF-8 codec. SB-POSIX is still bundled with SBCL and loaded directly by
+  ;; the SBCL-only raw-mode implementation, so it stays out of :DEPENDS-ON to
+  ;; avoid an ASDF source-registry scan merely to locate an already installed
+  ;; contrib.
   :depends-on ("cl-codec-kit")
   :serial t
   :components ((:file "src/package")

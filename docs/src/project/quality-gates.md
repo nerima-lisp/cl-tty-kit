@@ -82,12 +82,43 @@ top-level definitions (`define-ansi-function`,
 `define-tty-kit-condition`/`define-formatted-tty-kit-condition`,
 `%define-rect-split`, `%define-osc-color-query`) or a binding form that must
 run its body in a specific dynamic extent (`with-terminal-session`,
-`with-raw-mode`). Converting an ordinary function to a macro "for
-consistency" is a regression: unlike a function, a macro cannot be passed to
-`funcall`/`mapcar`/`apply`, cannot be shadowed for a test double, and its
-expansion is invisible to structural tooling. Duplication whose only
-variation is a runtime value gets a plain (optionally parameterized)
-function instead.
+`with-raw-mode`). These remain valid examples of macro use, but they are not
+the only justification: an internal helper that is never passed as a
+first-class value (never `#'name`, never handed to
+`mapcar`/`funcall`/`apply`) and never recursive (and never uses
+`return-from` against its own name) should be a `defmacro`, not a `defun`.
+This applies across all of `src/` going forward, not to a fixed list of
+already-converted files -- see
+[Architecture](../reference/architecture.md#notable-boundaries) for the
+files this has already been applied to and the `let`-binding expansion
+shape every such macro uses.
+
+This does **not** apply to any of `src/`'s exported/public functions:
+breaking `#'name`/`funcall`/`apply` for a downstream `nerima-lisp` consumer
+that calls into this library's public API (confirmed: `cl-cc-javascript`) is
+still out of scope. It also does not apply to anything recursive.
+
+Before landing such a conversion, verify all three of the following. These
+are drawn from a real incident: a prior broad function-to-macro sweep
+introduced 5 distinct bugs, none caught by `compile-file` -- every one of
+them only surfaced by actually running the test suite.
+
+1. **Compile-time-literal risk**: is the helper ever the target of a `setf`
+   on a typed struct slot where a caller might pass a compile-time-constant
+   literal? Converting that helper to a macro can silently turn a
+   runtime-only validation into a compile-time build failure.
+2. **Hygiene / capture risk**: could the macro's own internal `let`/binding
+   forms shadow a name that appears free in a spliced, unevaluated caller
+   argument expression?
+3. **Load-order risk**: is every caller's file guaranteed to load AFTER this
+   macro's definition, under this project's `:serial t` ASDF ordering? A
+   macro, unlike a `defun`, cannot tolerate a forward reference -- the
+   caller's file must already come later in `cl-tty-kit.asd`'s
+   `:components` list.
+
+Duplication whose only variation is a runtime value, and where any of the
+three checks above fails, gets a plain (optionally parameterized) function
+instead.
 
 Files split by concern, not by line count. A long file whose forms serve one
 cohesive purpose (a single data table, a single parser, a single solver) is
