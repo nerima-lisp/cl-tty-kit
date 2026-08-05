@@ -10,57 +10,64 @@
 (document-function 'pty-stream "Return the stream connected to PTY.")
 
 #+sbcl
-(defun %transient-spawn-failure-p (condition)
-  (search "resource temporarily unavailable"
-          (string-downcase (format nil "~A" condition))))
+(defmacro %transient-spawn-failure-p (condition)
+  `(let ((condition ,condition))
+     (search "resource temporarily unavailable"
+             (string-downcase (format nil "~A" condition)))))
 
 #+sbcl
-(defun %run-program-with-pty-retry (program args environment directory
-                                    &key (attempts 5) (sleep-seconds 0.05))
-  (loop repeat attempts
-        for condition = nil
-        do (handler-case
-               (return (sb-ext:run-program program args
-                                           :search t
-                                           :wait nil
-                                           :pty t
-                                           :environment environment
-                                           :directory directory))
-             (error (caught)
-               (setf condition caught)
-               (unless (%transient-spawn-failure-p caught)
-                 (error caught))))
-           (sleep sleep-seconds)
-        finally (error condition)))
+(defmacro %run-program-with-pty-retry (program args environment directory
+                                       &key (attempts 5) (sleep-seconds 0.05))
+  `(let ((program ,program) (args ,args) (environment ,environment) (directory ,directory)
+         (attempts ,attempts) (sleep-seconds ,sleep-seconds))
+     (loop repeat attempts
+           for condition = nil
+           do (handler-case
+                  (return (sb-ext:run-program program args
+                                              :search t
+                                              :wait nil
+                                              :pty t
+                                              :environment environment
+                                              :directory directory))
+                (error (caught)
+                  (setf condition caught)
+                  (unless (%transient-spawn-failure-p caught)
+                    (error caught))))
+              (sleep sleep-seconds)
+           finally (error condition))))
 
-(defun %list-of-strings-p (value)
-  (and (listp value)
-       (every #'stringp value)))
+(defmacro %list-of-strings-p (value)
+  `(let ((value ,value))
+     (and (listp value)
+          (every #'stringp value))))
 
-(defun %validate-pty-spawn-arguments (program args environment directory)
-  (unless (stringp program)
-    (error "PTY program must be a string, got ~S." program))
-  (unless (%list-of-strings-p args)
-    (error "PTY args must be a list of strings, got ~S." args))
-  (unless (or (null environment)
-              (%list-of-strings-p environment))
-    (error "PTY environment must be NIL or a list of strings, got ~S."
-           environment))
-  (unless (or (null directory)
-              (stringp directory)
-              (pathnamep directory))
-    (error "PTY directory must be NIL, a string, or a pathname, got ~S."
-           directory)))
+(defmacro %validate-pty-spawn-arguments (program args environment directory)
+  `(let ((program ,program) (args ,args) (environment ,environment) (directory ,directory))
+     (unless (stringp program)
+       (error "PTY program must be a string, got ~S." program))
+     (unless (%list-of-strings-p args)
+       (error "PTY args must be a list of strings, got ~S." args))
+     (unless (or (null environment)
+                 (%list-of-strings-p environment))
+       (error "PTY environment must be NIL or a list of strings, got ~S."
+              environment))
+     (unless (or (null directory)
+                 (stringp directory)
+                 (pathnamep directory))
+       (error "PTY directory must be NIL, a string, or a pathname, got ~S."
+              directory))))
 
-(defun %validate-pty-read-limit (limit)
-  (unless (and (integerp limit) (<= 0 limit))
-    (error "PTY read limit must be a non-negative integer, got ~S." limit)))
+(defmacro %validate-pty-read-limit (limit)
+  `(let ((limit ,limit))
+     (unless (and (integerp limit) (<= 0 limit))
+       (error "PTY read limit must be a non-negative integer, got ~S." limit))))
 
-(defun %validate-pty-size (columns rows)
-  (unless (and (integerp columns) (plusp columns))
-    (error "PTY columns must be a positive integer, got ~S." columns))
-  (unless (and (integerp rows) (plusp rows))
-    (error "PTY rows must be a positive integer, got ~S." rows)))
+(defmacro %validate-pty-size (columns rows)
+  `(let ((columns ,columns) (rows ,rows))
+     (unless (and (integerp columns) (plusp columns))
+       (error "PTY columns must be a positive integer, got ~S." columns))
+     (unless (and (integerp rows) (plusp rows))
+       (error "PTY rows must be a positive integer, got ~S." rows))))
 
 #+sbcl
 (defun make-pty (&key (program "/bin/sh") args environment directory)
@@ -82,9 +89,10 @@
      (error (condition)
        (%signal-pty-operation-failed ,operation ,pty condition))))
 
-(defun %pty-stream-or-error (pty)
-  (or (pty-stream pty)
-      (error "PTY stream is closed.")))
+(defmacro %pty-stream-or-error (pty)
+  `(let ((pty ,pty))
+     (or (pty-stream pty)
+         (error "PTY stream is closed."))))
 
 (defun pty-write (pty data)
   "Write DATA to PTY and return PTY."
@@ -150,33 +158,37 @@ PTY-EXIT-CODE, CLOSE-PTY."
     (and process (sb-ext:process-exit-code process))))
 
 #+sbcl
-(defun %wait-for-process-exit (process &key (attempts 20) (sleep-seconds 0.01))
-  (loop repeat attempts
-        until (not (sb-ext:process-alive-p process))
-        do (sleep sleep-seconds)
-        finally (return (not (sb-ext:process-alive-p process)))))
+(defmacro %wait-for-process-exit (process &key (attempts 20) (sleep-seconds 0.01))
+  `(let ((process ,process) (attempts ,attempts) (sleep-seconds ,sleep-seconds))
+     (loop repeat attempts
+           until (not (sb-ext:process-alive-p process))
+           do (sleep sleep-seconds)
+           finally (return (not (sb-ext:process-alive-p process))))))
 
 #+sbcl
-(defun %terminate-pty-process (process signals)
-  (dolist (signal signals nil)
-    (sb-ext:process-kill process signal :pid)
-    (when (%wait-for-process-exit process)
-      (return t))))
+(defmacro %terminate-pty-process (process signals)
+  `(let ((process ,process) (signals ,signals))
+     (dolist (signal signals nil)
+       (sb-ext:process-kill process signal :pid)
+       (when (%wait-for-process-exit process)
+         (return t)))))
 
 #+sbcl
-(defun %close-pty-process (process stream)
-  (when stream
-    (close stream :abort t))
-  (unless (%wait-for-process-exit process)
-    (unless (%terminate-pty-process process '(15 9))
-      (error "PTY process did not exit during shutdown")))
-  (sb-ext:process-close process))
+(defmacro %close-pty-process (process stream)
+  `(let ((process ,process) (stream ,stream))
+     (when stream
+       (close stream :abort t))
+     (unless (%wait-for-process-exit process)
+       (unless (%terminate-pty-process process '(15 9))
+         (error "PTY process did not exit during shutdown")))
+     (sb-ext:process-close process)))
 
-(defun %signal-pty-operation-failed (operation pty condition)
-  (error 'pty-operation-failed
-         :operation operation
-         :pty pty
-         :reason condition))
+(defmacro %signal-pty-operation-failed (operation pty condition)
+  `(let ((operation ,operation) (pty ,pty) (condition ,condition))
+     (error 'pty-operation-failed
+            :operation operation
+            :pty pty
+            :reason condition)))
 
 #+sbcl
 (defun close-pty (pty)

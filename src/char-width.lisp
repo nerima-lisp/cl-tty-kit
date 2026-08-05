@@ -1,7 +1,6 @@
 (in-package #:cl-tty-kit)
 
-(declaim (notinline sb-unicode:general-category)
-         (inline %character-width))
+(declaim (notinline sb-unicode:general-category))
 
 (defmacro %zero-width-general-category-p (category code)
   `(let ((category ,category) (code ,code))
@@ -105,8 +104,9 @@ since the ambiguous check runs only when this is true.")
        ((%wide-code-point-p code) 2)
        (t 1))))
 
-(defun %character-width (character)
-  (%code-point-width (char-code character)))
+(defmacro %character-width (character)
+  `(let ((character ,character))
+     (%code-point-width (char-code character))))
 
 (defun char-width (character)
   "Return the terminal column width of CHARACTER or a Unicode code point."
