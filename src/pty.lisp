@@ -69,6 +69,13 @@
      (unless (and (integerp rows) (plusp rows))
        (error "PTY rows must be a positive integer, got ~S." rows))))
 
+(defmacro %signal-pty-operation-failed (operation pty condition)
+  `(let ((operation ,operation) (pty ,pty) (condition ,condition))
+     (error 'pty-operation-failed
+            :operation operation
+            :pty pty
+            :reason condition)))
+
 #+sbcl
 (defun make-pty (&key (program "/bin/sh") args environment directory)
   "Spawn PROGRAM under a PTY on SBCL, returning a PTY object."
@@ -158,12 +165,11 @@ PTY-EXIT-CODE, CLOSE-PTY."
     (and process (sb-ext:process-exit-code process))))
 
 #+sbcl
-(defmacro %wait-for-process-exit (process &key (attempts 20) (sleep-seconds 0.01))
-  `(let ((process ,process) (attempts ,attempts) (sleep-seconds ,sleep-seconds))
-     (loop repeat attempts
-           until (not (sb-ext:process-alive-p process))
-           do (sleep sleep-seconds)
-           finally (return (not (sb-ext:process-alive-p process))))))
+(defun %wait-for-process-exit (process &key (attempts 20) (sleep-seconds 0.01))
+  (loop repeat attempts
+        until (not (sb-ext:process-alive-p process))
+        do (sleep sleep-seconds)
+        finally (return (not (sb-ext:process-alive-p process)))))
 
 #+sbcl
 (defmacro %terminate-pty-process (process signals)
@@ -174,21 +180,13 @@ PTY-EXIT-CODE, CLOSE-PTY."
          (return t)))))
 
 #+sbcl
-(defmacro %close-pty-process (process stream)
-  `(let ((process ,process) (stream ,stream))
-     (when stream
-       (close stream :abort t))
-     (unless (%wait-for-process-exit process)
-       (unless (%terminate-pty-process process '(15 9))
-         (error "PTY process did not exit during shutdown")))
-     (sb-ext:process-close process)))
-
-(defmacro %signal-pty-operation-failed (operation pty condition)
-  `(let ((operation ,operation) (pty ,pty) (condition ,condition))
-     (error 'pty-operation-failed
-            :operation operation
-            :pty pty
-            :reason condition)))
+(defun %close-pty-process (process stream)
+  (when stream
+    (close stream :abort t))
+  (unless (%wait-for-process-exit process)
+    (unless (%terminate-pty-process process '(15 9))
+      (error "PTY process did not exit during shutdown")))
+  (sb-ext:process-close process))
 
 #+sbcl
 (defun close-pty (pty)
