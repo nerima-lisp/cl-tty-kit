@@ -85,23 +85,34 @@ the one walk over the input from what a caller does with each result, so a
 future streaming consumer does not need a second walk.
 
 Every internal helper that is never passed as a first-class value (never
-`#'name`, never handed to `mapcar`/`funcall`/`apply`) and never recursive is a
-`defmacro`, not a `defun`. This is a standing policy for all of `src/` going
-forward, not a closed list of past conversions: `clamp.lisp`, `color.lisp`,
-`color-space.lisp`, `layout.lisp`, `text-layout.lisp`, `text-wrap.lisp`, and
-the CSI-parameter validators in `ansi.lisp`/`ansi-style.lisp` are where it
-has already been applied, and the rest of `src/` is expected to follow the
-same rule as it is touched. Each such macro wraps its original body in a
-`let` that binds its parameters to the (unevaluated, backquote-spliced)
-argument forms -- evaluated once, in the same left-to-right order a function
-call already used, so this changes nothing about calling behavior. What it
-does *not* apply to: any of `src/`'s 132 exported functions (breaking
+`#'name`, never handed to `mapcar`/`funcall`/`apply`, never reached through
+`symbol-function`/`fdefinition`) and never recursive is a `defmacro`, not a
+`defun`. This is a standing policy for all of `src/` going forward, not a
+closed list of past conversions. It started in the pure utility layer
+(`clamp.lisp`, `color.lisp`, `color-space.lisp`, `layout.lisp`,
+`text-layout.lisp`, `text-wrap.lisp`, and the CSI-parameter validators in
+`ansi.lisp`/`ansi-style.lisp`) and has since been applied across most of
+`src/` -- the input-decoding, screen, rendering, and SBCL-facing
+raw-mode/PTY files included -- so the remaining internal `defun`s are
+predominantly the exclusions below, and the rest of `src/` follows the same
+rule as it is touched. Each such macro wraps its original body in a `let`
+that binds its parameters to the (unevaluated, backquote-spliced) argument
+forms -- evaluated once, in the same left-to-right order a function call
+already used, so this changes nothing about calling behavior. What it does
+*not* apply to: any of `src/`'s exported functions (breaking
 `#'name`/`funcall` for public API is a compatibility break other
 `nerima-lisp` repositories that depend on this library would hit), anything
-passed as a value even internally (there are 8 of these, found by scanning
-every `#'name`/`(function name)` occurrence across `src/`, `t/`, and
-`examples/`), and anything recursive or using `return-from` against its own
-name (a `defmacro`'s expansion has no implicit block the way `defun` does).
+passed as a value even internally, anything the test suite stubs by
+replacing its function cell (`t/renderer-test.lisp`'s
+`(setf (symbol-function 'cl-tty-kit::%cell-equal-p) ...)` call counter and
+`t/pty-test.lisp`'s `with-function-overrides` are the live cases -- a macro
+has no function cell for such a stub to reach), and anything recursive or
+using `return-from` against its own name (a `defmacro`'s expansion has no
+implicit block the way `defun` does). Find the value-passing and
+function-cell cases by scanning `src/`, `t/`, and `examples/` for
+`#'name`/`(function name)` *and* for `symbol-function`/`fdefinition` --
+scanning only the former is how three of these were missed on the first
+pass.
 
 Before landing a new conversion, run the three-hazard verification
 documented in

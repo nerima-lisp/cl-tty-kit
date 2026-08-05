@@ -22,7 +22,14 @@ multi-implementation (non-SBCL) support.
 - richer diff rendering strategies for large screens
 - more examples for embedding the library in real terminal tools
 
-## Related nerima-lisp projects, and why they aren't dependencies
+## Related nerima-lisp projects, and why these particular ones aren't dependencies
+
+Depending on a `nerima-lisp` sibling is not itself out of scope: `cl-tty-kit`'s
+core `:depends-on` already carries `cl-codec-kit` (the UTF-8 codec) and
+`cl-concurrent-kit` (raw mode's lock), because each genuinely replaces logic
+this library would otherwise hand-roll. The projects below are excluded on
+their own merits — a dependency cycle, or no call site — not by a blanket rule
+against org dependencies.
 
 [`cl-process-kit`](https://github.com/nerima-lisp/cl-process-kit)'s `cl-process-kit/pty`
 subsystem already depends on `cl-tty-kit` (for `terminal-size`'s default rows/cols) and
@@ -32,7 +39,7 @@ reach for `cl-process-kit/pty` directly rather than cl-tty-kit growing an equiva
 reverse dependency also means `cl-tty-kit` itself must never depend on `cl-process-kit`,
 which would create a cycle. `cl-log-kit` (structured logging) and `cl-boundary-kit`
 (swappable-fake testing seams for external effects) were evaluated too: both are
-application-level concerns with no current call site in this dependency-free primitives
+application-level concerns with no current call site in this primitives
 library, and `cl-boundary-kit`'s own docs are explicit that its process boundary is a
 testing seam, not a PTY-shaped runner.
 

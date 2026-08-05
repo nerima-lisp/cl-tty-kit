@@ -6,12 +6,16 @@ and a first decoded key event.
 !!! info "Prerequisites"
 
     `cl-tty-kit` requires [SBCL](https://www.sbcl.org/) — see
-    [Compatibility](reference/compatibility.md) for why. The core system is
-    otherwise dependency-free; its test system, `:cl-tty-kit/test`,
-    additionally depends on [`cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
-    and [`cl-weave`](https://github.com/nerima-lisp/cl-weave), neither of
-    which is on Quicklisp — [Nix](https://nixos.org) is the supported way to
-    put both on ASDF's `CL_SOURCE_REGISTRY`, via this repository's
+    [Compatibility](reference/compatibility.md) for why. The core system
+    depends on two `nerima-lisp` siblings —
+    [`cl-codec-kit`](https://github.com/nerima-lisp/cl-codec-kit) for the
+    UTF-8 codec and
+    [`cl-concurrent-kit`](https://github.com/nerima-lisp/cl-concurrent-kit)
+    for raw mode's lock — and its test system, `:cl-tty-kit/test`,
+    additionally on [`cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
+    and [`cl-weave`](https://github.com/nerima-lisp/cl-weave). None of the
+    four is on Quicklisp — [Nix](https://nixos.org) is the supported way to
+    put them on ASDF's `CL_SOURCE_REGISTRY`, via this repository's
     `flake.nix`. There is no packaged release artifact for non-Nix installs;
     the project is distributed as source, loaded through
     [ASDF](https://asdf.common-lisp.dev/).
@@ -27,12 +31,16 @@ nix build .#docs         # hermetic MkDocs (Material) site build, --strict
 nix flake check          # hermetic test suite + a paredit-lint structural-parse gate
 ```
 
-`flake.nix` declares `nerima-lisp/cl-prolog`, `nerima-lisp/cl-weave`, and
-`nerima-lisp/paredit-cli` as development inputs. Only `cl-prolog` and
-`cl-weave` are ASDF dependencies, and only for `:cl-tty-kit/test`; the core
-system depends on SBCL's `sb-posix` layer. The Nix apps, checks, and
-`devShell` put the test dependencies on `CL_SOURCE_REGISTRY`; `paredit-cli`
-is a development binary.
+`flake.nix` declares `nerima-lisp/cl-codec-kit`,
+`nerima-lisp/cl-concurrent-kit`, `nerima-lisp/cl-prolog`,
+`nerima-lisp/cl-weave`, `nerima-lisp/cl-parser-kit`, and
+`nerima-lisp/paredit-cli` as inputs. `cl-codec-kit` and `cl-concurrent-kit`
+are `:cl-tty-kit`'s own ASDF dependencies; `cl-prolog` and `cl-weave` are
+ASDF dependencies of `:cl-tty-kit/test` only, and `cl-parser-kit` of
+`contrib/` only. `sb-posix` stays out of `:depends-on` — it ships with SBCL
+and the raw-mode implementation loads it with `require`. The Nix apps,
+checks, and `devShell` put all five libraries on `CL_SOURCE_REGISTRY`;
+`paredit-cli` is a development binary.
 
 ## Install without Nix
 
@@ -42,10 +50,12 @@ Put the repository somewhere ASDF can see it, for example:
 ~/quicklisp/local-projects/cl-tty-kit/
 ```
 
-and make `cl-prolog` and `cl-weave` discoverable the same way — as their own
-`local-projects` checkouts, or your own `CL_SOURCE_REGISTRY` entry — since
-neither ships with `cl-tty-kit` or Quicklisp. Any directory ASDF already
-searches works too, for example a path added to `asdf:*central-registry*`.
+and make `cl-codec-kit` and `cl-concurrent-kit` discoverable the same way —
+as their own `local-projects` checkouts, or your own `CL_SOURCE_REGISTRY`
+entry — since neither ships with `cl-tty-kit` or Quicklisp and loading
+`:cl-tty-kit` at all needs both. Add `cl-prolog` and `cl-weave` alongside
+them to run the test suite. Any directory ASDF already searches works too,
+for example a path added to `asdf:*central-registry*`.
 
 === "git clone"
 

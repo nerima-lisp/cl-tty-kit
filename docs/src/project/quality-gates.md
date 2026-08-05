@@ -84,8 +84,9 @@ top-level definitions (`define-ansi-function`,
 run its body in a specific dynamic extent (`with-terminal-session`,
 `with-raw-mode`). These remain valid examples of macro use, but they are not
 the only justification: an internal helper that is never passed as a
-first-class value (never `#'name`, never handed to
-`mapcar`/`funcall`/`apply`) and never recursive (and never uses
+first-class value (never `#'name`/`(function name)`, never handed to
+`mapcar`/`funcall`/`apply`, and never reached through
+`symbol-function`/`fdefinition`) and never recursive (and never uses
 `return-from` against its own name) should be a `defmacro`, not a `defun`.
 This applies across all of `src/` going forward, not to a fixed list of
 already-converted files -- see
@@ -96,7 +97,14 @@ shape every such macro uses.
 This does **not** apply to any of `src/`'s exported/public functions:
 breaking `#'name`/`funcall`/`apply` for a downstream `nerima-lisp` consumer
 that calls into this library's public API (confirmed: `cl-cc-javascript`) is
-still out of scope. It also does not apply to anything recursive.
+still out of scope. It also does not apply to anything recursive, nor to a
+helper the test suite reaches through its function cell: `t/renderer-test.lisp`
+rebinds `(symbol-function 'cl-tty-kit::%cell-equal-p)` to count dirty-region
+fast-path calls, and `t/pty-test.lisp`'s `with-function-overrides` stubs
+`%wait-for-process-exit`/`%close-pty-process` the same way. A macro is expanded
+inline at compile time and has no function cell for that to reach, so the stub
+either fails outright or silently stops intercepting -- and the assertion built
+on it silently stops proving anything.
 
 Before landing such a conversion, verify all three of the following. These
 are drawn from a real incident: a prior broad function-to-macro sweep

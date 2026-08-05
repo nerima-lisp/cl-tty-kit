@@ -2,8 +2,11 @@
 
 `contrib/` holds optional, opt-in integrations that layer external libraries
 on top of the core toolkit. **Nothing here is part of the core `cl-tty-kit`
-build or CI** — `:cl-tty-kit` has no ASDF dependencies; its SBCL-only
-raw-mode implementation loads the bundled `sb-posix` contrib with `require`
+build or CI** — `:cl-tty-kit`'s own ASDF dependencies are limited to the two
+`nerima-lisp` siblings it delegates real work to (`cl-codec-kit`,
+`cl-concurrent-kit`), both resolved from this repository's `flake.nix` and
+neither from Quicklisp; its SBCL-only raw-mode implementation loads the
+bundled `sb-posix` contrib with `require`
 (see [Compatibility](../reference/compatibility.md)). These modules pull additional
 libraries from Quicklisp, or from `nerima-lisp/cl-prolog`,
 `nerima-lisp/cl-weave`, and `nerima-lisp/cl-parser-kit` via this repository's
