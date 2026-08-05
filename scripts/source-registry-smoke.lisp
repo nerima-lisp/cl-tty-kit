@@ -20,6 +20,10 @@
            (remove-if-not #'probe-file
                           (list root
                                 (merge-pathnames #P"../cl-codec-kit/" sibling-root)
+                                (merge-pathnames #P"../cl-concurrent-kit/" sibling-root)
+                                (merge-pathnames #P"../cl-boundary-kit/" sibling-root)
+                                (merge-pathnames #P"../cl-date-kit/" sibling-root)
+                                (merge-pathnames #P"../cl-host-kit/" sibling-root)
                                 (merge-pathnames #P"../cl-weave/" sibling-root)
                                 (merge-pathnames #P"../cl-prolog/" sibling-root)
                                 (merge-pathnames #P"../cl-parser-kit/" sibling-root)))))
