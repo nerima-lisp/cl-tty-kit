@@ -187,6 +187,65 @@
         (expect (cl-tty-kit::screen-generation screen) :to-be generation)))))
 
 (describe
+  "screen cell write short-circuits"
+  (it
+    "stores a supplied cell object verbatim through (setf screen-cell), advancing the generation"
+    (let* ((screen (make-screen 2 1))
+           (cell (make-cell :char #\A :style '(:bold)))
+           (generation (cl-tty-kit::screen-generation screen)))
+      (expect
+        (setf (screen-cell screen 0 0) cell)
+        :to-be
+        screen)
+      (expect (screen-cell screen 0 0) :to-be cell)
+      (expect-cell (screen 0 0) #\A '(:bold))
+      (expect (cl-tty-kit::screen-generation screen) :to-be (1+ generation))))
+  (it
+    "leaves the generation alone when (setf screen-cell) rewrites the identical cell object"
+    (let ((screen (make-screen 2 1))
+          (cell (make-cell :char #\A :style '(:bold))))
+      (setf (screen-cell screen 0 0) cell)
+      (let ((generation (cl-tty-kit::screen-generation screen)))
+        (setf (screen-cell screen 0 0) cell)
+        (expect (screen-cell screen 0 0) :to-be cell)
+        (expect (cl-tty-kit::screen-generation screen) :to-be generation))))
+  (it
+    "drops the existing style when (setf screen-cell) writes the same character over a styled cell"
+    (let ((screen (make-screen 2 1)))
+      (setf (screen-cell screen 0 0) (make-cell :char #\A :style '(:bold)))
+      (let ((generation (cl-tty-kit::screen-generation screen)))
+        (setf (screen-cell screen 0 0) #\A)
+        (expect-cell (screen 0 0) #\A)
+        (expect (cell-style (screen-cell screen 0 0)) :to-be-null)
+        (expect (cl-tty-kit::screen-generation screen) :to-be (1+ generation)))))
+  (it
+    "drops the existing style when screen-put-cell writes the same character with no :style over a styled cell"
+    (let ((screen (make-screen 2 1)))
+      (screen-put-cell screen 0 0 #\A :style '(:bold))
+      (let ((generation (cl-tty-kit::screen-generation screen)))
+        (screen-put-cell screen 0 0 #\A)
+        (expect-cell (screen 0 0) #\A)
+        (expect (cell-style (screen-cell screen 0 0)) :to-be-null)
+        (expect (cl-tty-kit::screen-generation screen) :to-be (1+ generation)))))
+  (it
+    "leaves the generation alone when screen-put-cell rewrites the same character and :style"
+    (let ((screen (make-screen 2 1)))
+      (screen-put-cell screen 0 0 #\A :style '(:bold))
+      (let ((cell (screen-cell screen 0 0))
+            (generation (cl-tty-kit::screen-generation screen)))
+        (screen-put-cell screen 0 0 #\A :style '(:bold))
+        (expect (screen-cell screen 0 0) :to-be cell)
+        (expect (cl-tty-kit::screen-generation screen) :to-be generation))))
+  (it
+    "advances the generation when screen-put-cell keeps the character but changes :style"
+    (let ((screen (make-screen 2 1)))
+      (screen-put-cell screen 0 0 #\A :style '(:bold))
+      (let ((generation (cl-tty-kit::screen-generation screen)))
+        (screen-put-cell screen 0 0 #\A :style '(:italic))
+        (expect-cell (screen 0 0) #\A '(:italic))
+        (expect (cl-tty-kit::screen-generation screen) :to-be (1+ generation))))))
+
+(describe
   "screen-write-string edge cases"
   (it
     "writes a :start/:end substring at an offset, leaving surrounding cells alone"

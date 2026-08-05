@@ -117,7 +117,43 @@
             (aref (cl-tty-kit::screen-cells (cl-tty-kit::renderer-front renderer)) 0)
             :to-be
             equivalent))
-        (expect (renderer-render renderer) :to-equal "")))))
+        (expect (renderer-render renderer) :to-equal ""))))
+  (it
+    "emits nothing and leaves the front cells alone when a rewritten cell is only equivalent"
+    (let ((renderer (make-renderer 2 1)))
+      (screen-put-cell (renderer-screen renderer) 0 0 #\x)
+      (renderer-render renderer)
+      (let* ((front (cl-tty-kit::renderer-front renderer))
+             (snapshot-cell (aref (cl-tty-kit::screen-cells front) 0)))
+        (screen-put-cell (renderer-screen renderer) 0 0 (make-cell :char #\x))
+        (expect
+          (cl-tty-kit::screen-generation (renderer-screen renderer))
+          :to-be-greater-than
+          (cl-tty-kit::renderer-rendered-generation renderer))
+        (multiple-value-bind (output emitted-p) (renderer-render renderer)
+          (expect output :to-equal "")
+          (expect emitted-p :to-be-falsy))
+        (expect (cl-tty-kit::renderer-front renderer) :to-be front)
+        (expect (aref (cl-tty-kit::screen-cells front) 0) :to-be snapshot-cell)
+        (expect
+          (cl-tty-kit::renderer-rendered-generation renderer)
+          :to-be
+          (cl-tty-kit::screen-generation (renderer-screen renderer))))))
+  (it
+    "replaces the front buffer with a full repaint when the back buffer was resized in place"
+    (let ((renderer (make-renderer 2 1)))
+      (renderer-render renderer)
+      (screen-resize (renderer-screen renderer) 3 2)
+      (screen-write-string (renderer-screen renderer) 0 0 "xy")
+      (expect
+        (renderer-render renderer)
+        :to-equal
+        (render-screen (renderer-screen renderer)))
+      (let ((front (cl-tty-kit::renderer-front renderer)))
+        (expect (screen-width front) :to-be 3)
+        (expect (screen-height front) :to-be 2)
+        (expect (cell-char (screen-cell front 0 0)) :to-be #\x))
+      (expect (renderer-render renderer) :to-equal ""))))
 
 (describe
   "renderer diff-plan reuse"

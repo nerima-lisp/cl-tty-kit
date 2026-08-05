@@ -29,7 +29,12 @@
     (%expect-rect (rect-inset (make-rect :width 4 :height 4) :all 3) 3 3 0 0))
   (it "signals a non-type-error for a malformed inset amount"
     (expect (lambda () (rect-inset (make-rect) :left :bad))
-            :to-throw (lambda (c) (not (typep c 'type-error))))))
+            :to-throw (lambda (c) (not (typep c 'type-error)))))
+  (it "treats a negative margin on every edge as zero"
+    (%expect-rect (rect-inset (make-rect :x 1 :y 2 :width 10 :height 6) :all -3) 1 2 10 6))
+  (it "clamps only the negative edges, honoring the positive ones"
+    (%expect-rect (rect-inset (make-rect :width 10 :height 6) :left -2 :top 1 :right 3 :bottom -1)
+                  0 1 7 5)))
 
 (describe "rect-split-horizontal and rect-split-vertical"
   (it "splits at the given column"
@@ -95,7 +100,11 @@
   (it "intersecting with a containing rect is a no-op clip"
     (%expect-rect (rect-intersect (make-rect :x 1 :y 1 :width 2 :height 2)
                                   (make-rect :width 10 :height 10))
-                  1 1 2 2)))
+                  1 1 2 2))
+  (it "takes each far edge from whichever operand ends first"
+    (%expect-rect (rect-intersect (make-rect :x 2 :y 2 :width 4 :height 4)
+                                  (make-rect :width 4 :height 4))
+                  2 2 2 2)))
 
 (describe "rect-union"
   (it "spans both operands"
@@ -106,7 +115,11 @@
     (%expect-rect (rect-union (make-rect) (make-rect :x 1 :y 1 :width 2 :height 2))
                   1 1 2 2)
     (%expect-rect (rect-union (make-rect :x 1 :y 1 :width 2 :height 2) (make-rect))
-                  1 1 2 2)))
+                  1 1 2 2))
+  (it "spans both operands whichever order they are given in"
+    (%expect-rect (rect-union (make-rect :x 3 :y 3 :width 2 :height 2)
+                              (make-rect :width 2 :height 2))
+                  0 0 5 5)))
 
 (describe "layout-split"
   (it "fixed lengths plus a fill taking the remainder"
@@ -189,4 +202,20 @@
       (expect (reduce #'+ sizes) :to-be 257)
       (expect (every (lambda (size) (member size '(4 5))) sizes))))
   (it "an empty constraint list yields no rects"
-    (expect (layout-split (make-rect :width 10 :height 4) :horizontal '()) :to-be-falsy)))
+    (expect (layout-split (make-rect :width 10 :height 4) :horizontal '()) :to-be-falsy))
+  (it "treats a negative fill weight as zero, leaving it no share of the remainder"
+    (destructuring-bind (a b)
+        (layout-split (make-rect :width 10 :height 4) :horizontal '((:fill -1) (:fill 1)))
+      (%expect-rect a 0 0 0 4)
+      (%expect-rect b 0 0 10 4)))
+  (it "treats negative spacing as zero"
+    (destructuring-bind (a b)
+        (layout-split (make-rect :width 10 :height 4) :horizontal '((:fill 1) (:fill 1))
+                      :spacing -5)
+      (%expect-rect a 0 0 5 4)
+      (%expect-rect b 5 0 5 4)))
+  (it "collapses every segment when the spacing alone exceeds the axis extent"
+    (destructuring-bind (a b c)
+        (layout-split (make-rect :width 2 :height 4) :horizontal
+                      '((:fill 1) (:fill 1) (:fill 1)) :spacing 5)
+      (expect (every #'rect-empty-p (list a b c)) :to-be-truthy))))

@@ -28,7 +28,11 @@
                                      :y -1 "a non-negative integer"))
   (it "rejects a non-boolean visible"
     (expect-cursor-parameter-invalid (lambda () (make-cursor :visible :maybe))
-                                     :visible :maybe "a boolean")))
+                                     :visible :maybe "a boolean"))
+  (it "starts hidden when :visible is nil"
+    (let ((cursor (make-cursor :visible nil)))
+      (expect (cursor-x cursor) :to-be 0)
+      (expect (cursor-visible-p cursor) :to-be-falsy))))
 
 (describe "move-cursor"
   (it "stores the coordinate verbatim when no width/height is given"
@@ -62,7 +66,25 @@
                                      :width -1 "a non-negative integer"))
   (it "rejects a negative height"
     (expect-cursor-parameter-invalid (lambda () (move-cursor (make-cursor) 0 0 :height -1))
-                                     :height -1 "a non-negative integer")))
+                                     :height -1 "a non-negative integer"))
+  (it "clamps x against width and y against height, never the reverse"
+    (let ((cursor (make-cursor)))
+      (move-cursor cursor 50 60 :width 3 :height 7)
+      (expect (cursor-x cursor) :to-be 2)
+      (expect (cursor-y cursor) :to-be 6)))
+  (it "clamps only x when :width alone is given, leaving y verbatim"
+    (let ((cursor (make-cursor)))
+      (move-cursor cursor 50 60 :width 3)
+      (expect (cursor-x cursor) :to-be 2)
+      (expect (cursor-y cursor) :to-be 60)))
+  (it "clamps only y when :height alone is given, leaving x verbatim"
+    (let ((cursor (make-cursor)))
+      (move-cursor cursor 50 60 :height 7)
+      (expect (cursor-x cursor) :to-be 50)
+      (expect (cursor-y cursor) :to-be 6)))
+  (it "returns the cursor it moved"
+    (let ((cursor (make-cursor)))
+      (expect (move-cursor cursor 1 2) :to-be cursor))))
 
 (describe "setf accessors"
   (it "cursor-x and cursor-y are setfable"

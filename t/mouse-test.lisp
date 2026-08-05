@@ -39,7 +39,11 @@
     (8 1 1 #\M :left :press 0 0 (:alt)
      "Alt (button bit 8)")
     (20 1 1 #\M :left :press 0 0 (:control :shift)
-     "Shift (4) + Control (16), normalized and sorted"))
+     "Shift (4) + Control (16), normalized and sorted")
+    (0 0 5 #\M :left :press 0 4 nil
+     "A Cx of 0 clamps to column 0 instead of wrapping below the screen")
+    (0 5 0 #\M :left :press 4 0 nil
+     "A Cy of 0 clamps to row 0 instead of wrapping below the screen"))
   "Each case is (CB CX CY FINAL BUTTON ACTION X Y MODIFIERS MESSAGE): the SGR
 mouse report parameters %SGR-MOUSE builds, and the MOUSE-EVENT DECODE-MOUSE-
 SEQUENCE must decode it into.")
@@ -97,6 +101,18 @@ SEQUENCE must decode it into.")
       (expect consumed :to-be 0)))
   (it "declines a non-ESC prefix that otherwise resembles an SGR report"
     (multiple-value-bind (event consumed) (decode-mouse-sequence "x[<0;1;1M")
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a terminated report whose body carries no `;' separator at all"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence (format nil "~C[<0M" #\Esc))
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines a report whose first field is empty"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence (format nil "~C[<;1;1M" #\Esc))
+      (expect event :to-be-falsy)
+      (expect consumed :to-be 0)))
+  (it "declines an ESC that is not followed by `['"
+    (multiple-value-bind (event consumed) (decode-mouse-sequence (format nil "~C?<0;1;1M" #\Esc))
       (expect event :to-be-falsy)
       (expect consumed :to-be 0))))
 

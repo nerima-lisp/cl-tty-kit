@@ -105,6 +105,28 @@ checks both of those slots, never just that some error was signaled."
   (it "rejects a fractional :max-pending"
     (expect (lambda () (make-input-decoder :max-pending 1.5)) :to-throw 'error)))
 
+(describe "input-decoder state comparison"
+  (it "two decoders fed the same chunk hold EQUALP state"
+    (let ((a (make-input-decoder :max-pending 64))
+          (b (make-input-decoder :max-pending 64)))
+      (expect (decode-input-chunk a #(227 129)) :to-be-falsy)
+      (expect (decode-input-chunk b #(227 129)) :to-be-falsy)
+      (expect (eq a b) :to-be-falsy)
+      (expect (equalp a b) :to-be-truthy)))
+  (it "a decoder buffering partial UTF-8 octets is not EQUALP to one holding nothing"
+    (let ((buffered (make-input-decoder :max-pending 64))
+          (drained (make-input-decoder :max-pending 64)))
+      (expect (decode-input-chunk buffered #(227 129)) :to-be-falsy)
+      (expect (equalp buffered drained) :to-be-falsy)
+      ;; Completing the pending sequence drains the buffer back to the state
+      ;; DRAINED never left, so the two agree again.
+      (expect (decode-input-chunk buffered #(130) :eof t) :to-be-truthy)
+      (expect (equalp buffered drained) :to-be-truthy)))
+  (it "decoders differing only in MAX-PENDING are not EQUALP"
+    (expect (equalp (make-input-decoder :max-pending 64)
+                    (make-input-decoder :max-pending 65))
+            :to-be-falsy)))
+
 (describe "stream input poller"
   (it "drains available characters and preserves split escape sequences"
     (let* ((stream (make-string-input-stream (concatenate 'string
