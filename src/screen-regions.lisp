@@ -286,12 +286,30 @@ out-of-range row or column span signals SCREEN-INDEX-OUT-OF-BOUNDS."
              (destination-column-limit (- destination-width dest-x))
              (source-row-limit (- source-height src-y))
              (destination-row-limit (- destination-height dest-y))
-             (column-end (if (> source-column-limit destination-column-limit)
-                             destination-column-limit
-                             source-column-limit))
-             (row-end (if (> source-row-limit destination-row-limit)
-                          destination-row-limit
-                          source-row-limit))
+             (clipped-column-end (if (> source-column-limit destination-column-limit)
+                                     destination-column-limit
+                                     source-column-limit))
+             (clipped-row-end (if (> source-row-limit destination-row-limit)
+                                  destination-row-limit
+                                  source-row-limit))
+             ;; COLUMN-START and COLUMN-END count forward from (SRC-X, SRC-Y)
+             ;; and (DEST-X, DEST-Y) rather than in absolute source columns --
+             ;; SOURCE-COLUMN-LIMIT is SOURCE-WIDTH less SRC-X, and SOURCE-X is
+             ;; SRC-X plus COLUMN-START -- so a supplied WIDTH or HEIGHT bounds
+             ;; this span directly. Clamping by SRC-X plus WIDTH instead would
+             ;; let a positive SRC-X copy that many extra columns.
+             ;;
+             ;; The clamp applies only when the caller actually supplied the
+             ;; argument. An omitted one means "the whole source", which is
+             ;; already expressed by SOURCE-COLUMN-LIMIT; clamping by its
+             ;; default as well would truncate a negative-SRC-X copy, because
+             ;; SOURCE-COLUMN-LIMIT then exceeds SOURCE-WIDTH.
+             (column-end (if (and width-supplied-p (> clipped-column-end width))
+                             width
+                             clipped-column-end))
+             (row-end (if (and height-supplied-p (> clipped-row-end height))
+                          height
+                          clipped-row-end))
              (copy-width (if (> column-end column-start)
                              (- column-end column-start)
                              0))
@@ -307,6 +325,7 @@ out-of-range row or column span signals SCREEN-INDEX-OUT-OF-BOUNDS."
         (declare (type fixnum width height source-width destination-width source-height destination-height
                       src-x-offset dest-x-offset src-y-offset dest-y-offset
                       source-column-limit destination-column-limit source-row-limit destination-row-limit
+                      clipped-column-end clipped-row-end
                       column-start column-end row-start row-end copy-width copy-height
                       source-x source-y destination-x destination-y))
         (when (and (plusp copy-width) (plusp copy-height))

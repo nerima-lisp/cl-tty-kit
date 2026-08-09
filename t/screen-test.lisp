@@ -176,6 +176,123 @@ condition."
           (src (%screen-rows "ABCDE")))
       (screen-blit dest src :src-x 3 :width 5)
       (expect (screen-row-string dest 0) :to-equal "DE.")))
+  ;; :WIDTH and :HEIGHT bound the copied region even when both screens are
+  ;; large enough to hold more; without that bound the blit copies the whole
+  ;; overlap and silently ignores the requested extent.
+  (it "copies exactly :width columns, leaving the destination cell at dest-x + width untouched"
+    (let ((dest (make-screen 6 1 :initial-cell #\.))
+          (src (%screen-rows "ABCDEF")))
+      (screen-blit dest src :width 2)
+      (expect (screen-row-string dest 0) :to-equal "AB....")
+      (expect-cell (dest 2 0) #\.)))
+  (it "copies exactly :height rows, leaving the destination row at dest-y + height untouched"
+    (let ((dest (make-screen 1 4 :initial-cell #\.))
+          (src (%screen-rows "A" "B" "C" "D")))
+      (screen-blit dest src :height 2)
+      (expect (screen-to-string dest) :to-equal (format nil "A~%B~%.~%."))
+      (expect-cell (dest 0 2) #\.)))
+  ;; :WIDTH counts forward from :SRC-X, matching how SOURCE-COLUMN-LIMIT and
+  ;; DESTINATION-COLUMN-LIMIT are already expressed as offsets from the
+  ;; respective origins rather than as absolute source columns.
+  (it "counts :width forward from :src-x rather than from source column zero"
+    (let ((dest (make-screen 6 1 :initial-cell #\.))
+          (src (%screen-rows "ABCDEF")))
+      (screen-blit dest src :src-x 2 :width 3)
+      (expect (screen-row-string dest 0) :to-equal "CDE...")))
+  (it "counts :height forward from :src-y rather than from source row zero"
+    (let ((dest (make-screen 1 5 :initial-cell #\.))
+          (src (%screen-rows "A" "B" "C" "D" "E")))
+      (screen-blit dest src :src-y 1 :height 2)
+      (expect (screen-to-string dest) :to-equal (format nil "B~%C~%.~%.~%."))))
+  ;; The default path every existing caller relies on: an omitted :WIDTH or
+  ;; :HEIGHT still means the source's full extent.
+  (it "copies the whole source when :width and :height are omitted"
+    (let ((dest (make-screen 3 3 :initial-cell #\.))
+          (src (%screen-rows "AB" "CD")))
+      (screen-blit dest src)
+      (expect (screen-to-string dest) :to-equal (format nil "AB.~%CD.~%..."))))
+  ;; An omitted :WIDTH/:HEIGHT must impose NO bound, not a bound of the
+  ;; source's own extent. A negative :SRC-X drives SOURCE-COLUMN-LIMIT above
+  ;; SOURCE-WIDTH, so clamping unconditionally by the defaulted WIDTH would
+  ;; truncate a copy that has to stay whole. The destination is deliberately
+  ;; wide here: with a narrow one DESTINATION-COLUMN-LIMIT binds first and
+  ;; hides the defect.
+  (it "copies the full source for a negative :src-x when :width is omitted"
+    (let ((dest (make-screen 10 1 :initial-cell #\.))
+          (src (%screen-rows "ABCD")))
+      (screen-blit dest src :src-x -2)
+      (expect (screen-row-string dest 0) :to-equal "..ABCD....")))
+  (it "copies every source row for a negative :src-y when :height is omitted"
+    (let ((dest (make-screen 1 6 :initial-cell #\.))
+          (src (%screen-rows "A" "B" "C")))
+      (screen-blit dest src :src-y -2)
+      (expect (screen-to-string dest) :to-equal (format nil ".~%.~%A~%B~%C~%."))))
+  ;; The supplied case with the same negative offset still counts the region
+  ;; from :SRC-X, so the part of it left of source column zero is clipped away.
+  (it "clips a supplied :width region that starts left of source column zero"
+    (let ((dest (make-screen 10 1 :initial-cell #\.))
+          (src (%screen-rows "ABCD")))
+      (screen-blit dest src :src-x -2 :width 3)
+      (expect (screen-row-string dest 0) :to-equal "..A.......")))
+  (it "clips a bounded :width region against a negative :dest-x on both sides"
+    (let ((dest (make-screen 5 1 :initial-cell #\.))
+          (src (%screen-rows "ABCDE")))
+      (screen-blit dest src :dest-x -1 :width 3)
+      (expect (screen-row-string dest 0) :to-equal "BC...")))
+  (it "marks only the bounded extent dirty"
+    (let ((dest (make-screen 6 3 :initial-cell #\.))
+          (src (%screen-rows "ABCDEF" "GHIJKL" "MNOPQR")))
+      (cl-tty-kit::%screen-clear-dirty-cells dest)
+      (screen-blit dest src :dest-x 1 :dest-y 1 :width 2 :height 1)
+      (expect (aref (cl-tty-kit::screen-row-dirty-starts dest) 1) :to-be 1)
+      (expect (aref (cl-tty-kit::screen-row-dirty-ends dest) 1) :to-be 3)
+      ;; Rows outside the bounded region are never touched.
+      (expect (aref (cl-tty-kit::screen-row-dirty-ends dest) 0) :to-be 0)
+      (expect (aref (cl-tty-kit::screen-row-dirty-ends dest) 2) :to-be 0)))
+  ;; Zero is a legal dimension -- %ASSERT-SCREEN-DIMENSIONS accepts any
+  ;; non-negative fixnum -- so a zero extent must degrade to a clean no-op.
+  ;; COPY-WIDTH/COPY-HEIGHT reach zero and the PLUSP guard skips the copy loop
+  ;; and %SCREEN-TOUCH together, so the destination generation must not move:
+  ;; no degenerate extent is handed to any downstream consumer.
+  (it "treats :width 0 as a no-op that touches nothing"
+    (let* ((dest (make-screen 4 2 :initial-cell #\.))
+           (src (%screen-rows "ABCD" "EFGH"))
+           (generation (cl-tty-kit::screen-generation dest)))
+      (expect (screen-blit dest src :width 0) :to-be dest)
+      (expect (screen-to-string dest) :to-equal (format nil "....~%...."))
+      (expect (cl-tty-kit::screen-generation dest) :to-be generation)))
+  (it "treats :height 0 as a no-op that touches nothing"
+    (let* ((dest (make-screen 4 2 :initial-cell #\.))
+           (src (%screen-rows "ABCD" "EFGH"))
+           (generation (cl-tty-kit::screen-generation dest)))
+      (expect (screen-blit dest src :height 0) :to-be dest)
+      (expect (screen-to-string dest) :to-equal (format nil "....~%...."))
+      (expect (cl-tty-kit::screen-generation dest) :to-be generation)))
+  (it "treats :width 0 and :height 0 together as a no-op"
+    (let ((dest (make-screen 4 2 :initial-cell #\.))
+          (src (%screen-rows "ABCD" "EFGH")))
+      (expect (screen-blit dest src :width 0 :height 0) :to-be dest)
+      (expect (screen-to-string dest) :to-equal (format nil "....~%...."))))
+  ;; A zero extent must leave the destination renderable. The diff planner
+  ;; advances its row cursor by the SCREEN's own width, so this also confirms
+  ;; a zero-extent blit cannot hand it a degenerate row stride.
+  (it "leaves a zero-extent blit result renderable and diffable"
+    (let ((dest (make-screen 4 2 :initial-cell #\.))
+          (src (%screen-rows "ABCD" "EFGH")))
+      (screen-blit dest src :width 0 :height 0)
+      (expect (render-diff dest (screen-copy dest)) :to-equal "")
+      (expect (stringp (render-screen dest)) :to-be t)))
+  ;; A zero copy extent was already reachable before :WIDTH was honoured:
+  ;; %ASSERT-SCREEN-OFFSET requires only an integer, so an offset past the
+  ;; destination edge drives DESTINATION-COLUMN-LIMIT negative. Honouring
+  ;; :WIDTH adds another route to that same state, not a new state.
+  (it "is a no-op for a :dest-x entirely past the destination right edge"
+    (let* ((dest (make-screen 2 2 :initial-cell #\.))
+           (src (make-screen 2 2 :initial-cell #\X))
+           (generation (cl-tty-kit::screen-generation dest)))
+      (screen-blit dest src :dest-x 5)
+      (expect (screen-to-string dest) :to-equal (format nil "..~%.."))
+      (expect (cl-tty-kit::screen-generation dest) :to-be generation)))
   (it "clips at the destination right edge"
     (let ((dest (make-screen 2 1 :initial-cell #\.))
           (src (%screen-rows "AB")))
