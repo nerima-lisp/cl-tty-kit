@@ -9,7 +9,7 @@
 ;;;;
 ;;;; scripts/bootstrap.lisp registers the project tree with ASDF, so this runs
 ;;;; from a plain checkout with no CL_SOURCE_REGISTRY set for cl-tty-kit
-;;;; itself. Its test-only dependencies (cl-prolog, cl-weave) still come from
+;;;; itself. Its test-only dependencies (cl-prolog-kit, cl-weave) still come from
 ;;;; the environment, which flake.nix supplies.
 (require :asdf)
 

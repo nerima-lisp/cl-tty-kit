@@ -7,7 +7,7 @@
   (:documentation
    "Advanced usage of nerima-lisp/cl-parser-kit: a parser-combinator
 recognizer for the same ECMA-48 CSI (Control Sequence Introducer) byte-class
-grammar contrib/cl-prolog-csi-grammar.lisp recognizes via cl-prolog's DCG
+grammar contrib/cl-prolog-kit-csi-grammar.lisp recognizes via cl-prolog-kit's DCG
 support. src/input-decode.lisp already decodes CSI sequences imperatively
 for the render loop's hot path; this module is a second, independent
 declarative specification of that same sequence shape -- zero or more

@@ -21,7 +21,7 @@ org. This page covers only what is specific to this repository.
 
 ## Nix entry points
 
-Nix is the supported way to get `cl-prolog`/`cl-weave` onto
+Nix is the supported way to get `cl-prolog-kit`/`cl-weave` onto
 `CL_SOURCE_REGISTRY` (see [Getting Started](../getting-started.md#install-with-nix)); everything
 below assumes either `nix develop` or one of these wrappers.
 

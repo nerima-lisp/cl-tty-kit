@@ -1,7 +1,7 @@
 # Logic Engine (Prolog)
 
 `cl-tty-kit`'s embedded logic engine is
-[`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog) itself,
+[`nerima-lisp/cl-prolog-kit`](https://github.com/nerima-lisp/cl-prolog-kit) itself,
 not reimplemented. It is a `:cl-tty-kit/test` dependency, not a `:cl-tty-kit`
 one (see [Getting Started](../getting-started.md)): the core toolkit ships hand-written
 imperative decoders on its hot paths, and the test suite states part of that
@@ -29,8 +29,8 @@ runtime.
   `assertz`/`retract` goals with logical-update-view semantics.
 - **A rich ISO built-in set** — cut, arithmetic, `findall/3`/`bagof/3`/`setof/3`,
   `assert`/`retract`, DCG grammars, `library(assoc)`, `library(pairs)`, string
-  and character-classification predicates, and more. See cl-prolog's own
-  [Builtin Goals](https://github.com/nerima-lisp/cl-prolog) reference for the
+  and character-classification predicates, and more. See cl-prolog-kit's own
+  [Builtin Goals](https://github.com/nerima-lisp/cl-prolog-kit) reference for the
   full list.
 - **Bounded search** — `:max-depth` bounds user-rule resolution (exhaustion
   signals `prolog-depth-limit-exceeded`) and `:limit` caps the number of
@@ -46,10 +46,10 @@ whose first element is a relation symbol, e.g. `(parent abraham isaac)` or
 followed by zero or more body goals.
 
 `AND`, `OR`, `NOT`, and `=` are ordinary symbols inherited from `#:CL`, so they
-name cl-prolog's builtins from any package without qualification. `CALL`,
+name cl-prolog-kit's builtins from any package without qualification. `CALL`,
 `FINDALL`, `TRUE`, and `FAIL` (among others) have no `#:CL` equivalent, so a
-goal using one of these from outside the `CL-PROLOG` package must spell it
-`cl-prolog:call`, `cl-prolog:findall`, and so on — an unqualified symbol of the
+goal using one of these from outside the `CL-PROLOG-KIT` package must spell it
+`cl-prolog-kit:call`, `cl-prolog-kit:findall`, and so on — an unqualified symbol of the
 same name is a *different* symbol and the engine reports the goal as an
 undefined procedure.
 
@@ -60,7 +60,7 @@ undefined procedure.
 
 ```lisp
 (defparameter *family*
-  (cl-prolog:prolog
+  (cl-prolog-kit:prolog
     ((parent abraham isaac))
     ((parent isaac jacob))
     ((parent jacob joseph))
@@ -73,11 +73,11 @@ without touching the original:
 
 ```lisp
 (defparameter *extended*
-  (cl-prolog:extend-rulebase *family*
+  (cl-prolog-kit:extend-rulebase *family*
     ((parent joseph benjamin))))
 
-(cl-prolog:query-prolog *extended* '(parent joseph ?child))  ; sees benjamin
-(cl-prolog:query-prolog *family* '(parent joseph ?child))    ; still empty
+(cl-prolog-kit:query-prolog *extended* '(parent joseph ?child))  ; sees benjamin
+(cl-prolog-kit:query-prolog *family* '(parent joseph ?child))    ; still empty
 ```
 
 ## Querying
@@ -94,14 +94,14 @@ Each solution is an alist of query-variable bindings — project a single
 variable with `solution-binding`:
 
 ```lisp
-(mapcar (lambda (solution) (cl-prolog:solution-binding '?d solution))
-        (cl-prolog:query-prolog *family* '(ancestor abraham ?d)))
+(mapcar (lambda (solution) (cl-prolog-kit:solution-binding '?d solution))
+        (cl-prolog-kit:query-prolog *family* '(ancestor abraham ?d)))
 ;; => (ISAAC JACOB JOSEPH)
 ```
 
 A ground proof with no variables to bind succeeds with the alist `nil`, so its
 solution list is `(nil)` — not `nil` (that means no proof at all). See
-cl-prolog's own Querying and Troubleshooting docs for the full result
+cl-prolog-kit's own Querying and Troubleshooting docs for the full result
 convention.
 
 !!! warning "Queries are bounded"
@@ -122,10 +122,10 @@ convention.
 | `(and GOAL...)` | prove every goal (relational conjunction) |
 | `(or GOAL...)` | succeed with each solution of any goal (disjunction) |
 | `(not GOAL)` | negation as failure: succeed when `GOAL` has no proof |
-| `(cl-prolog:true)` | succeed exactly once |
-| `(cl-prolog:fail)` | never succeed |
-| `(cl-prolog:call GOAL)` | meta-call: prove a (possibly variable) goal term |
-| `(cl-prolog:findall TEMPLATE GOAL RESULT)` | unify `RESULT` with the list of `TEMPLATE` instances over every proof of `GOAL` |
+| `(cl-prolog-kit:true)` | succeed exactly once |
+| `(cl-prolog-kit:fail)` | never succeed |
+| `(cl-prolog-kit:call GOAL)` | meta-call: prove a (possibly variable) goal term |
+| `(cl-prolog-kit:findall TEMPLATE GOAL RESULT)` | unify `RESULT` with the list of `TEMPLATE` instances over every proof of `GOAL` |
 
 `findall/3` is the aggregation escape hatch out of pure relational search. It
 succeeds exactly once — with the empty list when the inner goal has no proof.
@@ -134,8 +134,8 @@ signals `prolog-instantiation-error` (ISO semantics) rather than silently
 failing.
 
 ```lisp
-(cl-prolog:query-prolog *family*
-  (list 'cl-prolog:findall '?d '(ancestor abraham ?d) '?ds))
+(cl-prolog-kit:query-prolog *family*
+  (list 'cl-prolog-kit:findall '?d '(ancestor abraham ?d) '?ds))
 ;; => (((?DS ISAAC JACOB JOSEPH)))
 ```
 
@@ -149,7 +149,7 @@ cross-checks the two, catching drift in either direction:
 
 ```lisp
 (defparameter *sgr-channel-grammar*
-  (cl-prolog:prolog
+  (cl-prolog-kit:prolog
     ((sgr-channel 38 :fg))
     ((sgr-channel 39 :fg))
     ((sgr-channel 48 :bg))
@@ -158,12 +158,12 @@ cross-checks the two, catching drift in either direction:
     ((sgr-channel 59 :underline-color))))
 
 ;; Which parameters drive the foreground channel, in definition order?
-(mapcar (lambda (s) (cl-prolog:solution-binding '?param s))
-        (cl-prolog:query-prolog *sgr-channel-grammar* '(sgr-channel ?param :fg)))
+(mapcar (lambda (s) (cl-prolog-kit:solution-binding '?param s))
+        (cl-prolog-kit:query-prolog *sgr-channel-grammar* '(sgr-channel ?param :fg)))
 ;; => (38 39)
 
 ;; A basic color parameter is not part of the channel-selection grammar.
-(cl-prolog:prolog-succeeds-p *sgr-channel-grammar* '(sgr-channel 30 :fg))
+(cl-prolog-kit:prolog-succeeds-p *sgr-channel-grammar* '(sgr-channel 30 :fg))
 ;; => NIL
 ```
 
@@ -176,12 +176,12 @@ engine usage: the plain facts are the *data* (the grammar), the query is the
 
 ## See also
 
-- [nerima-lisp/cl-prolog](https://github.com/nerima-lisp/cl-prolog) — the
+- [nerima-lisp/cl-prolog-kit](https://github.com/nerima-lisp/cl-prolog-kit) — the
   engine's own documentation: the full Rule DSL, builtin goal vocabulary,
   querying semantics, and how to extend it with `define-foreign-predicate`
 - [API Reference](../reference/api.md) — full public symbol map for the core toolkit
 - [Text Layout and Unicode Width](text-layout.md) — width classification the engine can specify
 - [ANSI Helpers](ansi-helpers.md) — SGR emission that the oracle above cross-checks
-- `contrib/cl-tty-kit-cl-prolog-csi-grammar` — a DCG grammar for the ECMA-48
+- `contrib/cl-tty-kit-cl-prolog-kit-csi-grammar` — a DCG grammar for the ECMA-48
   CSI byte shape, built on this same engine (opt-in, not part of the core
   build or CI; see `contrib/README.md`)

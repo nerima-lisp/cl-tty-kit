@@ -12,7 +12,7 @@ and a first decoded key event.
     UTF-8 codec and
     [`cl-concurrent-kit`](https://github.com/nerima-lisp/cl-concurrent-kit)
     for raw mode's lock — and its test system, `:cl-tty-kit/test`,
-    additionally on [`cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
+    additionally on [`cl-prolog-kit`](https://github.com/nerima-lisp/cl-prolog-kit)
     and [`cl-weave`](https://github.com/nerima-lisp/cl-weave). None of the
     four is on Quicklisp — [Nix](https://nixos.org) is the supported way to
     put them on ASDF's `CL_SOURCE_REGISTRY`, via this repository's
@@ -32,10 +32,10 @@ nix flake check          # hermetic test suite + a paredit-lint structural-parse
 ```
 
 `flake.nix` declares `nerima-lisp/cl-codec-kit`,
-`nerima-lisp/cl-concurrent-kit`, `nerima-lisp/cl-prolog`,
+`nerima-lisp/cl-concurrent-kit`, `nerima-lisp/cl-prolog-kit`,
 `nerima-lisp/cl-weave`, `nerima-lisp/cl-parser-kit`, and
 `nerima-lisp/paredit-cli` as inputs. `cl-codec-kit` and `cl-concurrent-kit`
-are `:cl-tty-kit`'s own ASDF dependencies; `cl-prolog` and `cl-weave` are
+are `:cl-tty-kit`'s own ASDF dependencies; `cl-prolog-kit` and `cl-weave` are
 ASDF dependencies of `:cl-tty-kit/test` only, and `cl-parser-kit` of
 `contrib/` only. `sb-posix` stays out of `:depends-on` — it ships with SBCL
 and the raw-mode implementation loads it with `require`. The Nix apps,
@@ -53,7 +53,7 @@ Put the repository somewhere ASDF can see it, for example:
 and make `cl-codec-kit` and `cl-concurrent-kit` discoverable the same way —
 as their own `local-projects` checkouts, or your own `CL_SOURCE_REGISTRY`
 entry — since neither ships with `cl-tty-kit` or Quicklisp and loading
-`:cl-tty-kit` at all needs both. Add `cl-prolog` and `cl-weave` alongside
+`:cl-tty-kit` at all needs both. Add `cl-prolog-kit` and `cl-weave` alongside
 them to run the test suite. Any directory ASDF already searches works too,
 for example a path added to `asdf:*central-registry*`.
 

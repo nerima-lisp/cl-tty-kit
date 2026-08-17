@@ -4,11 +4,11 @@
 ;;; actual test files small and lets the suite enumerate behaviors one by one.
 ;;;
 ;;; AND/OR/NOT/= are ordinary Common Lisp symbols inherited from #:CL, so they
-;;; dispatch to nerima-lisp/cl-prolog's builtins from any package without
-;;; qualification. CALL/FINDALL/TRUE/FAIL are cl-prolog-specific exports with no
+;;; dispatch to nerima-lisp/cl-prolog-kit's builtins from any package without
+;;; qualification. CALL/FINDALL/TRUE/FAIL are cl-prolog-kit-specific exports with no
 ;;; CL equivalent, so a bare (unqualified) symbol of that name read in this file
-;;; is a different symbol than CL-PROLOG:CALL and the engine reports the goal as
-;;; an undefined procedure -- these four are written CL-PROLOG:CALL etc.
+;;; is a different symbol than CL-PROLOG-KIT:CALL and the engine reports the goal as
+;;; an undefined procedure -- these four are written CL-PROLOG-KIT:CALL etc.
 ;;; throughout.
 
 (defparameter +prolog-query-cases+
@@ -26,7 +26,7 @@
      "an unprovable goal yields no solutions")))
 
 (defparameter +prolog-primitive-cases+
-  '((cl-prolog:prolog-succeeds-p
+  '((cl-prolog-kit:prolog-succeeds-p
       (ancestor abraham joseph)
       t
       "provable-p reports a reachable relation")
@@ -47,19 +47,19 @@
      (jacob joseph)
      "disjunction enumerates the solutions of each branch in order")
     (%solve-variable
-     (cl-prolog:call (ancestor abraham ?x))
+     (cl-prolog-kit:call (ancestor abraham ?x))
      (isaac jacob joseph)
      "call/1 proves a goal term like an ordinary relation")
     (%solve-result
-     (cl-prolog:findall ?a (ancestor ?a joseph) ?result)
+     (cl-prolog-kit:findall ?a (ancestor ?a joseph) ?result)
      ((jacob abraham isaac))
      "findall/3 aggregates every solution into a single list in proof order")
     (%solve-result
-     (cl-prolog:findall ?x (parent joseph ?x) ?result)
+     (cl-prolog-kit:findall ?x (parent joseph ?x) ?result)
      (())
      "findall/3 yields the empty list when the goal has no proof")
     (%not-provable-p
-     (cl-prolog:fail)
+     (cl-prolog-kit:fail)
      t
      "fail/0 never succeeds")
     (%not-provable-p
@@ -70,11 +70,11 @@
      (= abraham isaac)
      t
      "the = primitive fails when its arguments don't unify")
-    (cl-prolog:prolog-succeeds-p
-     (cl-prolog:true)
+    (cl-prolog-kit:prolog-succeeds-p
+     (cl-prolog-kit:true)
      t
      "true/0 always succeeds")
     (%not-provable-p
-     (cl-prolog:findall ?x (parent abraham ?x) (mismatch))
+     (cl-prolog-kit:findall ?x (parent abraham ?x) (mismatch))
      t
      "findall/3 fails when RESULT doesn't unify with the collected items")))

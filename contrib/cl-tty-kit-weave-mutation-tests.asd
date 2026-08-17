@@ -5,7 +5,7 @@
 ;;;; battery a unit test would use kills every mutation. This measures
 ;;;; whether the tests actually notice a wrong implementation, which
 ;;;; SB-COVER line/branch coverage alone cannot show. Load and run it
-;;;; explicitly from inside a Nix dev shell, which puts cl-prolog and
+;;;; explicitly from inside a Nix dev shell, which puts cl-prolog-kit and
 ;;;; cl-weave on CL_SOURCE_REGISTRY (see flake.nix
 ;;;; devShells.default.shellHook):
 ;;;;

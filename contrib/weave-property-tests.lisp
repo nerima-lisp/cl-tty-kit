@@ -11,7 +11,7 @@
 
 ;;; Advanced usage of nerima-lisp/cl-weave: property-based fuzzing of the two
 ;;; decoders that consume attacker-controlled PTY bytes, plus regression
-;;; coverage for contrib/cl-prolog-csi-grammar.lisp's DCG recognizer. Every
+;;; coverage for contrib/cl-prolog-kit-csi-grammar.lisp's DCG recognizer. Every
 ;;; decoder property below encodes the same contract each decoder already
 ;;; documents: malformed input signals a CL-TTY-KIT condition, never an
 ;;; unrelated Lisp error escaping from array indexing or type mismatches.
@@ -20,7 +20,7 @@
   (coerce (loop for code from #x40 to #x7E collect (code-char code)) 'string)
   "Every ECMA-48 CSI final byte (0x40-0x7E), as a GEN-CHARACTER alphabet.")
 
-(describe "cl-prolog DCG: ECMA-48 CSI grammar (contrib/cl-prolog-csi-grammar.lisp)"
+(describe "cl-prolog-kit DCG: ECMA-48 CSI grammar (contrib/cl-prolog-kit-csi-grammar.lisp)"
   (it "accepts a bare final byte"
     (expect (tty-csi-grammar:csi-sequence-valid-p "H")))
   (it "accepts a parameter plus a final byte"

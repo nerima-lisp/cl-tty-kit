@@ -73,7 +73,7 @@ Before tagging a release:
    under `examples/` — `t/package-readme-test.lisp` checks both mechanically, but
    review them by hand too.
 7. Smoke-test the examples on a clean SBCL environment if possible.
-8. If `flake.lock` moved (the `cl-prolog`/`cl-weave`/`paredit-cli`/`nixpkgs`
+8. If `flake.lock` moved (the `cl-prolog-kit`/`cl-weave`/`paredit-cli`/`nixpkgs`
    inputs), confirm `nix flake check` still passes against the new pins before
    tagging — see [Contrib](../guide/contrib.md). `--all-systems` is not used: `systems`
    is `[ "x86_64-linux" ]` alone, so there is no second platform for it to

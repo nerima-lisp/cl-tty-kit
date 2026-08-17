@@ -6,9 +6,9 @@
 ;;; See PACKAGE_STANDARD.md "asd の書き方".
 (in-package #:asdf-user)
 
-;; nerima-lisp/cl-prolog and nerima-lisp/cl-weave (see docs/src/guide/logic-engine.md
+;; nerima-lisp/cl-prolog-kit and nerima-lisp/cl-weave (see docs/src/guide/logic-engine.md
 ;; and t/sgr-prolog-oracle-test.lisp) are both used only by :CL-TTY-KIT/TEST below --
-;; cl-prolog as a differential-testing oracle cross-checking the hand-written
+;; cl-prolog-kit as a differential-testing oracle cross-checking the hand-written
 ;; SGR/CSI decoders, cl-weave as the test framework -- never by :CL-TTY-KIT
 ;; itself; those two stay test-only regardless of what :CL-TTY-KIT's own
 ;; :DEPENDS-ON grows to (see the note on its :DEPENDS-ON below). Neither is
@@ -150,7 +150,7 @@
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
   :serial t
-  :depends-on (#:cl-tty-kit #:cl-prolog #:cl-weave)
+  :depends-on (#:cl-tty-kit #:cl-prolog-kit #:cl-weave)
   :components ((:file "t/package")
                (:file "t/helpers-package-data")
                (:file "t/suite")

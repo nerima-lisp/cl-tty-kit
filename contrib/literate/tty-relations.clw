@@ -9,7 +9,7 @@
 
 @*Clauses to an external ISO Prolog. A clause written as a plain Lisp list of
 the shape |(head . body)|, with logic variables as |?|-prefixed symbols, is
-cl-prolog's own clause DSL shape (see the Rule DSL docs) and happens to match
+cl-prolog-kit's own clause DSL shape (see the Rule DSL docs) and happens to match
 the convention the maintained |cl-prolog2| library uses to drive a full
 external ISO Prolog. This module captures --- literately --- the one
 structural rewrite that lets such a clause cross from the Lisp-list shape to

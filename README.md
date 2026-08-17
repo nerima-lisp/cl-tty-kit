@@ -31,7 +31,7 @@ to a double-buffered render loop; see
 ## Install
 
 The core `cl-tty-kit` system is dependency-free, but its test system depends on
-[`cl-prolog`](https://github.com/nerima-lisp/cl-prolog) and
+[`cl-prolog-kit`](https://github.com/nerima-lisp/cl-prolog-kit) and
 [`cl-weave`](https://github.com/nerima-lisp/cl-weave), neither of which is on
 Quicklisp. Nix is the supported way to put both on `CL_SOURCE_REGISTRY`:
 
