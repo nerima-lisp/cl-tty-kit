@@ -6,10 +6,10 @@
 ;;; The imperative SGR decoder in src/sgr-parse.lisp classifies the colour
 ;;; parameters with a hand-written CASE. Here the same grammar is stated
 ;;; declaratively -- one relational fact per parameter -- and resolved by
-;;; nerima-lisp/cl-prolog. Cross-checking the two catches a drift in either
+;;; nerima-lisp/cl-prolog-kit. Cross-checking the two catches a drift in either
 ;;; direction: the decoder is the fast path, the relation is the independent
 ;;; specification. This keeps the data (the grammar) apart from the logic (the
-;;; decoder) and exercises CL-PROLOG:QUERY-PROLOG / PROLOG-SUCCEEDS-P as
+;;; decoder) and exercises CL-PROLOG-KIT:QUERY-PROLOG / PROLOG-SUCCEEDS-P as
 ;;; first-class code.
 ;;;
 ;;; (sgr-channel PARAM CHANNEL): PARAM touches CHANNEL. 38/48/58 set an extended
@@ -17,7 +17,7 @@
 ;;; --------------------------------------------------------------------------
 
 (defun %sgr-channel-grammar ()
-  (cl-prolog:prolog
+  (cl-prolog-kit:prolog
     ((sgr-channel 38 :fg))
     ((sgr-channel 39 :fg))
     ((sgr-channel 48 :bg))
@@ -50,4 +50,4 @@
             :to-equal '(58 59)))
   ;; A basic colour parameter is not part of the channel-selection grammar.
   (it "a basic colour parameter is not part of the channel-selection grammar"
-    (expect (not (cl-prolog:prolog-succeeds-p (%sgr-channel-grammar) '(sgr-channel 30 :fg))))))
+    (expect (not (cl-prolog-kit:prolog-succeeds-p (%sgr-channel-grammar) '(sgr-channel 30 :fg))))))

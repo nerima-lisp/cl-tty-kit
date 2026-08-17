@@ -1,7 +1,7 @@
 (in-package #:cl-tty-kit/test)
 
 (defun %genealogy-db ()
-  (cl-prolog:prolog
+  (cl-prolog-kit:prolog
     ((parent abraham isaac))
     ((parent isaac jacob))
     ((parent jacob joseph))
@@ -9,15 +9,15 @@
     ((ancestor ?a ?b) (parent ?a ?c) (ancestor ?c ?b))))
 
 (defun %many-solutions-db ()
-  (cl-prolog:prolog
+  (cl-prolog-kit:prolog
     ((value one))
     ((value two))
     ((value three))))
 
 (defun %project-variable (database goal variable)
   "Return VARIABLE's binding from every solution of GOAL against DATABASE."
-  (mapcar (lambda (solution) (cl-prolog:solution-binding variable solution))
-          (cl-prolog:query-prolog database goal)))
+  (mapcar (lambda (solution) (cl-prolog-kit:solution-binding variable solution))
+          (cl-prolog-kit:query-prolog database goal)))
 
 (defun %normalize-solutions (solutions)
   (sort (copy-list solutions)
@@ -33,7 +33,7 @@ SET-P (resolution order is not significant) or in proof order otherwise."
         (expect actual :to-equal expected))))
 
 (defun %not-provable-p (database goal)
-  (not (cl-prolog:prolog-succeeds-p database goal)))
+  (not (cl-prolog-kit:prolog-succeeds-p database goal)))
 
 (defun %solve-variable (database goal)
   (%project-variable database goal '?x))

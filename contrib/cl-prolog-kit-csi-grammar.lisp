@@ -1,13 +1,13 @@
-(defpackage #:cl-tty-kit/cl-prolog-csi-grammar
+(defpackage #:cl-tty-kit/cl-prolog-kit-csi-grammar
   (:use #:cl)
-  (:import-from #:cl-prolog #:make-rulebase #:def-dcg-rule #:dcg-star #:phrase)
+  (:import-from #:cl-prolog-kit #:make-rulebase #:def-dcg-rule #:dcg-star #:phrase)
   (:nicknames #:tty-csi-grammar)
   (:documentation
-   "Advanced usage of nerima-lisp/cl-prolog: a DCG recognizer for the ECMA-48 CSI
+   "Advanced usage of nerima-lisp/cl-prolog-kit: a DCG recognizer for the ECMA-48 CSI
 (Control Sequence Introducer) byte-class grammar. `src/input-decode.lisp`
 already decodes CSI sequences imperatively for the render loop's hot path;
 this module instead gives that same sequence shape a declarative grammar
-built from cl-prolog's `def-dcg-rule`/`phrase`, useful for validating or
+built from cl-prolog-kit's `def-dcg-rule`/`phrase`, useful for validating or
 documenting the shape independently of the hand-written decoder.
 
 A CSI sequence body (the bytes after ESC [) is, per ECMA-48 section 5.4:
@@ -18,7 +18,7 @@ final byte (0x40-0x7E).")
            #:tokenize-csi-body
            #:*csi-grammar*))
 
-(in-package #:cl-tty-kit/cl-prolog-csi-grammar)
+(in-package #:cl-tty-kit/cl-prolog-kit-csi-grammar)
 
 (defun %csi-byte-kind (char)
   "Classify CHAR into an ECMA-48 CSI byte class, or NIL if it fits none."

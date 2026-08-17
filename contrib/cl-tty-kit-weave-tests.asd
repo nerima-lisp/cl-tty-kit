@@ -3,7 +3,7 @@
 ;;;; Property-based fuzz tests built on nerima-lisp/cl-weave, exercising the
 ;;;; UTF-8 and input decoders against arbitrary octets plus the DCG-based CSI
 ;;;; grammar. Load and run it explicitly from inside a Nix dev shell, which
-;;;; puts cl-prolog and cl-weave on CL_SOURCE_REGISTRY (see flake.nix
+;;;; puts cl-prolog-kit and cl-weave on CL_SOURCE_REGISTRY (see flake.nix
 ;;;; devShells.default.shellHook):
 ;;;;
 ;;;;   nix develop
@@ -14,7 +14,7 @@
   :description "Property-based fuzz tests for cl-tty-kit, built on nerima-lisp/cl-weave."
   :author "nerima-lisp"
   :license "MIT"
-  :depends-on (#:cl-tty-kit #:cl-weave #:cl-tty-kit-cl-prolog-csi-grammar)
+  :depends-on (#:cl-tty-kit #:cl-weave #:cl-tty-kit-cl-prolog-kit-csi-grammar)
   :components ((:file "weave-property-tests"))
   :perform (asdf:test-op (op system)
              (declare (ignore op system))

@@ -13,16 +13,16 @@
   # inflating flake.lock and rebuilding identical derivations.
 
   # cl-tty-kit.asd names one real (non-test) sibling dependency,
-  # cl-codec-kit (declared further below, near cl-parser-kit); cl-prolog and
+  # cl-codec-kit (declared further below, near cl-parser-kit); cl-prolog-kit and
   # cl-weave are both :cl-tty-kit/test-only dependencies (see cl-tty-kit.asd
   # :depends-on and cl-tty-kit/test :depends-on). None of the three is
   # distributed by Quicklisp, and this project keeps no vendored copy of any:
   # these flake inputs are the only source of all three, put on
   # CL_SOURCE_REGISTRY by every app/check/devShell below.
-  inputs.cl-prolog.url = "github:nerima-lisp/cl-prolog/v1.4.3";
-  inputs.cl-prolog.inputs.nixpkgs.follows = "nixpkgs";
-  inputs.cl-prolog.inputs.cl-weave.follows = "cl-weave";
-  inputs.cl-prolog.inputs.paredit-cli.follows = "paredit-cli";
+  inputs.cl-prolog-kit.url = "github:nerima-lisp/cl-prolog-kit/v1.5.0";
+  inputs.cl-prolog-kit.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.cl-prolog-kit.inputs.cl-weave.follows = "cl-weave";
+  inputs.cl-prolog-kit.inputs.paredit-cli.follows = "paredit-cli";
 
   inputs.cl-weave.url = "github:nerima-lisp/cl-weave/v1.3.0";
   inputs.cl-weave.inputs.nixpkgs.follows = "nixpkgs";
@@ -78,11 +78,11 @@
 
   # contrib/cl-parser-kit-csi-grammar.lisp's dependency: an opt-in second,
   # independent declarative specification of the ECMA-48 CSI byte-class
-  # grammar (see contrib/cl-prolog-csi-grammar.lisp for the first, built on
-  # cl-prolog's DCG support instead). Never part of the core build/CI.
+  # grammar (see contrib/cl-prolog-kit-csi-grammar.lisp for the first, built on
+  # cl-prolog-kit's DCG support instead). Never part of the core build/CI.
   inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit/v1.1.1";
   inputs.cl-parser-kit.inputs.nixpkgs.follows = "nixpkgs";
-  inputs.cl-parser-kit.inputs.cl-prolog.follows = "cl-prolog";
+  inputs.cl-parser-kit.inputs.cl-prolog-kit.follows = "cl-prolog-kit";
   inputs.cl-parser-kit.inputs.cl-weave.follows = "cl-weave";
   inputs.cl-parser-kit.inputs.paredit-cli.follows = "paredit-cli";
 
@@ -100,7 +100,7 @@
     {
       self,
       nixpkgs,
-      cl-prolog,
+      cl-prolog-kit,
       cl-weave,
       cl-codec-kit,
       cl-concurrent-kit,
@@ -161,7 +161,7 @@
       # system loading, not an optional contrib layer). cl-boundary-kit,
       # cl-date-kit and cl-host-kit are here only because ASDF must load
       # cl-concurrent-kit's own closure to load cl-concurrent-kit -- no
-      # cl-tty-kit source references any of the three. cl-prolog and cl-weave
+      # cl-tty-kit source references any of the three. cl-prolog-kit and cl-weave
       # are test-only; cl-parser-kit is only a contrib/ dependency, but
       # sharing one registry string keeps every entry point able to load
       # contrib/ interactively without a separate CL_SOURCE_REGISTRY variant
@@ -171,7 +171,7 @@
       # express the same ASDF closure to two different consumers, and a
       # dependency added to one and not the other fails only at whichever
       # entry point the other serves.
-      clSourceRegistryFor = "${cl-codec-kit}//:${cl-concurrent-kit}//:${cl-boundary-kit}//:${cl-date-kit}//:${cl-host-kit}//:${cl-prolog}//:${cl-weave}//:${cl-parser-kit}//:";
+      clSourceRegistryFor = "${cl-codec-kit}//:${cl-concurrent-kit}//:${cl-boundary-kit}//:${cl-date-kit}//:${cl-host-kit}//:${cl-prolog-kit}//:${cl-weave}//:${cl-parser-kit}//:";
 
       # cl-codec-kit as a buildASDFSystem lib for cl-tty-kit's own :depends-on
       # (see cl-tty-kit.asd). Built directly from the flake = false source
@@ -246,7 +246,7 @@
 
       # Runs a repository script against the current working directory (so
       # local edits are picked up without rebuilding a Nix package), with
-      # CL_SOURCE_REGISTRY pointed at this flake's own cl-prolog/cl-weave
+      # CL_SOURCE_REGISTRY pointed at this flake's own cl-prolog-kit/cl-weave
       # inputs so cl-tty-kit.asd's :depends-on resolves without any vendored
       # copy on disk.
       # `meta.description` is what `nix flake show` renders and what
@@ -323,7 +323,7 @@
         {
           # lispLibs carries cl-codec-kit and cl-concurrent-kit,
           # :cl-tty-kit's two real (non-test) :depends-on entries (see
-          # cl-tty-kit.asd) -- cl-prolog and cl-weave remain
+          # cl-tty-kit.asd) -- cl-prolog-kit and cl-weave remain
           # :cl-tty-kit/test-only dependencies, resolved instead through
           # CL_SOURCE_REGISTRY (clSourceRegistryFor) everywhere else.
           cl-tty-kit = pkgs.sbcl.buildASDFSystem {
@@ -434,7 +434,7 @@
               treefmtEval.${system}.config.build.wrapper
               paredit-cli.packages.${system}.default
             ];
-            # The only place cl-prolog/cl-weave come from: cl-tty-kit.asd's
+            # The only place cl-prolog-kit/cl-weave come from: cl-tty-kit.asd's
             # :depends-on cannot resolve either without this.
             shellHook = ''
               export CL_SOURCE_REGISTRY="$PWD//:${clSourceRegistryFor}''${CL_SOURCE_REGISTRY:-}"

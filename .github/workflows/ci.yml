@@ -92,7 +92,7 @@ jobs:
           if-no-files-found: error
 
   # Separate job because it needs the network *inside* the build: contrib/
-  # pulls Quicklisp (for clweb) on top of cl-prolog/cl-weave from this flake's
+  # pulls Quicklisp (for clweb) on top of cl-prolog-kit/cl-weave from this flake's
   # inputs, and the Nix sandbox has none.
   #
   # continue-on-error because contrib is opt-in and isolated from the core
@@ -124,7 +124,7 @@ jobs:
               --eval "(quicklisp-quickstart:install)"
           '
 
-      # `nix develop` puts cl-prolog/cl-weave from this flake's inputs on
+      # `nix develop` puts cl-prolog-kit/cl-weave from this flake's inputs on
       # CL_SOURCE_REGISTRY (see flake.nix devShells.default.shellHook).
       - name: Run contrib verification
         run: nix develop --command sbcl --script contrib/verify-contrib.lisp

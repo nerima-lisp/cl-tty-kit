@@ -25,7 +25,7 @@
                                 (merge-pathnames #P"../cl-date-kit/" sibling-root)
                                 (merge-pathnames #P"../cl-host-kit/" sibling-root)
                                 (merge-pathnames #P"../cl-weave/" sibling-root)
-                                (merge-pathnames #P"../cl-prolog/" sibling-root)
+                                (merge-pathnames #P"../cl-prolog-kit/" sibling-root)
                                 (merge-pathnames #P"../cl-parser-kit/" sibling-root)))))
     (asdf/source-registry:initialize-source-registry
      `(:source-registry

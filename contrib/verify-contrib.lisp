@@ -1,14 +1,14 @@
 ;;;; Verify the optional contrib integrations. Run from the project root
-;;;; inside a Nix dev shell, which puts nerima-lisp/cl-prolog and
+;;;; inside a Nix dev shell, which puts nerima-lisp/cl-prolog-kit and
 ;;;; nerima-lisp/cl-weave on CL_SOURCE_REGISTRY (see flake.nix
 ;;;; devShells.default.shellHook):
 ;;;;
 ;;;;   nix develop --command sbcl --script contrib/verify-contrib.lisp
 ;;;;
 ;;;; It exercises clweb (via tangling the literate module) from Quicklisp,
-;;;; plus the nerima-lisp/cl-prolog DCG grammar, the nerima-lisp/cl-parser-kit
+;;;; plus the nerima-lisp/cl-prolog-kit DCG grammar, the nerima-lisp/cl-parser-kit
 ;;;; combinator grammar, and nerima-lisp/cl-weave property tests. The
-;;;; cl-prolog/cl-parser-kit/cl-weave checks are skipped, not failed, when
+;;;; cl-prolog-kit/cl-parser-kit/cl-weave checks are skipped, not failed, when
 ;;;; ASDF cannot find the relevant system (i.e. outside a Nix dev shell with
 ;;;; CL_SOURCE_REGISTRY pointed at none of them).
 
@@ -38,18 +38,18 @@
                 (equal '(:- (ancestor ?a ?b) (parent ?a ?b))
                        (funcall fn '((ancestor ?a ?b) (parent ?a ?b))))))))
 
-;;; --- nerima-lisp/cl-prolog DCG grammar --------------------------------------
-(if (asdf:find-system :cl-prolog nil)
+;;; --- nerima-lisp/cl-prolog-kit DCG grammar --------------------------------------
+(if (asdf:find-system :cl-prolog-kit nil)
     (progn
       (handler-bind ((warning #'muffle-warning))
-        (asdf:load-system :cl-tty-kit-cl-prolog-csi-grammar))
-      (check "cl-prolog DCG grammar accepts a well-formed CSI body"
+        (asdf:load-system :cl-tty-kit-cl-prolog-kit-csi-grammar))
+      (check "cl-prolog-kit DCG grammar accepts a well-formed CSI body"
              (funcall (read-from-string "tty-csi-grammar:csi-sequence-valid-p")
                       "38;5;196m"))
-      (check "cl-prolog DCG grammar rejects an unterminated CSI body"
+      (check "cl-prolog-kit DCG grammar rejects an unterminated CSI body"
              (not (funcall (read-from-string "tty-csi-grammar:csi-sequence-valid-p")
                            "1;1"))))
-    (format t "~&[SKIP] cl-prolog not on CL_SOURCE_REGISTRY (run inside `nix develop`)~%"))
+    (format t "~&[SKIP] cl-prolog-kit not on CL_SOURCE_REGISTRY (run inside `nix develop`)~%"))
 
 ;;; --- nerima-lisp/cl-parser-kit combinator grammar ---------------------------
 (if (asdf:find-system :cl-parser-kit nil)
@@ -65,7 +65,7 @@
       ;; The two independent grammars -- Prolog DCG and parser combinators --
       ;; must agree whenever both are loaded, the same differential-testing
       ;; contract SGR-PROLOG-ORACLE holds against the hand-written decoder.
-      (when (asdf:find-system :cl-prolog nil)
+      (when (asdf:find-system :cl-prolog-kit nil)
         (dolist (case '("1;1H" "38;5;196m" "?25h" "" "1;1" "1H2" "A" "9x;1"
                         ">0;276;0c" "1;1;104;200u"))
           (check (format nil "grammars agree on ~S" case)

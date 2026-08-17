@@ -6,8 +6,8 @@ and navigation; each group links to the guide page that carries the depth.
 
 !!! tip "Scope"
     The core toolkit is a single package, `cl-tty-kit`. The test suite's
-    embedded logic engine is [`nerima-lisp/cl-prolog`](https://github.com/nerima-lisp/cl-prolog)
-    itself, used directly under its own `cl-prolog` package — see
+    embedded logic engine is [`nerima-lisp/cl-prolog-kit`](https://github.com/nerima-lisp/cl-prolog-kit)
+    itself, used directly under its own `cl-prolog-kit` package — see
     [Logic Engine (Prolog)](../guide/logic-engine.md).
 
 ## Conditions

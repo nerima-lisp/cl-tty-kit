@@ -2,8 +2,8 @@
 ;;;;
 ;;;; A parser-combinator recognizer for the ECMA-48 CSI byte-class grammar,
 ;;;; built on nerima-lisp/cl-parser-kit -- a second, independent declarative
-;;;; specification of the same grammar cl-tty-kit-cl-prolog-csi-grammar
-;;;; recognizes via cl-prolog's DCG support. Load it explicitly from inside
+;;;; specification of the same grammar cl-tty-kit-cl-prolog-kit-csi-grammar
+;;;; recognizes via cl-prolog-kit's DCG support. Load it explicitly from inside
 ;;;; a Nix dev shell, which puts cl-parser-kit on CL_SOURCE_REGISTRY (see
 ;;;; flake.nix devShells.default.shellHook):
 ;;;;
