@@ -80,7 +80,7 @@
   # independent declarative specification of the ECMA-48 CSI byte-class
   # grammar (see contrib/cl-prolog-kit-csi-grammar.lisp for the first, built on
   # cl-prolog-kit's DCG support instead). Never part of the core build/CI.
-  inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit/v1.1.1";
+  inputs.cl-parser-kit.url = "github:nerima-lisp/cl-parser-kit/88d0f0c42d35904010936314191ebf62ac401aa1";
   inputs.cl-parser-kit.inputs.nixpkgs.follows = "nixpkgs";
   inputs.cl-parser-kit.inputs.cl-prolog-kit.follows = "cl-prolog-kit";
   inputs.cl-parser-kit.inputs.cl-weave.follows = "cl-weave";
