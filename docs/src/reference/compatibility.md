@@ -34,7 +34,7 @@ in isolation:
 Broader multi-implementation support is a possible future direction — see
 [Roadmap](../project/roadmap.md) — but is explicitly deferred today: it would require
 shipping the Unicode tables the library currently borrows from `sb-unicode`,
-which runs against the project's intentionally-small ethos. Today the
+which runs against the project's small scope. Today the
 supported and tested target is SBCL, on both Linux and macOS (the CI matrix
 runs both).
 
@@ -65,7 +65,7 @@ this contract is part of.
   partially-working build.
 - If you only need the pure logic (rendering, layout, color conversions, the
   logic engine) without any OS-facing terminal control, that code is already
-  written portably; it simply isn't packaged for or tested against other
+  written portably; it isn't packaged for or tested against other
   implementations today.
 
 See also [Roadmap](../project/roadmap.md) for the project's explicit list of what stays

@@ -55,7 +55,7 @@ in-scope gap was implemented; what remains deferred, with rationale:
   already covers bitmap output on the widely supported format; a second
   image mechanism would duplicate it.
 - **Non-SBCL portability** — would require shipping the Unicode tables the
-  library borrows from `sb-unicode`, against the intentionally-small ethos.
+  library borrows from `sb-unicode`, which limits portability beyond SBCL.
 
 Every decodable/feasible item from the audit has been implemented, including
 grapheme-cluster

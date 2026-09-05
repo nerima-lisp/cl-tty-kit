@@ -101,7 +101,7 @@ without turning into a UI framework or a shell.
 ## Status
 
 - **stable**: the public API is covered by the semantic-versioning guarantee below
-- requires SBCL (see [Compatibility](reference/compatibility.md)) and is intentionally small
+- requires SBCL (see [Compatibility](reference/compatibility.md)) and has a small scope
 - test-backed public API, with runnable examples in `examples/`
 - PTY support is limited to SBCL
 - maintainer-grade local quality gates are documented in [Quality Gates](project/quality-gates.md)

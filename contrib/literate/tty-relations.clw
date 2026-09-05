@@ -34,7 +34,7 @@ becomes an ISO rule, written |(:- head goal...)|. That is the whole of it.
         @<Build an ISO rule from |head| and |body|@>
         head)))
 
-@ The rule constructor is trivial, but naming it keeps the intent legible and
+@ The rule constructor is small, but naming it keeps the intent legible and
 lets the weave point at it.
 
 @<Build an ISO rule...@>=(list* :- head body)

@@ -3,7 +3,7 @@
 `cl-tty-kit` builds terminal output around a **pure screen model**: a fixed-size
 grid of styled cells you mutate freely, then hand to a renderer that turns it
 into ANSI. Nothing here touches the OS — a `screen` is an ordinary Lisp value,
-so it is trivial to build, snapshot, diff, and test.
+so it is easy to build, snapshot, diff, and test.
 
 This page walks the whole pipeline: the `cell`/`screen` data model, the style
 system, the screen mutation API, box drawing, and the render/diff functions that

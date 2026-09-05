@@ -8,7 +8,7 @@ side effects. Build the string, then hand it to `screen-write-string` (see
 further widgets encode bitmap images as terminal escape sequences.
 
 Because they are just functions returning strings, widgets compose freely and are
-trivial to test.
+easy to test.
 
 !!! note "Package"
 

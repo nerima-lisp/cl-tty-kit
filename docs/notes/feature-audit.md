@@ -300,7 +300,7 @@ a decodable capability left on the table:
   rendering escapes is in scope; manipulating the terminal window is not.
 - **Non-SBCL portability** — would require shipping Unicode
   category/width/grapheme tables the library currently borrows from
-  `sb-unicode`, against the intentionally-small ethos. Recorded as a
+  `sb-unicode`, which limits portability beyond SBCL. Recorded as a
   standing [Roadmap](../src/project/roadmap.md) item; see also [Compatibility](../src/reference/compatibility.md).
 
 Everything marked **GAP → DONE** is covered by tests. The simple
