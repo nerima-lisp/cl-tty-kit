@@ -63,7 +63,7 @@
   ;; longer a dependency-free package before this note was written. This
   ;; :DEPENDS-ON is not held to an unconditional dependency-free constraint --
   ;; other nerima-lisp org packages (siblings under the nerima-lisp GitHub
-  ;; org) may be added here deliberately, when one genuinely replaces
+  ;; org) may be added here when one replaces
   ;; hand-rolled logic in this codebase, the same way cl-codec-kit did for the
   ;; UTF-8 codec. SB-POSIX is still bundled with SBCL and loaded directly by
   ;; the SBCL-only raw-mode implementation, so it stays out of :DEPENDS-ON to
