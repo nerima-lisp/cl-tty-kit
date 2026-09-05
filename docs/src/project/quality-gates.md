@@ -1,7 +1,7 @@
 # Quality Gates
 
-`cl-tty-kit` ships a small API surface, but the bar for changes stays high.
-This page is the canonical definition of the repository-local gates a patch
+`cl-tty-kit` ships a small API surface.
+This page defines the repository-local gates a patch
 must satisfy before it is treated as release-ready.
 
 ## Functional requirements
@@ -77,56 +77,15 @@ nix build --option sandbox true .#checks.x86_64-linux.default
 
 ## Macro usage and file organization
 
-`defmacro` is for genuine compile-time shape: a family of near-identical
-top-level definitions (`define-ansi-function`,
-`define-tty-kit-condition`/`define-formatted-tty-kit-condition`,
-`%define-rect-split`, `%define-osc-color-query`) or a binding form that must
-run its body in a specific dynamic extent (`with-terminal-session`,
-`with-raw-mode`). These remain valid examples of macro use, but they are not
-the only justification: an internal helper that is never passed as a
-first-class value (never `#'name`/`(function name)`, never handed to
-`mapcar`/`funcall`/`apply`, and never reached through
-`symbol-function`/`fdefinition`) and never recursive (and never uses
-`return-from` against its own name) should be a `defmacro`, not a `defun`.
-This applies across all of `src/` going forward, not to a fixed list of
-already-converted files -- see
-[Architecture](../reference/architecture.md#notable-boundaries) for the
-files this has already been applied to and the `let`-binding expansion
-shape every such macro uses.
+Use `defmacro` for compile-time definition helpers and scoped binding forms
+that must control the dynamic extent of their body. Use `defun` for ordinary
+reusable helpers, especially when they are recursive, passed as values, or
+replaced through a function cell in tests. Check macro expansion and the
+affected tests whenever changing a macro.
 
-This does **not** apply to any of `src/`'s exported/public functions:
-breaking `#'name`/`funcall`/`apply` for a downstream `nerima-lisp` consumer
-that calls into this library's public API (confirmed: `cl-cc-javascript`) is
-still out of scope. It also does not apply to anything recursive, nor to a
-helper the test suite reaches through its function cell: `t/renderer-test.lisp`
-rebinds `(symbol-function 'cl-tty-kit::%cell-equal-p)` to count dirty-region
-fast-path calls, and `t/pty-test.lisp`'s `with-function-overrides` stubs
-`%wait-for-process-exit`/`%close-pty-process` the same way. A macro is expanded
-inline at compile time and has no function cell for that to reach, so the stub
-either fails outright or silently stops intercepting -- and the assertion built
-on it silently stops proving anything.
-
-Before landing such a conversion, verify all three of the following. These
-are drawn from a real incident: a prior broad function-to-macro sweep
-introduced 5 distinct bugs, none caught by `compile-file` -- every one of
-them only surfaced by actually running the test suite.
-
-1. **Compile-time-literal risk**: is the helper ever the target of a `setf`
-   on a typed struct slot where a caller might pass a compile-time-constant
-   literal? Converting that helper to a macro can silently turn a
-   runtime-only validation into a compile-time build failure.
-2. **Hygiene / capture risk**: could the macro's own internal `let`/binding
-   forms shadow a name that appears free in a spliced, unevaluated caller
-   argument expression?
-3. **Load-order risk**: is every caller's file guaranteed to load AFTER this
-   macro's definition, under this project's `:serial t` ASDF ordering? A
-   macro, unlike a `defun`, cannot tolerate a forward reference -- the
-   caller's file must already come later in `cl-tty-kit.asd`'s
-   `:components` list.
-
-Duplication whose only variation is a runtime value, and where any of the
-three checks above fails, gets a plain (optionally parameterized) function
-instead.
+Public API functions and test seams that use function cells remain functions;
+macros are expanded at compile time and cannot be replaced through a function
+cell.
 
 Files split by concern, not by line count. A long file whose forms serve one
 cohesive purpose (a single data table, a single parser, a single solver) is

@@ -250,7 +250,7 @@ columns within the body — and draws a titled panel into each region:
   (render-screen screen))
 ```
 
-This is the canonical layout shape: split the root into rows, split a body row
+This is the standard layout shape: split the root into rows, split a body row
 into columns, draw a bordered panel per region, and place each region's content
 inside the panel's inset interior. Swapping `(:length 3)` for `(:percentage 20)`
 or `(:min 5)` reflows the whole dashboard without touching any drawing code.

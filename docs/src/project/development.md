@@ -73,7 +73,7 @@ nix run .#coverage
 
 `nix run .#verify` runs the repository-local tests, the example smoke
 checks, and the fresh source-registry packaging smoke in one pass. The
-canonical test package is `cl-tty-kit/test`, and the tests live in `t/`.
+test package is `cl-tty-kit/test`, and the tests live in `t/`.
 
 If you want to work from a REPL, load the bootstrap first and then the core
 system, as described in [Getting Started](../getting-started.md):

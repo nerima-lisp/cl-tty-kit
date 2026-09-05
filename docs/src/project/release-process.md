@@ -63,7 +63,7 @@ Before tagging a release:
    ```
 
 4. Draft the release notes. There is no `CHANGELOG.md` in this repository: the
-   GitHub Release description is the only canonical history. Read
+   GitHub Release description is the release history. Read
    `git log <previous-tag>..HEAD` and select the entries by "does a user of
    this package have to change their own code" — see "Release notes" below.
    The text is pasted in after the release job goes green.

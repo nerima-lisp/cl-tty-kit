@@ -23,7 +23,7 @@ the default has no PATH, and any `sh -c' body calling a non-builtin exits 127.
 That stays invisible on a developer machine because sh then falls back to a
 compiled-in default PATH that happens to contain the binary; inside the Nix build
 sandbox, and therefore in CI, it does not. Prefer shell builtins where possible
-and this environment where a real binary is genuinely required."
+and this environment where a real binary is required."
   (sb-ext:posix-environ))
 
 #+sbcl

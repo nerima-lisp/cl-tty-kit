@@ -83,7 +83,7 @@ that is %VALIDATE-OCTET-VECTOR's job, called separately by every caller here."
   "Decode the complete UTF-8 prefix of octet VECTOR.
 Return two values: the decoded string and a fresh octet vector holding any
 incomplete trailing multibyte sequence (empty when VECTOR ends on a
-boundary). Genuinely invalid octets in the prefix still signal
+boundary). Invalid octets in the prefix still signal
 INVALID-UTF8-SEQUENCE."
   `(let ((octets ,octets))
      (setf octets (%coerce-octet-vector octets))

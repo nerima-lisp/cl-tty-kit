@@ -26,7 +26,7 @@ multi-implementation (non-SBCL) support.
 
 Depending on a `nerima-lisp` sibling is not itself out of scope: `cl-tty-kit`'s
 core `:depends-on` already carries `cl-codec-kit` (the UTF-8 codec) and
-`cl-concurrent-kit` (raw mode's lock), because each genuinely replaces logic
+`cl-concurrent-kit` (raw mode's lock), because each replaces logic
 this library would otherwise hand-roll. The projects below are excluded on
 their own merits — a dependency cycle, or no call site — not by a blanket rule
 against org dependencies.
