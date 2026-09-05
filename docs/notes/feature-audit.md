@@ -1,12 +1,8 @@
 # Feature Audit
 
-This page is the **enumeration ("洗い出し") phase**: a systematic sweep of the
-capability space of a terminal toolkit, cross-referenced against the
-established libraries in the field (notcurses, crossterm, tcell/termbox,
-blessed, Python `rich`/`prompt_toolkit`, ncurses), with each capability
-marked against `cl-tty-kit`'s actual public API. It is a maintainer
-record kept under `docs/notes/`, not a published page: the org DOCS_STANDARD
-keeps audit records out of `docs/src/`.
+This maintainer record lists terminal-toolkit capabilities and marks them
+against `cl-tty-kit`'s public API. It is kept under `docs/notes/`, not
+published under `docs/src/`.
 
 Status legend:
 
@@ -18,8 +14,7 @@ Status legend:
 
 The guiding constraint (see [Roadmap](../src/project/roadmap.md)) is *terminal primitives,
 SBCL-only, small and testable* — not an application framework.
-"Comprehensive" is measured against that boundary, not against full terminal
-emulation.
+The list is limited to that boundary, not full terminal emulation.
 
 ---
 
@@ -186,9 +181,8 @@ See [Logic Engine](../src/guide/logic-engine.md) for the full API.
 
 ## Second pass — competitive research (2026-07-20)
 
-The first pass above was from domain knowledge. To make the enumeration
-genuinely comprehensive rather than recalled, a second pass surveyed the
-*actual* published capability surfaces of the major terminal libraries —
+The second pass surveyed the published capability surfaces of the major
+terminal libraries —
 `crossterm`/`ratatui` (Rust), `notcurses` (C), `tcell`/`termbox2` (Go), and
 `rich`/`prompt_toolkit`/`blessed` (Python) — and diffed each capability
 against the then-current public API. The diff surfaced primitives that
@@ -219,9 +213,8 @@ them were then implemented:
 
 ## Third pass — closing the feasible deferrals (2026-07-20)
 
-A review of the second-pass "Deferred" list separated items that were
-genuinely out of scope from ones deferred only for expected effort. The
-feasible ones were then implemented:
+A review of the second-pass "Deferred" list separated out-of-scope items
+from items deferred for expected effort. The feasible ones were implemented:
 
 - **Kitty keyboard event kinds** — `key-event-kind` (:PRESS / :REPEAT /
   :RELEASE), decoded from the CSI-u (and general CSI) `MODIFIER:EVENT`
@@ -319,9 +312,9 @@ a decodable capability left on the table:
 
 Everything marked **GAP → DONE**, and every item under the second- through
 fifth-pass lists, was implemented after enumeration and is covered by tests.
-A later category-by-category re-check against the competitor inventory found
-no remaining in-scope, non-padding primitive gap: the trivially-derivable
+A later category-by-category re-check found no remaining in-scope primitive
+gap: the trivially-derivable
 candidates (`rgb-to-hex`, an `ansi-cursor-home` alias of `move 1;1`, legacy
 X10 mouse decoding, hardware tab stops) were rejected as padding, and the
 only substantive candidate (XTWINOPS) is the window-manipulation boundary
-above. The enumeration is exhausted down to these principled boundaries.
+above. These are the remaining boundaries for this audit.

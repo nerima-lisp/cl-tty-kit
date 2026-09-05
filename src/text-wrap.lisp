@@ -16,10 +16,6 @@ its own becomes a lone over-width chunk rather than causing an endless loop."
                   (setf index next)))
        (nreverse chunks))))
 
-;; Stays a DEFUN, not a DEFMACRO -- it is
-;; contrib/weave-mutation-tests.lisp's third flagship mutation-testing
-;; example; see src/clamp.lisp's CLAMP comment for why a DEFMACRO's
-;; backquote-template body cannot be mutated and re-evaluated the same way.
 (defun %split-on-char (string char)
   (let ((parts '())
         (start 0)

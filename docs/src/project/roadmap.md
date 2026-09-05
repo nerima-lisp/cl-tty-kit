@@ -45,7 +45,7 @@ testing seam, not a PTY-shaped runner.
 
 ## Deferred capabilities from the feature audit
 
-The [feature audit note](https://github.com/nerima-lisp/cl-tty-kit/blob/main/docs/notes/feature-audit.md) is the comprehensive enumeration of the
+The [feature audit note](https://github.com/nerima-lisp/cl-tty-kit/blob/main/docs/notes/feature-audit.md) lists the
 terminal-toolkit capability space, marking each item DONE / GAP / DEFERRED
 across three research passes (domain knowledge, a diff against
 crossterm/ratatui, notcurses, tcell/termbox2, and Python's
@@ -61,8 +61,8 @@ deferred, with rationale:
 - **Non-SBCL portability** — would require shipping the Unicode tables the
   library borrows from `sb-unicode`, against the intentionally-small ethos.
 
-Every decodable/feasible item from the audit has been implemented — across
-nine waves and five enumeration passes — including grapheme-cluster
+Every decodable/feasible item from the audit has been implemented, including
+grapheme-cluster
 segmentation, constraint-based `layout-split`, the full kitty input surface
 (event kinds, associated text, shifted/base-layout alternates), the CSI
 in-place editing escapes, and `format-sixel` graphics. What remains above is

@@ -1,29 +1,5 @@
 (in-package #:cl-tty-kit)
 
-;;; --------------------------------------------------------------------------
-;;; Tick-loop driver
-;;;
-;;; This file follows the split examples/renderer-loop.lisp and
-;;; examples/event-loop.lisp already establish for this repository: a PURE
-;;; state-advance function (old state in, new state out, no I/O, no wall
-;;; clock) kept separate from a thin loop that does real I/O. TICK-LOOP-RUN is
-;;; the bounded, deterministic side of that split -- it calls ADVANCE exactly
-;;; N times and returns, so a downstream app's tests can assert on an exact
-;;; final state or frame sequence without a real terminal or a clock.
-;;; TICK-LOOP-RUN-REALTIME is the thin real-IO side: the same per-tick step,
-;;; paced to a target frame interval and writing each frame to a real stream,
-;;; until a caller-supplied STOP predicate says to quit.
-;;;
-;;; Both modes call %TICK-LOOP-ADVANCE for every tick, so "what one tick does"
-;;; has exactly one definition; the bounded/real-time distinction is only in
-;;; how ticks are paced and where the frame output goes.
-;;;
-;;; Resizing is deliberately out of scope here. This repository polls
-;;; TERMINAL-SIZE rather than trapping SIGWINCH (see terminal-size.lisp), so a
-;;; caller's own POLL function is the place to wait for input and observe
-;;; terminal changes; TICK-LOOP-RUN-REALTIME does not invent a signal handler.
-;;; --------------------------------------------------------------------------
-
 (define-simple-assert %assert-tick-loop-function (name value)
   (functionp value)
   "Tick loop ~A ~S must be a function." name value)
