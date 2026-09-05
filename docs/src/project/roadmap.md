@@ -43,15 +43,11 @@ application-level concerns with no current call site in this primitives
 library, and `cl-boundary-kit`'s own docs are explicit that its process boundary is a
 testing seam, not a PTY-shaped runner.
 
-## Deferred capabilities from the feature audit
+## Deferred capabilities
 
-The [feature audit note](https://github.com/nerima-lisp/cl-tty-kit/blob/main/docs/notes/feature-audit.md) lists the
-terminal-toolkit capability space, marking each item DONE / GAP / DEFERRED
-across three research passes (domain knowledge, a diff against
-crossterm/ratatui, notcurses, tcell/termbox2, and Python's
-rich/prompt_toolkit/blessed, plus a pass closing the feasible deferrals).
-Every in-scope gap it found was implemented; what remains deliberately
-deferred, with rationale:
+The [feature audit note](https://github.com/nerima-lisp/cl-tty-kit/blob/main/docs/notes/feature-audit.md) records
+the terminal-toolkit capabilities reviewed against this library. Every
+in-scope gap was implemented; what remains deferred, with rationale:
 
 - **Wide-cell skip flag** — a design alternative to the spacer-cell model
   already used for double-width glyphs, not a capability gap.

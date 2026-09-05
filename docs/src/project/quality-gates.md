@@ -173,11 +173,9 @@ Quicklisp flakiness never blocks a core merge.
 See [Release Process](release-process.md) for how this gate fits into
 cutting a tagged release.
 
-## Production readiness
+## Release criteria
 
-"Production ready" is not a separate, informal judgment call layered on top
-of the gates above -- it is what passing all of them, together, means. A
-release is production ready when every one of these holds simultaneously:
+A release meets the repository's criteria when all of these hold:
 
 - **API contract**: the 1.x line has a semantic-versioning guarantee (see
   `README.md`'s "API stability" section), checked mechanically against the
@@ -185,25 +183,20 @@ release is production ready when every one of these holds simultaneously:
 - **Reproducible build**: `nix build` produces the hermetic package from a
   flake-pinned source registry, with no reliance on host ASDF configuration
   or caches (see the verification gate above)
-- **CI, not just local**: `.github/workflows/ci.yml` runs the same
-  `nix flake check` on every push, so the declared platform is gated by a
-  machine nobody can forget to run
+- **CI**: `.github/workflows/ci.yml` runs the same `nix flake check` on every
+  push, so the declared platform is checked independently of local runs
 - **Bounded execution**: every entry point (test, example, coverage,
   benchmark, verify) runs under an explicit OS-level timeout, so a hang is a
   failed run, not a stuck CI job -- see "Non-functional requirements" above
-- **No backward-compatibility debt**: the change-rejection criteria above
-  reject shims and dual code paths on sight, so the tree carries no
-  deprecated surface waiting to be a future incident
+- **Compatibility**: the change-rejection criteria above reject unnecessary
+  shims and dual code paths, keeping the supported surface explicit
 - **Documented contract**: the documentation gate above keeps the API
-  reference, examples list, and release notes mechanically or procedurally tied
-  to the actual exported surface, so "production ready" also means
-  "explainable to a new integrator without reading the source"
+  reference, examples list, and release notes tied to the actual exported
+  surface
 - **Security and support policy**: the org-wide
   [security policy](https://github.com/nerima-lisp/.github/blob/main/SECURITY.md)
   and [support policy](https://github.com/nerima-lisp/.github/blob/main/SUPPORT.md)
   apply to this repository, so a vulnerability report has a defined
   intake path rather than an ad hoc one
 
-None of these is new process -- each is an existing, already-enforced gate.
-This section exists so "is this production ready" has one page to check
-against instead of an implicit standard scattered across this site.
+These criteria summarize the repository gates described above.

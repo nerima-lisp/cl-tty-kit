@@ -278,7 +278,7 @@ tail of DEC private modes this library does not individually wrap (1047, 47,
 left out as legacy: modern TUIs position explicitly and draw with Unicode,
 so wrapping them would be padding, not capability.)
 
-## Deferred — genuine scope boundaries (not feasibility)
+## Deferred — scope boundaries
 
 What remains is deferred on principle, not effort. Each is either a design
 choice or outside the "small, SBCL-only, terminal-primitives" ethos; none is
@@ -303,7 +303,7 @@ a decodable capability left on the table:
   `sb-unicode`, against the intentionally-small ethos. Recorded as a
   standing [Roadmap](../src/project/roadmap.md) item; see also [Compatibility](../src/reference/compatibility.md).
 
-Everything marked **GAP → DONE** is covered by tests. The trivially-derivable
+Everything marked **GAP → DONE** is covered by tests. The simple
 candidates (`rgb-to-hex`, an `ansi-cursor-home` alias of `move 1;1`, legacy
 X10 mouse decoding, hardware tab stops) were rejected as padding, and the
 only substantive candidate (XTWINOPS) is the window-manipulation boundary
