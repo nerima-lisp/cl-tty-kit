@@ -71,7 +71,7 @@
   inputs.cl-host-kit.flake = false;
 
   # paredit-cli provides structural S-expression tooling for this repo's
-  # Lisp sources: a dev-shell binary for agent-driven refactors and a
+  # Lisp sources: a dev-shell binary for structural refactors and a
   # structural-parse lint gate reused in `checks`.
   inputs.paredit-cli.url = "github:nerima-lisp/paredit-cli/v1.5.0";
   inputs.paredit-cli.inputs.nixpkgs.follows = "nixpkgs";
