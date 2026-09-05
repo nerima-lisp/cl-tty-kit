@@ -7,8 +7,8 @@ published under `docs/src/`.
 Status legend:
 
 - **DONE** — implemented and tested in the public API.
-- **GAP** — a reasonable, in-scope capability that was missing; addressed in
-  the "wave 5" pass unless noted.
+- **GAP** — a reasonable, in-scope capability that was missing and has since
+  been addressed unless noted.
 - **DEFERRED** — intentionally out of scope for now, with a rationale. These
   are also recorded in [Roadmap](../src/project/roadmap.md).
 
@@ -35,7 +35,7 @@ The list is limited to that boundary, not full terminal emulation.
 | Synchronized output (DEC 2026) | GAP → DONE | `ansi-begin-synchronized-update`/`-end-synchronized-update` (flicker-free repaints) |
 | Terminal soft reset | GAP → DONE | `ansi-reset-terminal` (RIS) |
 | Runtime terminal size | GAP → DONE | `terminal-size` (ioctl TIOCGWINSZ; returns NIL off a tty) |
-| PTY window-size propagation | DONE (third pass) | `pty-resize` — see [PTY](../src/guide/pty.md) |
+| PTY window-size propagation | DONE | `pty-resize` — see [PTY](../src/guide/pty.md) |
 
 ## B. ANSI escape building
 
@@ -67,7 +67,7 @@ The list is limited to that boundary, not full terminal emulation.
 | Focus in/out | DONE | `:focus-in`/`:focus-out` |
 | Cursor position report | DONE | standalone `decode-cursor-position-report` |
 | Human-readable key labels | DONE | `key-event->string` |
-| Device attributes (DA) response decode | DONE (third pass) | `ansi-request-device-attributes` + `decode-device-attributes` |
+| Device attributes (DA) response decode | DONE | `ansi-request-device-attributes` + `decode-device-attributes` |
 
 See [Input Decoding](../src/guide/input-decoding.md) and [Mouse Input](../src/guide/mouse-input.md) for
 the full API.
@@ -81,7 +81,7 @@ the full API.
 | Width-aware truncation (+ ellipsis) | DONE | `truncate-string` |
 | Width-aware padding / alignment | DONE | `pad-string` |
 | Word wrapping (+ hard split) | DONE | `wrap-string` |
-| Grapheme-cluster segmentation | DONE (fourth pass) | `string-graphemes`, `grapheme-count`, `grapheme-width` via `sb-unicode:graphemes` |
+| Grapheme-cluster segmentation | DONE | `string-graphemes`, `grapheme-count`, `grapheme-width` via `sb-unicode:graphemes` |
 
 See [Text Layout](../src/guide/text-layout.md) for the full API.
 
@@ -98,7 +98,7 @@ See [Text Layout](../src/guide/text-layout.md) for the full API.
 | Multi-line / wrapped / aligned placement | DONE | `screen-write-lines`/`-wrapped`/`-aligned` |
 | Blank-cell predicate | DONE | `cell-blank-p` |
 | Resize preserving content | DONE | `screen-resize` |
-| Region extraction | DONE (second pass) | `screen-crop` |
+| Region extraction | DONE | `screen-crop` |
 
 ## F. Rendering
 
@@ -123,8 +123,8 @@ See [Screen and Rendering](../src/guide/screen-and-rendering.md) for the full AP
 | RGB blend / gradient ramp | DONE | `blend-colors`, `color-gradient` |
 | RGB → nearest 16-color | GAP → DONE | `rgb-to-ansi16` (for low-color terminals) |
 | Perceived luminance | GAP → DONE | `color-luminance` (e.g. to pick readable fg over a bg) |
-| HSL / HSV round-tripping | DONE (second pass) | `rgb-to-hsl`/`hsl-to-rgb`, `rgb-to-hsv`/`hsv-to-rgb` |
-| Unified color parsing | DONE (second pass) | `parse-color` (hex / `rgb(...)` / name), `contrast-color` |
+| HSL / HSV round-tripping | DONE | `rgb-to-hsl`/`hsl-to-rgb`, `rgb-to-hsv`/`hsv-to-rgb` |
+| Unified color parsing | DONE | `parse-color` (hex / `rgb(...)` / name), `contrast-color` |
 
 See [Color](../src/guide/color.md) for the full API.
 
@@ -138,7 +138,7 @@ See [Color](../src/guide/color.md) for the full API.
 | Point-in-rect | DONE | `rect-contains-p` |
 | Emptiness / area | GAP → DONE | `rect-empty-p`, `rect-area` |
 | Intersection / union | GAP → DONE | `rect-intersect`, `rect-union` (clipping & damage bounds) |
-| Constraint-based layout split | DONE (fourth pass) | `layout-split` (ratatui-style `:length`/`:percentage`/`:ratio`/`:min`/`:fill`) |
+| Constraint-based layout split | DONE | `layout-split` (ratatui-style `:length`/`:percentage`/`:ratio`/`:min`/`:fill`) |
 | Full flex/grid constraint solver (Cassowary) | DEFERRED | application-framework territory; `layout-split`/`rect-inset` cover panel layout |
 
 See [Layout](../src/guide/layout.md) for the full API.
@@ -154,7 +154,7 @@ See [Layout](../src/guide/layout.md) for the full API.
 | Aligned columns (single row) | DONE | `format-columns` |
 | Multi-row table (auto widths) | GAP → DONE | `format-table` |
 | Spinner frames | GAP → DONE | `spinner-frame` |
-| Bitmap graphics (sixel) | DONE (fifth pass) | `format-sixel` |
+| Bitmap graphics (sixel) | DONE | `format-sixel` |
 
 See [Widgets](../src/guide/widgets.md) for the full API.
 
@@ -164,7 +164,7 @@ See [Widgets](../src/guide/widgets.md) for the full API.
 |---|---|---|
 | Spawn under PTY | DONE | `make-pty` |
 | Read / write / close | DONE | `pty-read`, `pty-write`, `close-pty` |
-| Window-size propagation | DONE (third pass) | `pty-resize` |
+| Window-size propagation | DONE | `pty-resize` |
 | Fd-centric byte-transparent I/O (multiplexer use) | DONE | `pty-fd`, `pty-pid`, `fd-read-octets`, `fd-write-octets` |
 
 See [PTY](../src/guide/pty.md) for the full API.
@@ -179,15 +179,9 @@ See [Logic Engine](../src/guide/logic-engine.md) for the full API.
 
 ---
 
-## Second pass — competitive research (2026-07-20)
+## Additional implemented capabilities
 
-The second pass surveyed the published capability surfaces of the major
-terminal libraries —
-`crossterm`/`ratatui` (Rust), `notcurses` (C), `tcell`/`termbox2` (Go), and
-`rich`/`prompt_toolkit`/`blessed` (Python) — and diffed each capability
-against the then-current public API. The diff surfaced primitives that
-appeared across two or more of those libraries but were missing here. All of
-them were then implemented:
+The following capabilities extend the public API:
 
 - **Style / SGR** — extended underline styles `:double-underline`,
   `:curly-underline`, `:dotted-underline`, `:dashed-underline` (SGR
@@ -211,10 +205,9 @@ them were then implemented:
 - **Input** — horizontal wheel `:wheel-left`/`:wheel-right` in mouse
   decoding. *(crossterm ScrollLeft/Right.)*
 
-## Third pass — closing the feasible deferrals (2026-07-20)
+## Additional deferred capabilities that were implemented
 
-A review of the second-pass "Deferred" list separated out-of-scope items
-from items deferred for expected effort. The feasible ones were implemented:
+The following capabilities were previously deferred and are now implemented:
 
 - **Kitty keyboard event kinds** — `key-event-kind` (:PRESS / :REPEAT /
   :RELEASE), decoded from the CSI-u (and general CSI) `MODIFIER:EVENT`
@@ -238,9 +231,9 @@ from items deferred for expected effort. The feasible ones were implemented:
   reports the size now (verified by a `pty-resize` → `terminal-size`
   round-trip in the tests).
 
-## Fourth pass — re-examining two more deferrals (2026-07-20)
+## Further implemented capabilities
 
-Two items previously deferred turned out to be feasible after a closer look:
+The following previously deferred capabilities are now implemented:
 
 - **Grapheme-cluster segmentation** — it was deferred on the assumption it
   would require *shipping* Unicode grapheme-break tables. In fact
@@ -255,7 +248,7 @@ Two items previously deferred turned out to be feasible after a closer look:
   `(:fill WEIGHT)` constraints (with spacing), sharing leftover space by
   weight via largest-remainder.
 
-## Fifth pass — closing the remaining feasible items (2026-07-20)
+## Additional input and graphics capabilities
 
 - **Kitty associated text** — the CSI-u text field (field 3) is now decoded
   into `key-event-text` (the string a key inserts, for IME/international
@@ -276,7 +269,7 @@ and base-layout key alternates now populate `key-event-shifted-key` and
 `key-event-base-key` (for layout-independent keybindings), completing the
 kitty input surface.
 
-A follow-up sweep of the ANSI mode surface added the generic
+The ANSI mode surface also includes the generic
 `ansi-set-mode` / `ansi-reset-mode` (DECSET/DECRST/SM/RM by number) — the
 base primitive the specific `ansi-enable-*` toggles specialize, so the long
 tail of DEC private modes this library does not individually wrap (1047, 47,
@@ -310,10 +303,7 @@ a decodable capability left on the table:
   `sb-unicode`, against the intentionally-small ethos. Recorded as a
   standing [Roadmap](../src/project/roadmap.md) item; see also [Compatibility](../src/reference/compatibility.md).
 
-Everything marked **GAP → DONE**, and every item under the second- through
-fifth-pass lists, was implemented after enumeration and is covered by tests.
-A later category-by-category re-check found no remaining in-scope primitive
-gap: the trivially-derivable
+Everything marked **GAP → DONE** is covered by tests. The trivially-derivable
 candidates (`rgb-to-hex`, an `ansi-cursor-home` alias of `move 1;1`, legacy
 X10 mouse decoding, hardware tab stops) were rejected as padding, and the
 only substantive candidate (XTWINOPS) is the window-manipulation boundary

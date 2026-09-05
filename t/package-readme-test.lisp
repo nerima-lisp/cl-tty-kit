@@ -1,14 +1,7 @@
 (in-package #:cl-tty-kit/test)
 
-;;;; Documentation/code agreement.
-;;;;
-;;;; These assertions used to read README.md, which is why the README carried a
-;;;; 341-line enumeration of every exported symbol plus a list of all 21
-;;;; examples. The org standard caps the README at 150 lines, so the same
-;;;; invariants now hold against the pages under docs/src/ that own each piece
-;;;; of that content. The invariants themselves are unchanged: the documented
-;;;; API cannot silently drift from the package, and the documented example
-;;;; list cannot silently drift from examples/.
+;;;; Keep the documented API and example list aligned with the package and
+;;;; examples.
 
 (defun %doc-string (relative-path)
   (uiop:read-file-string (cl-tty-kit/bootstrap:project-pathname relative-path)))
