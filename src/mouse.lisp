@@ -95,15 +95,14 @@ FINAL is #\\M for a press/motion report and #\\m for a release."
                   (if (char= final #\m) :release :press)
                   modifiers))))))
 
-(defmacro %bounded-digit-run-p (string start end max-length &optional (radix 10))
+(defun %bounded-digit-run-p (string start end max-length &optional (radix 10))
   "Return true when [START, END) of STRING is a non-empty run of at most
 MAX-LENGTH digits in RADIX (decimal by default). Shared by %PARSE-MOUSE-UINT's
 decimal fields and src/keys-decode.lisp's %SCALE-HEX-TO-BYTE's hex fields."
-  `(let ((string ,string) (start ,start) (end ,end) (max-length ,max-length) (radix ,radix))
-     (and (< start end)
-          (<= (- end start) max-length)
-          (loop for index from start below end
-                always (digit-char-p (char string index) radix)))))
+  (and (< start end)
+       (<= (- end start) max-length)
+       (loop for index from start below end
+             always (digit-char-p (char string index) radix))))
 
 (defconstant +max-decoded-uint-digits+ 9
   "Maximum decimal digits accepted in terminal numeric reports.")

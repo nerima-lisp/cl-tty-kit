@@ -42,12 +42,11 @@ FD-READ-OCTETS / FD-WRITE-OCTETS."
   "File descriptor must be a non-negative integer, got ~S." fd)
 
 #+sbcl
-(defmacro %assert-octet-vector (value name)
-  `(let ((value ,value) (name ,name))
-     (unless (typep value 'octet-vector)
-       (error "~A must be a (SIMPLE-ARRAY (UNSIGNED-BYTE 8) (*)), got ~S."
-              name value))
-     value))
+(defun %assert-octet-vector (value name)
+  (unless (typep value 'octet-vector)
+    (error "~A must be a (SIMPLE-ARRAY (UNSIGNED-BYTE 8) (*)), got ~S."
+           name value))
+  value)
 
 #+sbcl
 (define-validating-assert %assert-fd-wait-direction (direction)
@@ -74,17 +73,16 @@ file descriptor's blocking mode."
     (sb-sys:wait-until-fd-usable fd direction timeout)))
 
 #+sbcl
-(defmacro %fd-would-block-errno-p (errno)
+(defun %fd-would-block-errno-p (errno)
   "Return true when ERRNO means \"no data/space right now, try again\" rather
 than a hard failure. EWOULDBLOCK is checked separately from EAGAIN for POSIX
 portability even though on this project's CI platforms (Linux and macOS) they
 share the same numeric value, so a real syscall can never independently reach
 the EWOULDBLOCK disjunct -- EAGAIN's `eql' always matches first."
-  `(let ((errno ,errno))
-     (and errno
-          (or (eql errno sb-unix:eagain)
-              (eql errno sb-unix:ewouldblock)
-              (eql errno sb-unix:eintr)))))
+  (and errno
+       (or (eql errno sb-unix:eagain)
+           (eql errno sb-unix:ewouldblock)
+           (eql errno sb-unix:eintr))))
 
 #+sbcl
 (defun fd-read-octets (fd buffer &optional limit)

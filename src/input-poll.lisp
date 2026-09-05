@@ -8,11 +8,10 @@
 ;;; the incremental decoder across ticks (including split escape sequences).
 ;;; --------------------------------------------------------------------------
 
-(defmacro %validate-input-poll-limit (limit)
-  `(let ((limit ,limit))
-     (unless (and (integerp limit) (plusp limit))
-       (error "INPUT poll limit must be a positive integer, got ~S." limit))
-     limit))
+(defun %validate-input-poll-limit (limit)
+  (unless (and (integerp limit) (plusp limit))
+    (error "INPUT poll limit must be a positive integer, got ~S." limit))
+  limit)
 
 (defun make-stream-input-poller (stream &key (decoder (make-input-decoder))
                                              (limit 4096))

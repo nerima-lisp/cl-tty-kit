@@ -114,18 +114,16 @@ grid -- can prefix a run with this and terminate it with ANSI-RESET-STYLE."
                 (cell-style-sequence-ready-p cell) t)
           sequence))))
 
-(defmacro %render-safe-cell-character (char)
-  `(let ((char ,char))
-     (if (%terminal-control-character-p char) #\Space
-       char)))
+(defun %render-safe-cell-character (char)
+  (if (%terminal-control-character-p char) #\Space
+    char))
 
-(defmacro %cell-rendered-length (cell)
-  `(let ((cell ,cell))
-     (let ((prefix (%cell-style-sequence cell)))
-       (+
-         1
-         (if prefix (+ (length prefix) +ansi-reset-style-length+)
-           0)))))
+(defun %cell-rendered-length (cell)
+  (let ((prefix (%cell-style-sequence cell)))
+    (+
+      1
+      (if prefix (+ (length prefix) +ansi-reset-style-length+)
+        0))))
 
 (progn
   (defun %write-cell (cell stream)

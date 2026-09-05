@@ -36,51 +36,46 @@ The kitty keyboard protocol reports this as the third sub-field of its key field
 -- the key at that physical position on the base (e.g. US-QWERTY) layout -- for
 layout-independent keybindings; NIL otherwise.")
 
-(defmacro keyword-modifier-p (value)
-  `(let ((value ,value))
-     (keywordp value)))
+(defun keyword-modifier-p (value)
+  (keywordp value))
 
-(defmacro unique-keyword-modifiers (modifiers)
-  `(let ((modifiers ,modifiers))
-     (let ((seen '()))
-       (dolist (modifier (ensure-list* modifiers) (nreverse seen))
-         (when (and (keyword-modifier-p modifier)
-                    (not (member modifier seen :test #'eq)))
-           (push modifier seen))))))
+(defun unique-keyword-modifiers (modifiers)
+  (let ((seen '()))
+    (dolist (modifier (ensure-list* modifiers) (nreverse seen))
+      (when (and (keyword-modifier-p modifier)
+                 (not (member modifier seen :test #'eq)))
+        (push modifier seen)))))
 
-(defmacro normalize-modifiers (modifiers)
+(defun normalize-modifiers (modifiers)
   "Return the keyword modifiers in MODIFIERS, de-duplicated and ordered by name.
 Non-keyword entries are ignored, so equivalent modifier sets compare EQUAL
 regardless of the order or duplicates in which they were supplied."
-  `(let ((modifiers ,modifiers))
-     (sort (unique-keyword-modifiers modifiers)
-           #'string< :key #'symbol-name)))
+  (sort (unique-keyword-modifiers modifiers)
+        #'string< :key #'symbol-name))
 
-(defmacro modifiers-from-csi-number (number)
-  `(let ((number ,number))
-     (let* ((number (or number 1))
-            (mask (if (< number 1) 0 (1- number))))
-       (normalize-modifiers
-        (append (when (logtest mask 1) '(:shift))
-                (when (logtest mask 2) '(:alt))
-                (when (logtest mask 4) '(:control)))))))
+(defun modifiers-from-csi-number (number)
+  (let* ((number (or number 1))
+         (mask (if (< number 1) 0 (1- number))))
+    (normalize-modifiers
+     (append (when (logtest mask 1) '(:shift))
+             (when (logtest mask 2) '(:alt))
+             (when (logtest mask 4) '(:control))))))
 
 (define-simple-assert %assert-key-event-type (type)
   (member type '(:character :special :paste) :test #'eq)
   "Key event TYPE ~S must be :CHARACTER, :SPECIAL, or :PASTE." type)
 
-(defmacro %assert-key-event-code (type code)
-  `(let ((type ,type) (code ,code))
-     (case type
-       (:character
-        (unless (characterp code)
-          (error "Character key event CODE ~S must be a character." code)))
-       (:special
-        (unless (keywordp code)
-          (error "Special key event CODE ~S must be a keyword." code)))
-       (:paste
-        (unless (stringp code)
-          (error "Paste key event CODE ~S must be a string." code))))))
+(defun %assert-key-event-code (type code)
+  (case type
+    (:character
+     (unless (characterp code)
+       (error "Character key event CODE ~S must be a character." code)))
+    (:special
+     (unless (keywordp code)
+       (error "Special key event CODE ~S must be a keyword." code)))
+    (:paste
+     (unless (stringp code)
+       (error "Paste key event CODE ~S must be a string." code)))))
 
 (define-simple-assert %assert-key-event-kind (kind)
   (member kind '(:press :repeat :release) :test #'eq)
@@ -115,46 +110,42 @@ regardless of the order or duplicates in which they were supplied."
                    :shifted-key shifted-key
                    :base-key base-key))
 
-(defmacro %key-event (type code &optional modifiers (kind :press) text)
-  `(let ((type ,type) (code ,code) (modifiers ,modifiers) (kind ,kind) (text ,text))
-     (make-key-event :type type :code code :modifiers modifiers
-                     :kind kind :text text)))
+(defun %key-event (type code &optional modifiers (kind :press) text)
+  (make-key-event :type type :code code :modifiers modifiers
+                  :kind kind :text text))
 
 (defparameter +modifier-prefixes+
   '((:control . "C-") (:alt . "M-") (:shift . "S-"))
   "Maps a modifier keyword to its %MODIFIER-PREFIX label, in Ctrl-Alt-Shift
 order regardless of how MODIFIERS was stored.")
 
-(defmacro %modifier-prefix (modifiers)
+(defun %modifier-prefix (modifiers)
   "Return the `C-'/`M-'/`S-' prefix string for MODIFIERS, in Ctrl-Alt-Shift
 order regardless of how they were stored."
-  `(let ((modifiers ,modifiers))
-     (with-output-to-string (out)
-       (dolist (entry +modifier-prefixes+)
-         (when (member (car entry) modifiers :test #'eq)
-           (write-string (cdr entry) out))))))
+  (with-output-to-string (out)
+    (dolist (entry +modifier-prefixes+)
+      (when (member (car entry) modifiers :test #'eq)
+        (write-string (cdr entry) out)))))
 
-(defmacro %format-key-keyword (keyword)
+(defun %format-key-keyword (keyword)
   "Render a :SPECIAL key code keyword as a label, mapping :CONTROL-x to `C-x'
 and otherwise capitalizing hyphen-delimited words (:PAGE-UP -> \"Page-Up\")."
-  `(let ((keyword ,keyword))
-     (let ((name (symbol-name keyword)))
-       (if (and (= (length name) 9)
-                (string= "CONTROL-" name :end2 8))
-           (format nil "C-~A" (char-downcase (char name 8)))
-           (string-capitalize name)))))
+  (let ((name (symbol-name keyword)))
+    (if (and (= (length name) 9)
+             (string= "CONTROL-" name :end2 8))
+        (format nil "C-~A" (char-downcase (char name 8)))
+        (string-capitalize name))))
 
-(defmacro %key-event-body (event)
+(defun %key-event-body (event)
   "Render EVENT's CODE per its TYPE's invariant, guaranteed by
 %ASSERT-KEY-EVENT-CODE: :CHARACTER carries a character, :PASTE a string, and
 :SPECIAL (the only remaining TYPE) a keyword."
-  `(let ((event ,event))
-     (let ((type (key-event-type event))
-           (code (key-event-code event)))
-       (case type
-         (:character (string code))
-         (:paste (format nil "<paste ~D bytes>" (length code)))
-         (t (%format-key-keyword code))))))
+  (let ((type (key-event-type event))
+        (code (key-event-code event)))
+    (case type
+      (:character (string code))
+      (:paste (format nil "<paste ~D bytes>" (length code)))
+      (t (%format-key-keyword code)))))
 
 (defun key-event->string (event)
   "Return a human-readable label for EVENT, such as \"C-a\", \"S-Up\", \"Enter\",

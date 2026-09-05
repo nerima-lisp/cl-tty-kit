@@ -23,39 +23,33 @@ simple without a measurable cost."
   (and (integerp fd) (not (minusp fd)))
   "Raw mode FD must be a non-negative integer, got ~S." fd)
 
-(defmacro %signal-raw-mode-operation-failed (operation fd reason)
-  `(let ((operation ,operation) (fd ,fd) (reason ,reason))
-     (error 'raw-mode-operation-failed
-            :operation operation
-            :fd fd
-            :reason reason)))
+(defun %signal-raw-mode-operation-failed (operation fd reason)
+  (error 'raw-mode-operation-failed
+         :operation operation
+         :fd fd
+         :reason reason))
 
-(defmacro %raw-mode-state (fd)
-  `(let ((fd ,fd))
-     (assoc fd *raw-mode-states* :test #'eql)))
+(defun %raw-mode-state (fd)
+  (assoc fd *raw-mode-states* :test #'eql))
 
-(defmacro %raw-mode-state-depth (state)
-  `(let ((state ,state))
-     (getf (cdr state) :depth)))
+(defun %raw-mode-state-depth (state)
+  (getf (cdr state) :depth))
 
-(defmacro %raw-mode-state-snapshot (state)
-  `(let ((state ,state))
-     (getf (cdr state) :snapshot)))
+(defun %raw-mode-state-snapshot (state)
+  (getf (cdr state) :snapshot))
 
-(defmacro %set-raw-mode-state (fd snapshot depth)
-  `(let ((fd ,fd) (snapshot ,snapshot) (depth ,depth))
-     (let ((state (%raw-mode-state fd)))
-       (if state
-           (setf (getf (cdr state) :snapshot) snapshot
-                 (getf (cdr state) :depth) depth)
-           (push (cons fd (list :snapshot snapshot :depth depth))
-                 *raw-mode-states*))
-       depth)))
+(defun %set-raw-mode-state (fd snapshot depth)
+  (let ((state (%raw-mode-state fd)))
+    (if state
+        (setf (getf (cdr state) :snapshot) snapshot
+              (getf (cdr state) :depth) depth)
+        (push (cons fd (list :snapshot snapshot :depth depth))
+              *raw-mode-states*))
+    depth))
 
-(defmacro %remove-raw-mode-state (fd)
-  `(let ((fd ,fd))
-     (setf *raw-mode-states*
-           (delete fd *raw-mode-states* :key #'car :test #'eql))))
+(defun %remove-raw-mode-state (fd)
+  (setf *raw-mode-states*
+        (delete fd *raw-mode-states* :key #'car :test #'eql)))
 
 (defmacro with-raw-mode ((&optional (fd 0)) &body body)
   "Execute BODY with raw mode enabled for FD when supported."

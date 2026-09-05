@@ -22,25 +22,24 @@
   (cell-p cell)
   "Expected a CELL, got ~S." cell)
 
-(defmacro %style-color (channel first &optional second third)
-  `(let ((channel ,channel) (first ,first) (second ,second) (third ,third))
-     (cond
-       ((and (null second) (null third))
-         (unless (%valid-color-byte-p first)
-           (error
-             "Invalid ~A color index ~S; expected an integer in [0, 255]."
-             channel
-             first))
-         (list channel first))
-       ((and second third)
-         (unless (every #'%valid-color-byte-p (list first second third))
-           (error
-             "Invalid ~A RGB color ~S; expected integers in [0, 255]."
-             channel
-             (list first second third)))
-         (list channel first second third))
-       (t
-         (error "~A color constructors accept either INDEX or RED GREEN BLUE." channel)))))
+(defun %style-color (channel first &optional second third)
+  (cond
+    ((and (null second) (null third))
+      (unless (%valid-color-byte-p first)
+        (error
+          "Invalid ~A color index ~S; expected an integer in [0, 255]."
+          channel
+          first))
+      (list channel first))
+    ((and second third)
+      (unless (every #'%valid-color-byte-p (list first second third))
+        (error
+          "Invalid ~A RGB color ~S; expected integers in [0, 255]."
+          channel
+          (list first second third)))
+      (list channel first second third))
+    (t
+      (error "~A color constructors accept either INDEX or RED GREEN BLUE." channel))))
 
 (defun style-fg (first &optional second third)
   "Return a validated foreground style entry."
