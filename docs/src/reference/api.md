@@ -1,6 +1,6 @@
 # API Reference
 
-A fast, scannable map of the public `cl-tty-kit` package, grouped by subsystem.
+A map of the public `cl-tty-kit` package, grouped by subsystem.
 Every symbol below is exported from `src/package.lisp`. This page is for lookup
 and navigation; each group links to the guide page that carries the depth.
 

@@ -1,9 +1,8 @@
 # Input Decoding
 
 `cl-tty-kit` turns the raw byte stream a terminal sends on stdin into a list of
-structured `key-event` objects. Decoding is pure logic with no OS calls, so it is
-fully deterministic and easy to test: you hand it a string or an octet vector and
-get events back.
+structured `key-event` objects. Decoding is pure logic with no OS calls: callers
+pass a string or an octet vector and receive events.
 
 There are two entry points:
 

@@ -1,10 +1,9 @@
 # Roadmap
 
-`cl-tty-kit` is intentionally scoped to terminal primitives. This page
-records what is intentionally deferred so the project stays honest about its
-boundaries.
+`cl-tty-kit` is scoped to terminal primitives. This page lists capabilities
+outside that scope.
 
-## Deferred on purpose
+## Scope boundaries
 
 - full terminal emulation
 - window manager or multiplexer behavior
@@ -45,26 +44,25 @@ testing seam, not a PTY-shaped runner.
 
 ## Deferred capabilities
 
-The [feature audit note](https://github.com/nerima-lisp/cl-tty-kit/blob/main/docs/notes/feature-audit.md) records
-the terminal-toolkit capabilities reviewed against this library. Every
-in-scope gap was implemented; what remains deferred, with rationale:
+The [feature audit note](https://github.com/nerima-lisp/cl-tty-kit/blob/main/docs/notes/feature-audit.md) lists
+terminal-toolkit capabilities and their corresponding public APIs. The items
+below are outside the supported scope:
 
 - **Wide-cell skip flag** — a design alternative to the spacer-cell model
   already used for double-width glyphs, not a capability gap.
 - **Kitty graphics protocol** — `format-sixel` (see [Widgets](../guide/widgets.md))
-  already covers bitmap output on the widely supported format; a second
-  image mechanism would duplicate it.
+  covers bitmap output through Sixel; a second image mechanism would
+  duplicate it.
 - **Non-SBCL portability** — would require shipping the Unicode tables the
   library borrows from `sb-unicode`, which limits portability beyond SBCL.
 
-Every decodable/feasible item from the audit has been implemented, including
-grapheme-cluster
-segmentation, constraint-based `layout-split`, the full kitty input surface
-(event kinds, associated text, shifted/base-layout alternates), the CSI
-in-place editing escapes, and `format-sixel` graphics. What remains above is
-deferred on principle, not effort.
+Implemented capabilities include grapheme-cluster segmentation,
+constraint-based `layout-split`, the full kitty input surface (event kinds,
+associated text, shifted/base-layout alternates), the CSI in-place editing
+escapes, and `format-sixel` graphics. The items above are outside the
+supported scope.
 
-## Principle
+## New features
 
-Every new feature should stay small, testable, and aligned with terminal
-primitives rather than application framework behavior.
+New features must align with terminal primitives rather than application
+framework behavior.

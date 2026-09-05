@@ -88,7 +88,7 @@ without turning into a UI framework or a shell.
     ---
 
     A scannable API index grouped by subsystem, the condition hierarchy,
-    every runnable example, and the feature-coverage audit against
+    every runnable example, and the feature coverage against
     established terminal libraries.
 
     [:octicons-arrow-right-24: API Reference](reference/api.md) ·
@@ -104,7 +104,7 @@ without turning into a UI framework or a shell.
 - requires SBCL (see [Compatibility](reference/compatibility.md)) and has a small scope
 - test-backed public API, with runnable examples in `examples/`
 - PTY support is limited to SBCL
-- maintainer-grade local quality gates are documented in [Quality Gates](project/quality-gates.md)
+- local quality gates are documented in [Quality Gates](project/quality-gates.md)
 - build, test and coverage commands live in [Development](project/development.md); the
   internal split is described in [Architecture](reference/architecture.md)
 - contribution, conduct and security policy are org-wide and live in
@@ -129,14 +129,14 @@ plumbing. See [Release Process](project/release-process.md) for what would requi
 
 ## Non-goals
 
-`cl-tty-kit` stops deliberately short of an application framework:
+`cl-tty-kit` stops short of an application framework:
 
 - no shell implementation
 - no full terminal emulator
 - no widget toolkit
 - no opinionated application framework
 
-See [Roadmap](project/roadmap.md) for what is intentionally deferred, and why.
+See [Roadmap](project/roadmap.md) for capabilities outside the supported scope.
 
 ## License
 

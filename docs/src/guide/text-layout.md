@@ -1,7 +1,7 @@
 # Text Layout and Unicode Width
 
 Terminal layout is measured in **columns**, not characters. This one idea is the
-key that makes the whole layout API make sense, so it is worth stating plainly
+key to understanding the layout API, so state it plainly
 before the function reference.
 
 ## Why a cell is a column, not a character

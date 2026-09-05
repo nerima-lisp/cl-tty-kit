@@ -1,20 +1,16 @@
 # Feature Audit
 
-This maintainer record lists terminal-toolkit capabilities and marks them
-against `cl-tty-kit`'s public API. It is kept under `docs/notes/`, not
-published under `docs/src/`.
+This note maps terminal-toolkit capabilities to `cl-tty-kit`'s public API. It
+is kept under `docs/notes/`, not published under `docs/src/`.
 
-Status legend:
+Status:
 
 - **DONE** — implemented and tested in the public API.
-- **GAP** — a reasonable, in-scope capability that was missing and has since
-  been addressed unless noted.
-- **DEFERRED** — intentionally out of scope for now, with a rationale. These
-  are also recorded in [Roadmap](../src/project/roadmap.md).
+- **DEFERRED** — outside the supported scope; see
+  [Roadmap](../src/project/roadmap.md).
 
-The guiding constraint (see [Roadmap](../src/project/roadmap.md)) is *terminal primitives,
-SBCL-only, small and testable* — not an application framework.
-The list is limited to that boundary, not full terminal emulation.
+The scope is terminal primitives on SBCL, not terminal emulation or an
+application framework.
 
 ---
 
@@ -31,10 +27,10 @@ The list is limited to that boundary, not full terminal emulation.
 | Mouse tracking modes | DONE | `ansi-enable-mouse`/`-disable-mouse` (:normal/:button/:any + SGR) — see [Mouse Input](../src/guide/mouse-input.md) |
 | Kitty keyboard enhancement | DONE | `ansi-set/push/pop-keyboard-enhancements` |
 | Cursor position query | DONE | `ansi-request-cursor-position` + `decode-cursor-position-report` |
-| Terminal bell | GAP → DONE | `ansi-bell` |
-| Synchronized output (DEC 2026) | GAP → DONE | `ansi-begin-synchronized-update`/`-end-synchronized-update` (flicker-free repaints) |
-| Terminal soft reset | GAP → DONE | `ansi-reset-terminal` (RIS) |
-| Runtime terminal size | GAP → DONE | `terminal-size` (ioctl TIOCGWINSZ; returns NIL off a tty) |
+| Terminal bell | DONE | `ansi-bell` |
+| Synchronized output (DEC 2026) | DONE | `ansi-begin-synchronized-update`/`-end-synchronized-update` (flicker-free repaints) |
+| Terminal soft reset | DONE | `ansi-reset-terminal` (RIS) |
+| Runtime terminal size | DONE | `terminal-size` (ioctl TIOCGWINSZ; returns NIL off a tty) |
 | PTY window-size propagation | DONE | `pty-resize` — see [PTY](../src/guide/pty.md) |
 
 ## B. ANSI escape building
@@ -50,7 +46,7 @@ The list is limited to that boundary, not full terminal emulation.
 | Cursor shape | DONE | `ansi-set-cursor-style` |
 | SGR text attributes | DONE | bold/dim/italic/underline/blink/reverse/hidden/strikethrough + generic `ansi-sgr` |
 | SGR reset | DONE | `ansi-reset-style` |
-| Default fg/bg (SGR 39/49) | GAP → DONE | `ansi-default-foreground`, `ansi-default-background` |
+| Default fg/bg (SGR 39/49) | DONE | `ansi-default-foreground`, `ansi-default-background` |
 | OSC 8 hyperlinks | DONE | `ansi-hyperlink` |
 | 256-color / truecolor SGR | DONE | via the style model + `style-ansi` — see [ANSI Helpers](../src/guide/ansi-helpers.md) |
 
@@ -121,8 +117,8 @@ See [Screen and Rendering](../src/guide/screen-and-rendering.md) for the full AP
 | Hex parse (`#rrggbb` / `#rgb`) | DONE | `parse-hex-color` |
 | xterm-256 ↔ RGB | DONE | `color-256-to-rgb`, `rgb-to-256` |
 | RGB blend / gradient ramp | DONE | `blend-colors`, `color-gradient` |
-| RGB → nearest 16-color | GAP → DONE | `rgb-to-ansi16` (for low-color terminals) |
-| Perceived luminance | GAP → DONE | `color-luminance` (e.g. to pick readable fg over a bg) |
+| RGB → nearest 16-color | DONE | `rgb-to-ansi16` (for low-color terminals) |
+| Perceived luminance | DONE | `color-luminance` (e.g. to pick readable fg over a bg) |
 | HSL / HSV round-tripping | DONE | `rgb-to-hsl`/`hsl-to-rgb`, `rgb-to-hsv`/`hsv-to-rgb` |
 | Unified color parsing | DONE | `parse-color` (hex / `rgb(...)` / name), `contrast-color` |
 
@@ -136,8 +132,8 @@ See [Color](../src/guide/color.md) for the full API.
 | Inset (margins) | DONE | `rect-inset` |
 | Horizontal / vertical split | DONE | `rect-split-horizontal`/`-vertical` |
 | Point-in-rect | DONE | `rect-contains-p` |
-| Emptiness / area | GAP → DONE | `rect-empty-p`, `rect-area` |
-| Intersection / union | GAP → DONE | `rect-intersect`, `rect-union` (clipping & damage bounds) |
+| Emptiness / area | DONE | `rect-empty-p`, `rect-area` |
+| Intersection / union | DONE | `rect-intersect`, `rect-union` (clipping & damage bounds) |
 | Constraint-based layout split | DONE | `layout-split` (ratatui-style `:length`/`:percentage`/`:ratio`/`:min`/`:fill`) |
 | Full flex/grid constraint solver (Cassowary) | DEFERRED | application-framework territory; `layout-split`/`rect-inset` cover panel layout |
 
@@ -148,12 +144,12 @@ See [Layout](../src/guide/layout.md) for the full API.
 | Capability | Status | Notes |
 |---|---|---|
 | Box borders + lines (5 styles) | DONE | `screen-draw-box`, `screen-draw-horizontal-line`/`-vertical-line` |
-| Box title | GAP → DONE | `screen-draw-box :title`/`:title-align` |
+| Box title | DONE | `screen-draw-box :title`/`:title-align` |
 | Progress bar (sub-cell) | DONE | `format-progress-bar` |
 | Sparkline | DONE | `format-sparkline` |
 | Aligned columns (single row) | DONE | `format-columns` |
-| Multi-row table (auto widths) | GAP → DONE | `format-table` |
-| Spinner frames | GAP → DONE | `spinner-frame` |
+| Multi-row table (auto widths) | DONE | `format-table` |
+| Spinner frames | DONE | `spinner-frame` |
 | Bitmap graphics (sixel) | DONE | `format-sixel` |
 
 See [Widgets](../src/guide/widgets.md) for the full API.
@@ -179,7 +175,7 @@ See [Logic Engine](../src/guide/logic-engine.md) for the full API.
 
 ---
 
-## Additional implemented capabilities
+## Other implemented capabilities
 
 The following capabilities extend the public API:
 
@@ -205,9 +201,9 @@ The following capabilities extend the public API:
 - **Input** — horizontal wheel `:wheel-left`/`:wheel-right` in mouse
   decoding. *(crossterm ScrollLeft/Right.)*
 
-## Additional deferred capabilities that were implemented
+## Input and PTY capabilities
 
-The following capabilities were previously deferred and are now implemented:
+These APIs are implemented:
 
 - **Kitty keyboard event kinds** — `key-event-kind` (:PRESS / :REPEAT /
   :RELEASE), decoded from the CSI-u (and general CSI) `MODIFIER:EVENT`
@@ -231,19 +227,16 @@ The following capabilities were previously deferred and are now implemented:
   reports the size now (verified by a `pty-resize` → `terminal-size`
   round-trip in the tests).
 
-## Further implemented capabilities
+## Text and layout capabilities
 
-The following previously deferred capabilities are now implemented:
+These APIs are implemented:
 
-- **Grapheme-cluster segmentation** — it was deferred on the assumption it
-  would require *shipping* Unicode grapheme-break tables. In fact
-  `sb-unicode:graphemes` is already in the SBCL image, so
-  `string-graphemes`, `grapheme-count`, and `grapheme-width` were added for
-  free. (SB-UNICODE's `graphemes` errors on the empty string; that edge is
-  guarded.)
-- **Constraint-based layout** — a full Cassowary solver is application
-  territory, but the practical `ratatui`-style constraint split is a
-  geometry primitive: `layout-split` divides a rect along an axis by a list
+- **Grapheme-cluster segmentation** — `sb-unicode:graphemes` is available in
+  the SBCL image. `string-graphemes`, `grapheme-count`, and `grapheme-width`
+  use it; the empty-string case is handled separately.
+- **Constraint-based layout** — `layout-split` is a geometry primitive;
+  full Cassowary solving is outside the library's scope. It divides a rect
+  along an axis by a list
   of `(:length N)`, `(:percentage P)`, `(:ratio A B)`, `(:min N)`, and
   `(:fill WEIGHT)` constraints (with spacing), sharing leftover space by
   weight via largest-remainder.
@@ -253,58 +246,49 @@ The following previously deferred capabilities are now implemented:
 - **Kitty associated text** — the CSI-u text field (field 3) is now decoded
   into `key-event-text` (the string a key inserts, for IME/international
   input), and the shifted-key subfield of field 1 is skipped to the primary
-  key. Combined with `key-event-kind`, the practical kitty input surface is
-  covered.
+  key. Together with `key-event-kind`, this covers the supported kitty input
+  fields.
 - **In-place editing escapes** — `ansi-insert-line`/`ansi-delete-line` (IL/DL),
   `ansi-insert-char`/`ansi-delete-char`/`ansi-erase-char` (ICH/DCH/ECH),
   `ansi-cursor-row` (VPA), and `ansi-repeat` (REP) round out the CSI editing
   set that terminal libraries use for partial-line updates.
 - **Sixel graphics** — `format-sixel` encodes a raw RGB pixel buffer into a
   sixel DCS string (xterm-256 quantization, 6-row bands, run-length
-  compression), so a sixel-capable terminal can render bitmaps. This closes
-  the "graphics" gap for the widely supported sixel format.
+  compression), so a sixel-capable terminal can render bitmaps.
 
-Also closed the last decodable kitty field: the CSI-u first field's shifted
-and base-layout key alternates now populate `key-event-shifted-key` and
-`key-event-base-key` (for layout-independent keybindings), completing the
-kitty input surface.
+The CSI-u first field's shifted and base-layout key alternates populate
+`key-event-shifted-key` and `key-event-base-key` for layout-independent
+keybindings.
 
 The ANSI mode surface also includes the generic
 `ansi-set-mode` / `ansi-reset-mode` (DECSET/DECRST/SM/RM by number) — the
 base primitive the specific `ansi-enable-*` toggles specialize, so the long
 tail of DEC private modes this library does not individually wrap (1047, 47,
 12, 1005, 1015, 1016, ...) is now reachable — plus `ansi-reset-scroll-region`.
-(Hardware tab stops and SCS character-set designation were considered and
-left out as legacy: modern TUIs position explicitly and draw with Unicode,
-so wrapping them would be padding, not capability.)
+(Hardware tab stops and SCS character-set designation are not included;
+modern TUIs position explicitly and draw with Unicode.)
 
 ## Deferred — scope boundaries
 
-What remains is deferred on principle, not effort. Each is either a design
-choice or outside the "small, SBCL-only, terminal-primitives" ethos; none is
-a decodable capability left on the table:
+The remaining items are outside the supported scope or are alternative
+representations of capabilities already provided:
 
 - **Wide-cell skip flag** — a design *alternative* to the spacer-cell model
-  this library already uses for double-width glyphs, not a missing
-  capability. Both render and diff correctly; choosing the other
-  representation would be a rewrite for no user-visible gain.
+  this library already uses for double-width glyphs. Both representations
+  support rendering and diffing; this library uses spacer cells.
 - **Kitty graphics protocol** — a second bitmap-output mechanism;
   `format-sixel` already covers image output on the widely supported format.
-  Adding kitty graphics would duplicate that surface for terminals that
-  mostly also do sixel.
+  Adding kitty graphics would duplicate that surface.
 - **Window manipulation (XTWINOPS `CSI Ps … t`: resize, move, minimize,
-  raise/lower, report position/size)** — considered (crossterm exposes a
-  `SetSize`). Left out because it is *window-manager* behavior, which
-  [Roadmap](../src/project/roadmap.md) defers on purpose; the size *query* it overlaps with
-  is already served by `terminal-size` (ioctl). Providing the in-terminal
-  rendering escapes is in scope; manipulating the terminal window is not.
+  raise/lower, report position/size)** — this is *window-manager* behavior,
+  outside the scope described in [Roadmap](../src/project/roadmap.md). The
+  size *query* it overlaps with is already served by `terminal-size` (ioctl).
+  In-terminal rendering escapes remain in scope; manipulating the terminal
+  window is not.
 - **Non-SBCL portability** — would require shipping Unicode
   category/width/grapheme tables the library currently borrows from
   `sb-unicode`, which limits portability beyond SBCL. Recorded as a
   standing [Roadmap](../src/project/roadmap.md) item; see also [Compatibility](../src/reference/compatibility.md).
 
-Everything marked **GAP → DONE** is covered by tests. The simple
-candidates (`rgb-to-hex`, an `ansi-cursor-home` alias of `move 1;1`, legacy
-X10 mouse decoding, hardware tab stops) were rejected as padding, and the
-only substantive candidate (XTWINOPS) is the window-manipulation boundary
-above. These are the remaining boundaries for this audit.
+All **DONE** entries are covered by tests. The remaining entries are the
+scope boundaries listed above.

@@ -15,8 +15,8 @@ labels: enhancement
 
 ## Scope check
 
-`cl-tty-kit` deliberately stops at terminal primitives (see `ROADMAP.md` and the
-Non-goals section of `README.md`). Explain how this stays a primitive rather than
+`cl-tty-kit` stops at terminal primitives (see `ROADMAP.md` and the
+Non-goals section of `README.md`). Explain how this remains a primitive rather than
 framework, emulator, or widget behavior.
 
 ## Alternatives considered

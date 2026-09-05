@@ -1,7 +1,7 @@
 # Examples
 
 The `examples/` directory contains ~22 self-contained, runnable programs that
-exercise the public API. Each is a small, focused demonstration you can read as
+exercise the public API. Each demonstrates a use case you can read as
 documentation and run as a smoke test.
 
 ## The example pattern

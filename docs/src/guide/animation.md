@@ -12,7 +12,7 @@ gives you — they are thin helpers a caller composes with ordinary Lisp
     All symbols are exported from `cl-tty-kit`. See
     [Getting Started](../getting-started.md) for loading the system.
 
-!!! warning "Deliberately out of scope"
+!!! warning "Out of scope"
 
     There is no z-order/layer/compositing-order concept here. Painting order
     is controlled at the call site by the order `sprite-blit` and

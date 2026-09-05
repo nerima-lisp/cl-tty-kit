@@ -1,8 +1,8 @@
 # Development
 
-`cl-tty-kit` is intentionally small and SBCL-first. Contributions should keep
-the core API focused, testable, and easy to embed in terminal applications —
-see [Roadmap](roadmap.md) for what stays explicitly out of scope.
+`cl-tty-kit` targets SBCL and terminal primitives. Contributions should keep
+the core API focused and easy to embed in terminal applications — see
+[Roadmap](roadmap.md) for capabilities outside the supported scope.
 
 The org-wide policy documents — the
 [contribution guide](https://github.com/nerima-lisp/.github/blob/main/CONTRIBUTING.md),
@@ -112,7 +112,7 @@ exercise cursor-coordinate boundaries where decimal escape-sequence lengths
 change.
 
 `t/properties-test.lisp` also includes an allocation regression guard for an
-80x24 full repaint. It uses a deliberately generous 2 MiB ceiling to catch
+80x24 full repaint. It uses a 2 MiB ceiling to catch
 accidental per-cell string construction without treating machine-specific GC
 noise as a failure. Do not claim a latency or throughput improvement without a
 separate, repeatable benchmark on an otherwise idle host.

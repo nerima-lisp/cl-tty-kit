@@ -49,7 +49,7 @@ Expected outcomes:
 - the source-registry smoke test can discover `cl-tty-kit` and
   `cl-tty-kit/test`, then load and test the system in a fresh SBCL process
   via the repository bootstrap
-- `scripts/verify.lisp` succeeds as the maintainer-grade local release gate
+- `scripts/verify.lisp` succeeds as the local release gate
 - coverage output is regenerated and inspected for meaningful gaps
 - the working tree contains no whitespace or merge-marker defects
 

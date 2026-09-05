@@ -7,8 +7,7 @@ side effects. Build the string, then hand it to `screen-write-string` (see
 [Screen and Rendering](screen-and-rendering.md)) or print it directly. Two
 further widgets encode bitmap images as terminal escape sequences.
 
-Because they are just functions returning strings, widgets compose freely and are
-easy to test.
+Widgets are functions returning strings and can be composed by callers.
 
 !!! note "Package"
 

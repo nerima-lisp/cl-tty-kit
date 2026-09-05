@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # One job on purpose. Granularity belongs in the flake's `checks.*`
+  # Checks run in one job. Granularity belongs in the flake's `checks.*`
   # attributes, which `nix flake check` evaluates in parallel with build
   # caching. Splitting these into separate GitHub jobs would duplicate that
   # scheduling and lose cache sharing between them.

@@ -1,7 +1,7 @@
 # Compatibility
 
-`cl-tty-kit` currently **requires SBCL**. This is a deliberate scope
-decision, not an oversight — see the rationale below.
+`cl-tty-kit` currently **requires SBCL**. This is a scope boundary; see the
+rationale below.
 
 ## Why SBCL-only
 
@@ -19,12 +19,11 @@ directly with `require` by the SBCL-only raw-mode implementation; it is not
 an ASDF dependency. This avoids scanning caller source registries merely to
 locate an already installed library.
 
-## Portability by concern, not by promise
+## Portability by concern
 
-Internally, the code is still organized by the portability of *concern*, even
-though only one implementation is supported today. That separation keeps the
-OS-facing surface small and isolated, and keeps the pure logic easy to test
-in isolation:
+Internally, the code is organized by the portability of *concern*, even though
+only one implementation is supported today. The OS-facing surface and pure
+logic are separate:
 
 | Layer | Examples | Notes |
 |---|---|---|
@@ -68,6 +67,6 @@ this contract is part of.
   written portably; it isn't packaged for or tested against other
   implementations today.
 
-See also [Roadmap](../project/roadmap.md) for the project's explicit list of what stays
-out of scope on purpose, and [PTY](../guide/pty.md) for the SBCL-specific process and
-file-descriptor layer.
+See also [Roadmap](../project/roadmap.md) for the project's scope boundaries,
+and [PTY](../guide/pty.md) for the SBCL-specific process and file-descriptor
+layer.
