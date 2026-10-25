@@ -34,7 +34,8 @@
 
 (describe "tick-loop-run-realtime"
   (it "advances, renders, and writes each frame to :stream until :stop is true"
-    (let ((stream (make-string-output-stream)))
+    (let ((stream (make-string-output-stream))
+          (timings '()))
       (let ((final-state
               (tick-loop-run-realtime
                0
@@ -42,9 +43,34 @@
                (lambda (state) (format nil "<~D>" state))
                (lambda (state) (>= state 3))
                :stream stream
-               :interval 1/1000)))
+               :interval 1/1000
+               :on-timing (lambda (event tick-number value)
+                            (push (list event tick-number value) timings)))))
         (expect final-state :to-be 3)
-        (expect (get-output-stream-string stream) :to-equal "<1><2><3>"))))
+        (expect (get-output-stream-string stream) :to-equal "<1><2><3>")
+        (setf timings (nreverse timings))
+        (let ((phase-timings
+                (remove-if-not
+                 (lambda (timing)
+                   (member (first timing)
+                           '(:deadline-sleep :wake-overshoot :advance :render
+                             :write-string :finish-output)))
+                 timings)))
+          (expect (mapcar #'first phase-timings)
+                  :to-equal
+                  '(:deadline-sleep :wake-overshoot :advance :render
+                    :write-string :finish-output
+                    :deadline-sleep :wake-overshoot :advance :render
+                    :write-string :finish-output
+                    :deadline-sleep :wake-overshoot :advance :render
+                    :write-string :finish-output))
+          (expect (mapcar #'second phase-timings)
+                  :to-equal '(1 1 1 1 1 1 2 2 2 2 2 2 3 3 3 3 3 3))
+          (expect (every (lambda (timing)
+                           (and (realp (third timing))
+                                (>= (third timing) 0)))
+                         phase-timings)
+                  :to-be t)))))
   (it "checks :stop only after advancing and rendering, so it always emits the stopping frame"
     (let* ((stream (make-string-output-stream))
            (rendered '()))
@@ -92,7 +118,8 @@
         (expect (get-output-stream-string stream) :to-equal "12"))))
   (it "allows a render function to suppress output or write directly to the stream"
     (let ((stream (make-string-output-stream))
-          (render-count 0))
+          (render-count 0)
+          (timings '()))
       (tick-loop-run-realtime
        0 #'1+
        (lambda (state)
@@ -101,13 +128,24 @@
            ((= state 1) nil)
            ((= state 2)
             (write-string "direct" stream)
-            (values stream t t))
+            (values stream t))
            (t "framed")))
        (lambda (state) (= state 3))
        :stream stream
-       :interval 1/1000)
+       :interval 1/1000
+       :on-timing (lambda (event tick-number value)
+                    (push (list event tick-number value) timings)))
       (expect render-count :to-be 3)
-      (expect (get-output-stream-string stream) :to-equal "directframed")))
+      (expect (get-output-stream-string stream) :to-equal "directframed")
+      (setf timings (nreverse timings))
+      (let ((output-timings
+              (remove-if-not
+               (lambda (timing)
+                 (member (first timing) '(:write-string :finish-output)))
+               timings)))
+        (expect (mapcar #'first output-timings)
+                :to-equal '(:finish-output :write-string :finish-output))
+        (expect (mapcar #'second output-timings) :to-equal '(2 3 3)))))
   (it "signals a non-type-error for malformed arguments"
     (expect-non-type-error
      (tick-loop-run-realtime 0 :not-a-function (lambda (s) (declare (ignore s)) "") (lambda (s) t)))
@@ -122,10 +160,27 @@
                              :interval 0))
     (expect-non-type-error
      (tick-loop-run-realtime 0 #'1+ (lambda (s) (declare (ignore s)) "")
-                             (lambda (s) t) :poll :not-a-function)))
+                             (lambda (s) t) :poll :not-a-function))
+    (expect-non-type-error
+     (tick-loop-run-realtime 0 #'1+ (lambda (s) (declare (ignore s)) "")
+                             (lambda (s) t) :on-timing :not-a-function))
+    (let ((observer-error-propagated-p nil))
+      (handler-case
+          (tick-loop-run-realtime
+           0 #'1+
+           (lambda (state) (declare (ignore state)) nil)
+           (lambda (state) (declare (ignore state)) t)
+           :interval 1/1000
+           :on-timing (lambda (event tick-number value)
+                        (declare (ignore event tick-number value))
+                        (error 'program-error)))
+        (program-error ()
+          (setf observer-error-propagated-p t)))
+      (expect observer-error-propagated-p :to-be t)))
   (it "does not accumulate repeated scheduler wake overshoot"
     (let ((now 0)
           (starts '())
+          (timings '())
           (stream (make-string-output-stream))
           (units internal-time-units-per-second))
       (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
@@ -139,12 +194,34 @@
                  (lambda (state) (declare (ignore state)) nil)
                  (lambda (state) (= state 4))
                  :stream stream
-                 :interval (/ 10 units))))
+                 :interval (/ 10 units)
+                 :on-timing (lambda (event tick-number value)
+                              (push (list event tick-number value) timings)))))
           (expect final-state :to-be 4)
-          (expect (nreverse starts) :to-equal '(0 12 22 32))))))
+          (expect (nreverse starts) :to-equal '(0 12 22 32))
+          (setf timings (nreverse timings))
+          (let ((sleep-timings
+                  (remove-if-not
+                   (lambda (timing)
+                     (eq (first timing) :deadline-sleep))
+                   timings))
+                (overshoot-timings
+                  (remove-if-not
+                   (lambda (timing)
+                     (eq (first timing) :wake-overshoot))
+                   timings)))
+            (expect (mapcar #'second sleep-timings)
+                    :to-equal '(1 2 3 4))
+            (expect (mapcar #'third sleep-timings)
+                    :to-equal (list 0 (/ 10 units) (/ 8 units) (/ 8 units)))
+            (expect (mapcar #'second overshoot-timings)
+                    :to-equal '(1 2 3 4))
+            (expect (mapcar #'third overshoot-timings)
+                    :to-equal (list 0 (/ 2 units) (/ 2 units) (/ 2 units))))))))
   (it "resynchronizes after a frame overrun without a catch-up burst"
     (let ((now 0)
           (starts '())
+          (timings '())
           (stream (make-string-output-stream))
           (units internal-time-units-per-second))
       (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
@@ -162,6 +239,42 @@
                  (lambda (state) (declare (ignore state)) nil)
                  (lambda (state) (= state 3))
                  :stream stream
-                 :interval (/ 10 units))))
+                 :interval (/ 10 units)
+                 :on-timing (lambda (event tick-number value)
+                              (push (list event tick-number value) timings)))))
           (expect final-state :to-be 3)
-          (expect (nreverse starts) :to-equal '(0 25 35)))))))
+          (expect (nreverse starts) :to-equal '(0 25 35))
+          (setf timings (nreverse timings))
+          (expect (remove-if-not
+                   (lambda (timing)
+                     (member (first timing) '(:deadline-miss :frame-drop)))
+                   timings)
+                  :to-equal
+                  (list (list :deadline-miss 1 (/ 15 units))
+                        (list :frame-drop 1 2)))))))
+  (it "does not report skipped frames when stop terminates the loop"
+    (let ((now 0)
+          (timings (list))
+          (stream (make-string-output-stream))
+          (units internal-time-units-per-second))
+      (let ((cl-tty-kit::*tick-loop-clock* (lambda () now)))
+        (let ((final-state
+                (tick-loop-run-realtime
+                 0
+                 (lambda (state)
+                   (setf now 25)
+                   (1+ state))
+                 (lambda (state) (declare (ignore state)) nil)
+                 (lambda (state)
+                   (declare (ignore state))
+                   t)
+                 :stream stream
+                 :interval (/ 10 units)
+                 :on-timing (lambda (event tick-number value)
+                              (push (list event tick-number value) timings)))))
+          (expect final-state :to-be 1)
+          (expect (remove-if-not
+                   (lambda (timing)
+                     (member (first timing) (list :deadline-miss :frame-drop)))
+                   timings)
+                  :to-equal nil))))))

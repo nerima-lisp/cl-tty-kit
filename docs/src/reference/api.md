@@ -191,6 +191,15 @@ instead of producing a burst of catch-up frames.
 resize observation before each tick. A renderer may return `nil` to suppress a
 frame or write directly to the loop stream and return that stream.
 
+The realtime driver also accepts `on-timing`, called as
+`(on-timing event tick-number seconds)` after each measured operation. Tick
+numbers start at 1. The events are `:advance`, `:render`, `:write-string`,
+`:finish-output`, `:deadline-sleep`, `:wake-overshoot`, and `:deadline-miss`;
+`:frame-drop` carries the integer count of skipped tick slots. The callback
+runs without an internal lock held, and its errors propagate. The loop emits
+`:deadline-miss` and `:frame-drop` when it continues after a tick overruns its
+next deadline. See [Animation](../guide/animation.md) for event timing details.
+
 ## PTY
 
 Minimal SBCL PTY abstraction, with a byte-transparent fd-centric layer

@@ -105,6 +105,19 @@ does not accumulate as drift; if a frame overruns its deadline, the loop
 resynchronizes to the current time instead of issuing a burst of catch-up
 frames.
 
+Pass `:on-timing` a function to measure loop phases. The callback receives
+`(event tick-number seconds)` after each measured operation, with tick numbers
+starting at 1. Events include `:advance`, `:render`, `:write-string`,
+`:finish-output`, `:deadline-sleep`, `:wake-overshoot`, and `:deadline-miss`;
+`:frame-drop` reports an integer count of skipped tick slots. When the loop
+continues after a tick finishes past its next deadline, `:deadline-miss`
+reports the lateness and `:frame-drop` reports the slots skipped during
+resynchronization. Sleep and wake overshoot events occur on every tick,
+including when their value is zero. Output events occur only when the loop
+writes or flushes a frame. A render function that writes directly to the
+stream is measured as `:render` and does not emit `:write-string`. Callback
+errors propagate to the caller.
+
 The compatibility string-frame driver accepts either a string or `NIL` from
 `render`; `NIL` suppresses output for that tick without allocating an empty
 string. Other return values signal an error. Use the direct-stream variant
