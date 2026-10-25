@@ -52,20 +52,19 @@ STATE unchanged with an empty FRAMES list."
           (push frame frames))))
     (values state (nreverse frames))))
 
-(progn
-  ;; Internal bindings make deadline behavior deterministic in tests without
-  ;; adding clock injection to the public tick-loop API.
-  (defvar *tick-loop-clock* (function get-internal-real-time))
-  (defvar *tick-loop-sleeper* (function sleep))
+;; Internal bindings make deadline behavior deterministic in tests without
+;; adding clock injection to the public tick-loop API.
+(defvar *tick-loop-clock* (function get-internal-real-time))
+(defvar *tick-loop-sleeper* (function sleep))
 
-  (defun %tick-loop-now ()
-    (funcall *tick-loop-clock*))
+(defun %tick-loop-now ()
+  (funcall *tick-loop-clock*))
 
-  (defun %tick-loop-sleep-until (deadline)
-    (let ((remaining (/ (- deadline (%tick-loop-now))
-                        internal-time-units-per-second)))
-      (when (plusp remaining)
-        (funcall *tick-loop-sleeper* remaining)))))
+(defun %tick-loop-sleep-until (deadline)
+  (let ((remaining (/ (- deadline (%tick-loop-now))
+                      internal-time-units-per-second)))
+    (when (plusp remaining)
+      (funcall *tick-loop-sleeper* remaining))))
 
 (defun tick-loop-run-realtime (state advance render stop
                                &key (stream *standard-output*) (interval 1/30)
