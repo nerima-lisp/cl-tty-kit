@@ -183,9 +183,12 @@ Bounded and real-time drivers sharing one per-tick step. See
 
 `tick-loop-run`, `tick-loop-run-realtime`. The realtime driver accepts a
 string or `NIL` from `render`; `NIL` suppresses output for that tick. Realtime
-pacing uses a monotonic internal-time deadline, so scheduler overshoot does
-not accumulate as drift; an overrun frame resynchronizes to the current time
-instead of producing a burst of catch-up frames.
+pacing uses a monotonic internal-time deadline. It sleeps until the final
+millisecond, then polls the clock until the deadline; a late sleep skips that
+polling phase. This uses a short CPU burst to improve on-time wake precision.
+Scheduler overshoot does not accumulate as drift; an overrun frame
+resynchronizes to the current time instead of producing a burst of catch-up
+frames.
 
 `tick-loop-run-realtime` accepts an optional `poll` function for input and
 resize observation before each tick. A renderer may return `nil` to suppress a

@@ -74,15 +74,25 @@ STATE unchanged with an empty FRAMES list."
 ;; adding clock injection to the public tick-loop API.
 (defvar *tick-loop-clock* (function get-internal-real-time))
 (defvar *tick-loop-sleeper* (function sleep))
+(defvar *tick-loop-spin-window* (/ internal-time-units-per-second 1000))
 
 (defun %tick-loop-now ()
   (funcall *tick-loop-clock*))
+(defun %tick-loop-spin-until (deadline)
+  (loop while (< (%tick-loop-now) deadline)
+        do (progn)))
+(defvar *tick-loop-spinner* (function %tick-loop-spin-until))
 
 (defun %tick-loop-sleep-until (deadline)
-  (let ((remaining (/ (- deadline (%tick-loop-now))
-                      internal-time-units-per-second)))
-    (when (plusp remaining)
-      (funcall *tick-loop-sleeper* remaining))))
+  (let ((spin-window (max 0 *tick-loop-spin-window*)))
+    (loop for remaining = (- deadline (%tick-loop-now))
+          while (> remaining spin-window)
+          do (funcall *tick-loop-sleeper*
+                      (/ (- remaining spin-window)
+                         internal-time-units-per-second)))
+    (when (< (%tick-loop-now) deadline)
+      (loop while (< (%tick-loop-now) deadline)
+            do (funcall *tick-loop-spinner* deadline)))))
 
 (defun tick-loop-run-realtime (state advance render stop
                                &key (stream *standard-output*) (interval 1/30)

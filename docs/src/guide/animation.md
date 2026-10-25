@@ -100,10 +100,12 @@ TTY and press `q` to exit.
 `stop` is checked *after* a tick has been advanced and rendered, so the loop
 always emits the frame that caused it to stop rather than swallowing it.
 Pacing uses a monotonic internal-time deadline for each frame rather than
-sleeping a fresh interval after every render. Scheduler overshoot therefore
-does not accumulate as drift; if a frame overruns its deadline, the loop
-resynchronizes to the current time instead of issuing a burst of catch-up
-frames.
+sleeping a fresh interval after every render. The loop sleeps until the final
+millisecond, then polls the clock until the deadline; a late sleep skips that
+polling phase. This trades a short CPU burst for a more precise on-time wake.
+Scheduler overshoot therefore does not accumulate as drift; if a frame
+overruns its deadline, the loop resynchronizes to the current time instead of
+issuing a burst of catch-up frames.
 
 Pass `:on-timing` a function to measure loop phases. The callback receives
 `(event tick-number seconds)` after each measured operation, with tick numbers

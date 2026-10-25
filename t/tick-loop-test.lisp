@@ -184,6 +184,7 @@
           (stream (make-string-output-stream))
           (units internal-time-units-per-second))
       (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
+            (cl-tty-kit::*tick-loop-spin-window* 0)
             (cl-tty-kit::*tick-loop-sleeper*
               (lambda (seconds)
                 (incf now (+ (round (* seconds units)) 2)))))
@@ -218,6 +219,30 @@
                     :to-equal '(1 2 3 4))
             (expect (mapcar #'third overshoot-timings)
                     :to-equal (list 0 (/ 2 units) (/ 2 units) (/ 2 units))))))))
+  (it "bounds the spin phase to the configured final window"
+    (let ((now 0)
+          (sleep-requests (list))
+          (spin-windows (list))
+          (sleep-calls 0)
+          (units internal-time-units-per-second))
+      (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
+            (cl-tty-kit::*tick-loop-spin-window* 3)
+            (cl-tty-kit::*tick-loop-sleeper*
+              (lambda (seconds)
+                (push seconds sleep-requests)
+                (incf sleep-calls)
+                (if (= sleep-calls 1)
+                    (incf now 4)
+                    (incf now (round (* seconds units))))))
+            (cl-tty-kit::*tick-loop-spinner*
+              (lambda (deadline)
+                (push (- deadline now) spin-windows)
+                (setf now deadline))))
+        (cl-tty-kit::%tick-loop-sleep-until 10)
+        (expect (nreverse sleep-requests)
+                :to-equal (list (/ 7 units) (/ 3 units)))
+        (expect (nreverse spin-windows) :to-equal (list 3))
+        (expect now :to-be 10))))
   (it "resynchronizes after a frame overrun without a catch-up burst"
     (let ((now 0)
           (starts '())
@@ -225,6 +250,7 @@
           (stream (make-string-output-stream))
           (units internal-time-units-per-second))
       (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
+            (cl-tty-kit::*tick-loop-spin-window* 0)
             (cl-tty-kit::*tick-loop-sleeper*
               (lambda (seconds)
                 (incf now (round (* seconds units))))))
