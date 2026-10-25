@@ -197,8 +197,18 @@ frame or write directly to the loop stream and return that stream.
 The realtime driver also accepts `on-timing`, called as
 `(on-timing event tick-number seconds)` after each measured operation. Tick
 numbers start at 1. The events are `:advance`, `:render`, `:write-string`,
-`:finish-output`, `:deadline-sleep`, `:wake-overshoot`, and `:deadline-miss`;
-`:frame-drop` carries the integer count of skipped tick slots. The callback
+`:finish-output`, `:deadline-sleep`, `:wake-overshoot`, `:spin-window`,
+`:sleep-wake-overshoot`, and `:deadline-miss`; `:frame-drop` carries the
+integer count of skipped tick slots. The loop emits `:spin-window` on every
+tick with the window used for that tick. `:wake-overshoot` reports time past
+the scheduled deadline. `:sleep-wake-overshoot` reports the greatest excess
+beyond a requested sleep duration across that tick's sleep calls, when the
+sleeper ran. The spin window follows the 90th percentile (p90) of up to 31
+recent per-tick `:sleep-wake-overshoot` values, one for each tick where the
+sleeper ran, and stays within the tick interval. Growth requires eight
+consecutive measured ticks where both the p90 target and per-tick overshoot
+exceed the current window. Growth is limited to 1 ms per step; shrink is
+limited to 0.25 ms per step. The callback
 runs without an internal lock held, and its errors propagate. The loop emits
 `:deadline-miss` and `:frame-drop` when it continues after a tick overruns its
 next deadline. See [Animation](../guide/animation.md) for event timing details.

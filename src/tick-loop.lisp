@@ -311,31 +311,37 @@ ticks (default 1/30). Pacing uses monotonic internal-time deadlines, so
 scheduler wake overshoot does not accumulate as drift. If a frame finishes
 past the next deadline, the loop resynchronizes that deadline to the current
 time rather than producing a burst of catch-up frames. The spin window starts
-at *TICK-LOOP-SPIN-WINDOW* (1 ms by default) and adapts toward the p90 of recent
-sleep wake overshoot. It grows by at most 1 ms or shrinks by at most 0.25 ms per
-observed sleep, and is capped at the tick interval. On SBCL/macOS, the current
-thread temporarily requests USER_INTERACTIVE QoS during deadline waiting and
-restores its prior QoS class afterward; an unspecified prior class is restored
-as QOS_CLASS_DEFAULT. Other platforms use the normal thread QoS. STOP is
-checked after each tick is advanced and rendered, so the loop always emits the
-frame that caused it to stop before returning.
+at *TICK-LOOP-SPIN-WINDOW* (1 ms by default) and adapts toward the 90th
+percentile (p90) of up to 31 recent per-tick sleep-wake overshoots, one
+value for each tick where the sleeper ran.
+Growth requires eight consecutive measured ticks where both the p90
+target and per-tick overshoot exceed the current window. Growth is limited to
+1 ms per step; shrink is limited to 0.25 ms, and the window is capped at the
+tick interval. On SBCL/macOS, the current thread temporarily requests USER_INTERACTIVE
+QoS during deadline waiting and restores its prior QoS class afterward; an
+unspecified prior class is restored as QOS_CLASS_DEFAULT. Other platforms use
+the normal thread QoS. STOP is checked after each tick is advanced and
+rendered, so the loop always emits the frame that caused it to stop before
+returning.
 
 ON-TIMING, when supplied, is called as (FUNCALL ON-TIMING EVENT TICK-NUMBER
 VALUE); TICK-NUMBER is one-based. The :ADVANCE, :RENDER, :WRITE-STRING,
 :FINISH-OUTPUT, :DEADLINE-SLEEP, :WAKE-OVERSHOOT, :SPIN-WINDOW, and
 :SLEEP-WAKE-OVERSHOOT events report seconds. The deadline-sleep value is elapsed
-wait up to the scheduled deadline; wake-overshoot is excess time after that
+wait up to the scheduled deadline; wake-overshoot is excess time past that
 deadline. Spin-window reports the window used for that tick. Sleep-wake-overshoot
-reports the greatest excess over a requested sleep wake time when the sleeper
-ran. Deadline-sleep and wake-overshoot are reported on every tick, including
-zero values. Write-string and finish-output are reported only when those
-operations run. A render function that writes directly to STREAM includes that
-work in :RENDER and emits no :WRITE-STRING; :FINISH-OUTPUT is still reported
-when the loop flushes. When completed tick work passes its next scheduled
-deadline, :DEADLINE-MISS reports lateness in seconds and :FRAME-DROP reports
-the integer number of scheduled tick slots skipped by resynchronization.
-ON-TIMING is disabled by default. The callback runs after each measured
-operation returns, without an internal lock held, and its errors propagate."
+reports the greatest excess beyond a requested sleep duration across that
+tick's sleep calls, when the sleeper ran. Deadline-sleep, wake-overshoot, and
+spin-window are reported on every tick; the first two include zero values.
+Sleep-wake-overshoot is reported only when the sleeper ran. Write-string and
+finish-output are reported only when those operations run. A render function
+that writes directly to STREAM includes that work in :RENDER and emits no
+:WRITE-STRING; :FINISH-OUTPUT is still reported when the loop flushes. When
+completed tick work passes its next scheduled deadline, :DEADLINE-MISS reports
+lateness in seconds and :FRAME-DROP reports the integer number of scheduled
+tick slots skipped by resynchronization. ON-TIMING is disabled by default. The
+callback runs after each measured operation returns, without an internal lock
+held, and its errors propagate."
   (%assert-tick-loop-function :advance advance)
   (%assert-tick-loop-function :render render)
   (%assert-tick-loop-function :stop stop)
