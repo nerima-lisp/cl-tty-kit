@@ -76,6 +76,8 @@ STATE unchanged with an empty FRAMES list."
 (defvar *tick-loop-sleeper* (function sleep))
 (defvar *tick-loop-spin-window* (/ internal-time-units-per-second 1000))
 
+(defconstant +tick-loop-max-spin-window+ (floor internal-time-units-per-second 1000))
+
 (defun %tick-loop-now ()
   (funcall *tick-loop-clock*))
 (defun %tick-loop-spin-until (deadline)
@@ -83,16 +85,65 @@ STATE unchanged with an empty FRAMES list."
         do (progn)))
 (defvar *tick-loop-spinner* (function %tick-loop-spin-until))
 
+(progn
+#+(and sbcl darwin)
+(progn
+  ;; macOS qos_class_t values: USER_INTERACTIVE is 0x21 and DEFAULT is 0x15.
+  (sb-alien:define-alien-routine ("pthread_self" %tick-loop-pthread-self)
+      sb-alien:system-area-pointer)
+  (sb-alien:define-alien-routine
+      ("pthread_get_qos_class_np" %tick-loop-pthread-get-qos-class)
+      sb-alien:int
+    (thread sb-alien:system-area-pointer)
+    (qos (* sb-alien:unsigned-int))
+    (relative-priority (* sb-alien:int)))
+  (sb-alien:define-alien-routine
+      ("pthread_set_qos_class_self_np" %tick-loop-pthread-set-qos-class)
+      sb-alien:int
+    (qos sb-alien:unsigned-int)
+    (relative-priority sb-alien:int))
+  (defmacro %with-tick-loop-user-interactive-qos (&body body)
+    `(sb-alien:with-alien ((qos sb-alien:unsigned-int)
+                            (relative-priority sb-alien:int))
+       (let ((status (%tick-loop-pthread-get-qos-class
+                      (%tick-loop-pthread-self)
+                      (sb-alien:addr qos)
+                      (sb-alien:addr relative-priority))))
+         (unless (zerop status)
+           (error "Could not read the current thread QoS class (errno ~D)." status))
+         (if (and (= qos #x21) (zerop relative-priority))
+             (progn ,@body)
+             (let ((restore-qos (if (zerop qos) #x15 qos))
+                   (restore-relative-priority
+                     (if (zerop qos) 0 relative-priority)))
+               (let ((status (%tick-loop-pthread-set-qos-class #x21 0)))
+                 (unless (zerop status)
+                   (error "Could not raise the tick-loop thread QoS class (errno ~D)." status)))
+               (unwind-protect
+                    (progn ,@body)
+                 ;; pthread_set_qos_class_self_np cannot restore UNSPECIFIED.
+                 (let ((status (%tick-loop-pthread-set-qos-class
+                                restore-qos restore-relative-priority)))
+                   (unless (zerop status)
+                     (warn "Could not restore the tick-loop thread QoS class (errno ~D)."
+                           status))))))))))
+#-(and sbcl darwin)
+(defmacro %with-tick-loop-user-interactive-qos (&body body)
+  `(progn ,@body)))
+
 (defun %tick-loop-sleep-until (deadline)
-  (let ((spin-window (max 0 *tick-loop-spin-window*)))
-    (loop for remaining = (- deadline (%tick-loop-now))
-          while (> remaining spin-window)
-          do (funcall *tick-loop-sleeper*
-                      (/ (- remaining spin-window)
-                         internal-time-units-per-second)))
-    (when (< (%tick-loop-now) deadline)
-      (loop while (< (%tick-loop-now) deadline)
-            do (funcall *tick-loop-spinner* deadline)))))
+  (%with-tick-loop-user-interactive-qos
+    (let ((spin-window
+            (min +tick-loop-max-spin-window+
+                 (max 0 *tick-loop-spin-window*))))
+      (loop for remaining = (- deadline (%tick-loop-now))
+            while (> remaining spin-window)
+            do (funcall *tick-loop-sleeper*
+                        (/ (- remaining spin-window)
+                           internal-time-units-per-second)))
+      (when (< (%tick-loop-now) deadline)
+        (loop while (< (%tick-loop-now) deadline)
+              do (funcall *tick-loop-spinner* deadline))))))
 
 (defun tick-loop-run-realtime (state advance render stop
                                &key (stream *standard-output*) (interval 1/30)
@@ -114,9 +165,13 @@ function set from a decoded KEY-EVENT). INTERVAL is the target seconds between
 ticks (default 1/30). Pacing uses monotonic internal-time deadlines, so
 scheduler wake overshoot does not accumulate as drift. If a frame finishes
 past the next deadline, the loop resynchronizes that deadline to the current
-time rather than producing a burst of catch-up frames. STOP is checked after
-each tick is advanced and rendered, so the loop always emits the frame that
-caused it to stop before returning.
+time rather than producing a burst of catch-up frames. The spin phase is
+capped at 1 ms per tick. On SBCL/macOS, the current thread temporarily requests
+USER_INTERACTIVE QoS during deadline waiting and restores its prior QoS class
+afterward; an unspecified prior class is restored as QOS_CLASS_DEFAULT. Other
+platforms use the normal thread QoS. STOP is checked after each tick is
+advanced and rendered, so the loop always emits the frame that caused it to
+stop before returning.
 
 ON-TIMING, when supplied, is called as (FUNCALL ON-TIMING EVENT TICK-NUMBER
 VALUE); TICK-NUMBER is one-based. The :ADVANCE, :RENDER, :WRITE-STRING,
@@ -126,12 +181,12 @@ wake-overshoot is excess time after that deadline. Deadline-sleep and
 wake-overshoot are reported on every tick, including zero values. Write-string
 and finish-output are reported only when those operations run. A render function
 that writes directly to STREAM includes that work in :RENDER and emits no
-:WRITE-STRING; :FINISH-OUTPUT is still reported when the loop flushes. When completed
-tick work passes its next scheduled deadline, :DEADLINE-MISS reports lateness
-in seconds and :FRAME-DROP reports the integer number of scheduled tick slots
-skipped by resynchronization. ON-TIMING is disabled by default. The callback
-runs after each measured operation returns, without an internal lock held, and
-its errors propagate."
+:WRITE-STRING; :FINISH-OUTPUT is still reported when the loop flushes. When
+completed tick work passes its next scheduled deadline, :DEADLINE-MISS reports
+lateness in seconds and :FRAME-DROP reports the integer number of scheduled
+tick slots skipped by resynchronization. ON-TIMING is disabled by default. The
+callback runs after each measured operation returns, without an internal lock
+held, and its errors propagate."
   (%assert-tick-loop-function :advance advance)
   (%assert-tick-loop-function :render render)
   (%assert-tick-loop-function :stop stop)
