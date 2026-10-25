@@ -177,7 +177,7 @@
         (program-error ()
           (setf observer-error-propagated-p t)))
       (expect observer-error-propagated-p :to-be t)))
-  (it "does not accumulate repeated scheduler wake overshoot"
+  (it "adapts recent sleeper overshoot without accumulating deadline drift"
     (let ((now 0)
           (starts '())
           (timings '())
@@ -199,7 +199,7 @@
                  :on-timing (lambda (event tick-number value)
                               (push (list event tick-number value) timings)))))
           (expect final-state :to-be 4)
-          (expect (nreverse starts) :to-equal '(0 12 22 32))
+          (expect (nreverse starts) :to-equal '(0 12 20 30))
           (setf timings (nreverse timings))
           (let ((sleep-timings
                   (remove-if-not
@@ -214,20 +214,22 @@
             (expect (mapcar #'second sleep-timings)
                     :to-equal '(1 2 3 4))
             (expect (mapcar #'third sleep-timings)
-                    :to-equal (list 0 (/ 10 units) (/ 8 units) (/ 8 units)))
+                    :to-equal (list 0 (/ 10 units) (/ 8 units) (/ 10 units)))
             (expect (mapcar #'second overshoot-timings)
                     :to-equal '(1 2 3 4))
             (expect (mapcar #'third overshoot-timings)
-                    :to-equal (list 0 (/ 2 units) (/ 2 units) (/ 2 units))))))))
-  (it "caps the spin phase at one millisecond"
+                    :to-equal (list 0 (/ 2 units) 0 0)))))))
+  (it "caps the adaptive spin phase at one tick interval"
     (let* ((units internal-time-units-per-second)
-           (spin-limit (floor units 1000))
-           (deadline (* 2 spin-limit))
+           (spin-limit (max 1 (floor units 1000)))
+           (interval (* 2 spin-limit))
+           (deadline (* 3 spin-limit))
            (now 0)
            (sleep-requests (list))
-           (spin-windows (list)))
+           (spin-windows (list))
+           (estimator nil))
       (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
-            (cl-tty-kit::*tick-loop-spin-window* (* 2 spin-limit))
+            (cl-tty-kit::*tick-loop-spin-window* interval)
             (cl-tty-kit::*tick-loop-sleeper*
               (lambda (seconds)
                 (push seconds sleep-requests)
@@ -236,15 +238,17 @@
               (lambda (target)
                 (push (- target now) spin-windows)
                 (setf now target))))
-        (cl-tty-kit::%tick-loop-sleep-until deadline)
-        (if (plusp spin-limit)
-            (progn
-              (expect (nreverse sleep-requests)
-                      :to-equal (list (/ spin-limit units)))
-              (expect (nreverse spin-windows) :to-equal (list spin-limit)))
-            (progn
-              (expect sleep-requests :to-equal (list))
-              (expect spin-windows :to-equal (list))))
+        (setf estimator
+              (cl-tty-kit::%tick-loop-make-wake-estimator interval)
+              (cl-tty-kit::%tick-loop-wake-estimator-window estimator)
+              (* 3 spin-limit))
+        (multiple-value-bind (window observed-overshoot)
+            (cl-tty-kit::%tick-loop-sleep-until deadline estimator interval)
+          (expect window :to-be interval)
+          (expect observed-overshoot :to-be 0))
+        (expect (nreverse sleep-requests)
+                :to-equal (list (/ spin-limit units)))
+        (expect (nreverse spin-windows) :to-equal (list interval))
         (expect now :to-be deadline))))
   (it "continues realtime ticks when QoS FFI calls fail"
     (dolist (failure-mode '(:read :raise :restore))
@@ -359,4 +363,92 @@
                    (lambda (timing)
                      (member (first timing) (list :deadline-miss :frame-drop)))
                    timings)
-                  :to-equal nil))))))
+                  :to-equal nil)))))
+  (it "bounds adaptive spin growth and shrink and filters isolated overshoot"
+    (let* ((units internal-time-units-per-second)
+           (millisecond (/ units 1000))
+           (interval (* 20 millisecond))
+           (estimator nil))
+      (let ((cl-tty-kit::*tick-loop-spin-window* millisecond))
+        (setf estimator
+              (cl-tty-kit::%tick-loop-make-wake-estimator interval))
+        (loop repeat 31
+              do (cl-tty-kit::%tick-loop-observe-sleep-wake
+                  estimator 0 interval))
+        (expect (cl-tty-kit::%tick-loop-wake-estimator-window estimator)
+                :to-be millisecond)
+        (cl-tty-kit::%tick-loop-observe-sleep-wake
+         estimator (* 40 millisecond) interval)
+        (expect (cl-tty-kit::%tick-loop-wake-estimator-window estimator)
+                :to-be millisecond)
+        (loop repeat 3
+              do (cl-tty-kit::%tick-loop-observe-sleep-wake
+                  estimator (* 40 millisecond) interval))
+        (expect (cl-tty-kit::%tick-loop-wake-estimator-window estimator)
+                :to-be (* 2 millisecond))
+        (loop repeat 20
+              do (let ((previous
+                         (cl-tty-kit::%tick-loop-wake-estimator-window estimator)))
+                   (cl-tty-kit::%tick-loop-observe-sleep-wake
+                    estimator (* 40 millisecond) interval)
+                   (let ((current
+                           (cl-tty-kit::%tick-loop-wake-estimator-window estimator)))
+                     (expect (<= (- current previous)
+                                 cl-tty-kit::+tick-loop-max-spin-window-growth+)
+                             :to-be t)
+                     (expect (<= current interval) :to-be t))))
+        (expect (cl-tty-kit::%tick-loop-wake-estimator-window estimator)
+                :to-be interval)
+        (loop repeat 28
+              do (let ((previous
+                         (cl-tty-kit::%tick-loop-wake-estimator-window estimator)))
+                   (cl-tty-kit::%tick-loop-observe-sleep-wake estimator 0 interval)
+                   (let ((current
+                           (cl-tty-kit::%tick-loop-wake-estimator-window estimator)))
+                     (expect (<= (- previous current)
+                                 cl-tty-kit::+tick-loop-max-spin-window-shrink+)
+                             :to-be t))))
+        (expect (cl-tty-kit::%tick-loop-wake-estimator-window estimator)
+                :to-be (- interval
+                          cl-tty-kit::+tick-loop-max-spin-window-shrink+)))))
+  (it "uses observed sleep wake delay to expand its spin window"
+    (let* ((units internal-time-units-per-second)
+           (millisecond (/ units 1000))
+           (delay (* 8 millisecond))
+           (now 0)
+           (timings '()))
+      (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
+            (cl-tty-kit::*tick-loop-spin-window* millisecond)
+            (cl-tty-kit::*tick-loop-sleeper*
+              (lambda (seconds)
+                (incf now (+ (round (* seconds units)) delay))))
+            (cl-tty-kit::*tick-loop-spinner*
+              (lambda (deadline)
+                (setf now deadline))))
+        (tick-loop-run-realtime
+         0 #'1+
+         (lambda (state) (declare (ignore state)) nil)
+         (lambda (state) (= state 5))
+         :stream (make-string-output-stream)
+         :interval (/ (* 30 millisecond) units)
+         :on-timing (lambda (event tick-number value)
+                      (push (list event tick-number value) timings)))
+        (setf timings (nreverse timings))
+        (let ((windows
+                (remove-if-not
+                 (lambda (timing) (eq (first timing) :spin-window))
+                 timings))
+              (sleep-overshoots
+                (remove-if-not
+                 (lambda (timing)
+                   (eq (first timing) :sleep-wake-overshoot))
+                 timings)))
+          (expect (mapcar #'third windows)
+                  :to-equal (list (/ millisecond units) (/ millisecond units)
+                                  (/ (* 2 millisecond) units)
+                                  (/ (* 3 millisecond) units)
+                                  (/ (* 4 millisecond) units)))
+          (expect (mapcar #'second sleep-overshoots) :to-equal '(2 3 4 5))
+          (expect (mapcar #'third sleep-overshoots)
+                  :to-equal (list (/ delay units) (/ delay units)
+                                  (/ delay units) (/ delay units))))))))
