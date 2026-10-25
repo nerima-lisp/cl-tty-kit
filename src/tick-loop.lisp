@@ -52,18 +52,20 @@ STATE unchanged with an empty FRAMES list."
           (push frame frames))))
     (values state (nreverse frames))))
 
-(defmacro %tick-loop-sleep-remainder (tick-start-time interval)
-  "Sleep the portion of INTERVAL seconds not already spent since
-TICK-START-TIME (an INTERNAL-TIME-UNITS-PER-SECOND-scaled timestamp), so a
-slow tick shortens the following sleep instead of accumulating drift across
-many frames. A tick that already ran longer than INTERVAL sleeps not at all."
-  `(let* ((tick-start-time ,tick-start-time)
-          (interval ,interval)
-          (elapsed (/ (- (get-internal-real-time) tick-start-time)
-                      internal-time-units-per-second))
-          (remaining (- interval elapsed)))
-     (when (plusp remaining)
-       (sleep remaining))))
+(progn
+  ;; Internal bindings make deadline behavior deterministic in tests without
+  ;; adding clock injection to the public tick-loop API.
+  (defvar *tick-loop-clock* (function get-internal-real-time))
+  (defvar *tick-loop-sleeper* (function sleep))
+
+  (defun %tick-loop-now ()
+    (funcall *tick-loop-clock*))
+
+  (defun %tick-loop-sleep-until (deadline)
+    (let ((remaining (/ (- deadline (%tick-loop-now))
+                        internal-time-units-per-second)))
+      (when (plusp remaining)
+        (funcall *tick-loop-sleeper* remaining)))))
 
 (defun tick-loop-run-realtime (state advance render stop
                                &key (stream *standard-output*) (interval 1/30)
@@ -82,17 +84,20 @@ advance and its return value is threaded into ADVANCE's existing one-argument
 state contract. STOP is a
 function of one argument (the current state) returning true once the loop
 should quit (e.g. a quit-key flag an ADVANCE function set from a decoded
-KEY-EVENT). INTERVAL is the target seconds between ticks (default 1/30);
-%TICK-LOOP-SLEEP-REMAINDER holds that pace without drifting when a tick runs
-long. STOP is checked after each tick is advanced and rendered, so the loop
-always emits the frame that caused it to stop before returning."
+KEY-EVENT). INTERVAL is the target seconds between ticks (default 1/30).
+Pacing uses monotonic internal-time deadlines, so scheduler wake overshoot does
+not accumulate as drift. If a frame finishes past the next deadline, the loop
+resynchronizes that deadline to the current time rather than producing a burst
+of catch-up frames. STOP is checked after each tick is advanced and rendered,
+so the loop always emits the frame that caused it to stop before returning."
   (%assert-tick-loop-function :advance advance)
   (%assert-tick-loop-function :render render)
   (%assert-tick-loop-function :stop stop)
   (%assert-tick-loop-optional-function :poll poll)
   (%assert-tick-loop-interval interval)
-  (loop
-    (let ((tick-start-time (get-internal-real-time)))
+  (let ((next-deadline (%tick-loop-now)))
+    (loop
+      (%tick-loop-sleep-until next-deadline)
       (when poll
         (setf state (funcall poll state)))
       (multiple-value-bind (new-state frame output-written-p output-known-p)
@@ -109,5 +114,8 @@ always emits the frame that caused it to stop before returning."
           (when wrote-output-p
             (finish-output stream)))
         (when (funcall stop state)
-          (return state))
-        (%tick-loop-sleep-remainder tick-start-time interval)))))
+          (return state)))
+      (incf next-deadline (* interval internal-time-units-per-second))
+      (let ((now (%tick-loop-now)))
+        (when (> now next-deadline)
+          (setf next-deadline now))))))

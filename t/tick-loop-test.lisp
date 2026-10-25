@@ -122,4 +122,46 @@
                              :interval 0))
     (expect-non-type-error
      (tick-loop-run-realtime 0 #'1+ (lambda (s) (declare (ignore s)) "")
-                             (lambda (s) t) :poll :not-a-function))))
+                             (lambda (s) t) :poll :not-a-function)))
+  (it "does not accumulate repeated scheduler wake overshoot"
+    (let ((now 0)
+          (starts '())
+          (stream (make-string-output-stream))
+          (units internal-time-units-per-second))
+      (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
+            (cl-tty-kit::*tick-loop-sleeper*
+              (lambda (seconds)
+                (incf now (+ (round (* seconds units)) 2)))))
+        (let ((final-state
+                (tick-loop-run-realtime
+                 0
+                 (lambda (state) (push now starts) (1+ state))
+                 (lambda (state) (declare (ignore state)) nil)
+                 (lambda (state) (= state 4))
+                 :stream stream
+                 :interval (/ 10 units))))
+          (expect final-state :to-be 4)
+          (expect (nreverse starts) :to-equal '(0 12 22 32))))))
+  (it "resynchronizes after a frame overrun without a catch-up burst"
+    (let ((now 0)
+          (starts '())
+          (stream (make-string-output-stream))
+          (units internal-time-units-per-second))
+      (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
+            (cl-tty-kit::*tick-loop-sleeper*
+              (lambda (seconds)
+                (incf now (round (* seconds units))))))
+        (let ((final-state
+                (tick-loop-run-realtime
+                 0
+                 (lambda (state)
+                   (push now starts)
+                   (when (zerop state)
+                     (incf now 25))
+                   (1+ state))
+                 (lambda (state) (declare (ignore state)) nil)
+                 (lambda (state) (= state 3))
+                 :stream stream
+                 :interval (/ 10 units))))
+          (expect final-state :to-be 3)
+          (expect (nreverse starts) :to-equal '(0 25 35)))))))
