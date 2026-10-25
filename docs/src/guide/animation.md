@@ -110,15 +110,25 @@ issuing a burst of catch-up frames.
 Pass `:on-timing` a function to measure loop phases. The callback receives
 `(event tick-number seconds)` after each measured operation, with tick numbers
 starting at 1. Events include `:advance`, `:render`, `:write-string`,
-`:finish-output`, `:deadline-sleep`, `:wake-overshoot`, and `:deadline-miss`;
-`:frame-drop` reports an integer count of skipped tick slots. When the loop
-continues after a tick finishes past its next deadline, `:deadline-miss`
-reports the lateness and `:frame-drop` reports the slots skipped during
-resynchronization. Sleep and wake overshoot events occur on every tick,
-including when their value is zero. Output events occur only when the loop
-writes or flushes a frame. A render function that writes directly to the
-stream is measured as `:render` and does not emit `:write-string`. Callback
-errors propagate to the caller.
+`:finish-output`, `:deadline-sleep`, `:wake-overshoot`, `:spin-window`,
+`:sleep-wake-overshoot`, and `:deadline-miss`; `:frame-drop` reports an integer
+count of skipped tick slots. The loop emits `:spin-window` on every tick with
+the window used for that tick. `:wake-overshoot` reports time past the scheduled
+deadline. `:sleep-wake-overshoot` reports the greatest excess beyond a requested
+sleep duration across that tick's sleep calls, when the sleeper ran. The spin
+window follows the 90th percentile (p90) of up to 31 recent per-tick
+`:sleep-wake-overshoot` values, one for each tick where the sleeper ran, and
+stays within the tick interval. Growth requires eight consecutive measured
+ticks where both the p90 target and per-tick overshoot exceed the current
+window. Growth is limited to 1 ms per step; shrink is limited to 0.25 ms per
+step. When the loop
+continues after a tick finishes past its next deadline, `:deadline-miss` reports
+the lateness and `:frame-drop` reports the slots skipped during
+resynchronization. `:deadline-sleep` and `:wake-overshoot`
+occur on every tick, including when their value is zero. Output events occur
+only when the loop writes or flushes a frame. A render function that writes
+directly to the stream is measured as `:render` and does not emit
+`:write-string`. Callback errors propagate to the caller.
 
 The compatibility string-frame driver accepts either a string or `NIL` from
 `render`; `NIL` suppresses output for that tick without allocating an empty

@@ -58,6 +58,7 @@ the full setup, including the non-Nix path.
 ## Documentation
 
 - [Getting Started](https://nerima-lisp.github.io/cl-tty-kit/getting-started/) — install, then the smallest end-to-end render
+- [Animation](https://nerima-lisp.github.io/cl-tty-kit/guide/animation/) — deterministic and real-time tick loops, including timing events
 - [Screen and Rendering](https://nerima-lisp.github.io/cl-tty-kit/guide/screen-and-rendering/) — the screen model and the diff renderer
 - [Input Decoding](https://nerima-lisp.github.io/cl-tty-kit/guide/input-decoding/) — turning terminal bytes into key events
 - [API Reference](https://nerima-lisp.github.io/cl-tty-kit/reference/api/) — every exported symbol, by subsystem
