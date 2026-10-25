@@ -246,6 +246,59 @@
               (expect sleep-requests :to-equal (list))
               (expect spin-windows :to-equal (list))))
         (expect now :to-be deadline))))
+  (it "continues realtime ticks when QoS FFI calls fail"
+    (dolist (failure-mode '(:read :raise :restore))
+      (let ((now 0)
+            (ticks 0)
+            (warnings 0)
+            (qos #x15)
+            (get-calls 0)
+            (set-calls 0)
+            (units internal-time-units-per-second))
+        (let ((cl-tty-kit::*tick-loop-clock* (lambda () now))
+              (cl-tty-kit::*tick-loop-spin-window* 0)
+              (cl-tty-kit::*tick-loop-sleeper*
+                (lambda (seconds)
+                  (incf now (round (* seconds units)))))
+              (cl-tty-kit::*tick-loop-qos-getter*
+                (lambda ()
+                  (incf get-calls)
+                  (if (eq failure-mode :read)
+                      (values 42 qos 0)
+                      (values 0 qos 0))))
+              (cl-tty-kit::*tick-loop-qos-setter*
+                (lambda (class relative-priority)
+                  (declare (ignore relative-priority))
+                  (incf set-calls)
+                  (cond
+                    ((and (eq failure-mode :raise) (= class #x21)) 42)
+                    ((and (eq failure-mode :restore) (= class #x15)) 42)
+                    (t (setf qos class) 0))))
+              (cl-tty-kit::*tick-loop-qos-warning-issued-p* nil))
+          (handler-bind ((warning
+                           (lambda (condition)
+                             (incf warnings)
+                             (muffle-warning condition))))
+            (expect
+              (tick-loop-run-realtime
+               0
+               (lambda (state)
+                 (incf ticks)
+                 (1+ state))
+               (lambda (state) (declare (ignore state)) nil)
+               (lambda (state) (= state 3))
+               :stream (make-string-output-stream)
+               :interval 1/1000)
+              :to-be 3))
+          (expect ticks :to-be 3)
+          (expect warnings :to-be 1)
+          (expect get-calls :to-be 3)
+          (expect qos :to-be (if (eq failure-mode :restore) #x21 #x15))
+          (expect set-calls :to-be
+                  (case failure-mode
+                    (:read 0)
+                    (:raise 3)
+                    (:restore 2)))))))
   (it "resynchronizes after a frame overrun without a catch-up burst"
     (let ((now 0)
           (starts '())

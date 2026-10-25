@@ -86,50 +86,105 @@ STATE unchanged with an empty FRAMES list."
 (defvar *tick-loop-spinner* (function %tick-loop-spin-until))
 
 (progn
-#+(and sbcl darwin)
-(progn
-  ;; macOS qos_class_t values: USER_INTERACTIVE is 0x21 and DEFAULT is 0x15.
-  (sb-alien:define-alien-routine ("pthread_self" %tick-loop-pthread-self)
-      sb-alien:system-area-pointer)
-  (sb-alien:define-alien-routine
-      ("pthread_get_qos_class_np" %tick-loop-pthread-get-qos-class)
-      sb-alien:int
-    (thread sb-alien:system-area-pointer)
-    (qos (* sb-alien:unsigned-int))
-    (relative-priority (* sb-alien:int)))
-  (sb-alien:define-alien-routine
-      ("pthread_set_qos_class_self_np" %tick-loop-pthread-set-qos-class)
-      sb-alien:int
-    (qos sb-alien:unsigned-int)
-    (relative-priority sb-alien:int))
-  (defmacro %with-tick-loop-user-interactive-qos (&body body)
-    `(sb-alien:with-alien ((qos sb-alien:unsigned-int)
-                            (relative-priority sb-alien:int))
-       (let ((status (%tick-loop-pthread-get-qos-class
-                      (%tick-loop-pthread-self)
-                      (sb-alien:addr qos)
-                      (sb-alien:addr relative-priority))))
-         (unless (zerop status)
-           (error "Could not read the current thread QoS class (errno ~D)." status))
-         (if (and (= qos #x21) (zerop relative-priority))
-             (progn ,@body)
+  (defvar *tick-loop-qos-getter* nil)
+  (defvar *tick-loop-qos-setter* nil)
+  (defvar *tick-loop-qos-warning-issued-p* nil)
+  (defvar *tick-loop-qos-warning-lock*
+    #+sb-thread (sb-thread:make-mutex :name "tick-loop QoS warning")
+    #-sb-thread nil)
+
+  (defun %tick-loop-warn-qos-failure-once (operation failure)
+    (flet ((report ()
+             (unless *tick-loop-qos-warning-issued-p*
+               (setf *tick-loop-qos-warning-issued-p* t)
+               (warn "Could not ~A the tick-loop thread QoS; continuing without the QoS optimization (~A)."
+                     operation failure))))
+      #+sb-thread
+      (sb-thread:with-mutex (*tick-loop-qos-warning-lock*)
+        (report))
+      #-sb-thread
+      (report)))
+
+  (defun %tick-loop-try-get-qos ()
+    (handler-case
+        (multiple-value-bind (status qos relative-priority)
+            (funcall *tick-loop-qos-getter*)
+          (if (zerop status)
+              (values t qos relative-priority nil)
+              (values nil nil nil status)))
+      (error (condition)
+        (values nil nil nil condition))))
+
+  (defun %tick-loop-try-set-qos (qos relative-priority)
+    (handler-case
+        (let ((status (funcall *tick-loop-qos-setter* qos relative-priority)))
+          (unless (zerop status)
+            status))
+      (error (condition)
+        condition)))
+
+  (defun %tick-loop-call-with-user-interactive-qos (body)
+    (if (and *tick-loop-qos-getter* *tick-loop-qos-setter*)
+        (multiple-value-bind (read-p qos relative-priority failure)
+            (%tick-loop-try-get-qos)
+          (cond
+            ((not read-p)
+             (%tick-loop-warn-qos-failure-once "read" failure)
+             (funcall body))
+            ((and (= qos #x21) (zerop relative-priority))
+             (funcall body))
+            (t
              (let ((restore-qos (if (zerop qos) #x15 qos))
                    (restore-relative-priority
                      (if (zerop qos) 0 relative-priority)))
-               (let ((status (%tick-loop-pthread-set-qos-class #x21 0)))
-                 (unless (zerop status)
-                   (error "Could not raise the tick-loop thread QoS class (errno ~D)." status)))
-               (unwind-protect
-                    (progn ,@body)
-                 ;; pthread_set_qos_class_self_np cannot restore UNSPECIFIED.
-                 (let ((status (%tick-loop-pthread-set-qos-class
+               (let ((failure (%tick-loop-try-set-qos #x21 0)))
+                 (if failure
+                     (progn
+                       (%tick-loop-warn-qos-failure-once "raise" failure)
+                       (funcall body))
+                     (unwind-protect
+                          (funcall body)
+                       ;; pthread_set_qos_class_self_np cannot restore UNSPECIFIED.
+                       (let ((failure
+                               (%tick-loop-try-set-qos
                                 restore-qos restore-relative-priority)))
-                   (unless (zerop status)
-                     (warn "Could not restore the tick-loop thread QoS class (errno ~D)."
-                           status))))))))))
-#-(and sbcl darwin)
-(defmacro %with-tick-loop-user-interactive-qos (&body body)
-  `(progn ,@body)))
+                         (when failure
+                           (%tick-loop-warn-qos-failure-once "restore" failure))))))))))
+        (funcall body)))
+
+  #+(and sbcl darwin)
+  (progn
+    ;; macOS qos_class_t values: USER_INTERACTIVE is 0x21 and DEFAULT is 0x15.
+    (sb-alien:define-alien-routine ("pthread_self" %tick-loop-pthread-self)
+        sb-alien:system-area-pointer)
+    (sb-alien:define-alien-routine
+        ("pthread_get_qos_class_np" %tick-loop-pthread-get-qos-class)
+        sb-alien:int
+      (thread sb-alien:system-area-pointer)
+      (qos (* sb-alien:unsigned-int))
+      (relative-priority (* sb-alien:int)))
+    (sb-alien:define-alien-routine
+        ("pthread_set_qos_class_self_np" %tick-loop-pthread-set-qos-class)
+        sb-alien:int
+      (qos sb-alien:unsigned-int)
+      (relative-priority sb-alien:int))
+    (defun %tick-loop-get-qos ()
+      (sb-alien:with-alien ((qos sb-alien:unsigned-int)
+                            (relative-priority sb-alien:int))
+        (values (%tick-loop-pthread-get-qos-class
+                 (%tick-loop-pthread-self)
+                 (sb-alien:addr qos)
+                 (sb-alien:addr relative-priority))
+                qos relative-priority)))
+    (defun %tick-loop-set-qos (qos relative-priority)
+      (%tick-loop-pthread-set-qos-class qos relative-priority))
+    (setf *tick-loop-qos-getter* #'%tick-loop-get-qos
+          *tick-loop-qos-setter* #'%tick-loop-set-qos))
+
+  (defmacro %with-tick-loop-user-interactive-qos (&body body)
+    `(if (and *tick-loop-qos-getter* *tick-loop-qos-setter*)
+         (%tick-loop-call-with-user-interactive-qos (lambda () ,@body))
+         (progn ,@body))))
 
 (defun %tick-loop-sleep-until (deadline)
   (%with-tick-loop-user-interactive-qos
