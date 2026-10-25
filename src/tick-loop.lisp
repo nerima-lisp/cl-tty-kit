@@ -76,6 +76,8 @@ STATE unchanged with an empty FRAMES list."
 (defvar *tick-loop-sleeper* (function sleep))
 (defvar *tick-loop-spin-window* (/ internal-time-units-per-second 1000))
 
+(defconstant +tick-loop-wake-growth-confirmation-count+ 8)
+
 (progn
   (defconstant +tick-loop-wake-history-size+ 31)
   (defconstant +tick-loop-max-spin-window-growth+
@@ -89,7 +91,8 @@ STATE unchanged with an empty FRAMES list."
     window
     (samples (make-array +tick-loop-wake-history-size+ :initial-element 0))
     (count 0)
-    (next-index 0))
+    (next-index 0)
+    (high-overshoot-streak 0))
 
   (defun %tick-loop-make-wake-estimator (interval)
     (let* ((minimum-window
@@ -125,16 +128,29 @@ STATE unchanged with an empty FRAMES list."
                          (%tick-loop-wake-p90 estimator))))
              (current
                (min interval (%tick-loop-wake-estimator-window estimator)))
+             (high-overshoot-streak
+               (if (and (> target current) (> overshoot current))
+                   (1+ (%tick-loop-wake-estimator-high-overshoot-streak
+                        estimator))
+                   0))
              (window
                (cond
                  ((> target current)
-                  (min target
-                       (+ current +tick-loop-max-spin-window-growth+)))
+                  (if (>= high-overshoot-streak
+                          +tick-loop-wake-growth-confirmation-count+)
+                      (min target
+                           (+ current +tick-loop-max-spin-window-growth+))
+                      current))
                  ((< target current)
                   (max target
                        (- current +tick-loop-max-spin-window-shrink+)))
                  (t current))))
-        (setf (%tick-loop-wake-estimator-window estimator) window)
+        ;; The p90 can stay high after a short burst leaves the sample tail.
+        ;; Require ongoing raw overshoot before growing the spin window.
+        (setf (%tick-loop-wake-estimator-high-overshoot-streak estimator)
+              high-overshoot-streak
+              (%tick-loop-wake-estimator-window estimator)
+              window)
         window))))
 
 (defun %tick-loop-now ()
