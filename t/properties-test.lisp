@@ -197,4 +197,3 @@
           (expect (concatenate '(vector (unsigned-byte 8))
                                captured (subseq remaining 0 count))
                   :to-equalp payload))))))
-
