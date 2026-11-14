@@ -226,10 +226,14 @@ alongside the stream API. See [PTY](../guide/pty.md).
 | Input monitoring | `call-with-input-monitor` |
 
 `(call-with-input-monitor fd function on-event &key on-finish)` runs `function`
-on the caller while a helper reads `fd` and calls `on-event` for each event from
-a private decoder with bracketed-paste collection enabled. Returns the captured
-octet vector and a list of `function`'s multiple values. After stopping and
+on the caller while a helper reads `fd` and calls `on-event` for decoded events
+while active. Shutdown may leave captured bytes without notifications; every
+byte read remains in the raw result. The private decoder collects bracketed
+paste and must start at a complete input-sequence boundary, since it does not
+inherit another decoder's pending state. Returns the captured octet vector and
+a list of `function`'s multiple values. After stopping and
 joining, `on-finish` receives that vector on the caller, including during a
 nonlocal exit. Reads from `fd` must be exclusive and event callbacks must return
-promptly without blocking. See [Input Decoding](../guide/input-decoding.md#monitoring-input-during-a-caller-operation)
-for cleanup, error, and replay behavior.
+promptly without blocking. Requires SBCL thread support; otherwise signals
+`unsupported-feature`. See [Input Decoding](../guide/input-decoding.md#monitoring-input-during-a-caller-operation)
+for cleanup latency measurements, errors, and replay behavior.

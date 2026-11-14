@@ -4,16 +4,21 @@
 (defun call-with-input-monitor (fd function on-event &key on-finish)
   "Run FUNCTION on the caller while a helper monitors terminal FD.
 Return the exact octets read, in order, and FUNCTION's multiple values as a
-list. ON-EVENT receives each decoded event on the helper thread, using a
-private decoder that collects bracketed paste. ON-FINISH, when supplied,
+list. While active, ON-EVENT receives decoded events on the helper thread.
+Shutdown can omit notifications for captured bytes; the raw result still
+preserves every byte read. The private decoder collects bracketed paste and
+must start at a complete input-sequence boundary, without another decoder's
+pending state. ON-FINISH, when supplied,
 receives the same octet vector on the caller after the helper has joined,
 including when FUNCTION exits nonlocally. A helper error is re-signaled on
 the caller after a normal return from FUNCTION; a nonlocal exit takes priority.
 
 The caller must exclusively own reads from FD for this scope and keep FD open.
-Callbacks must return promptly without blocking: the helper waits at most 20ms
-per poll and stops and joins within 50ms under that precondition, excluding OS
-scheduling delays. The helper does not flush partial UTF-8, escape, or paste
+Event callbacks must return promptly without blocking. The helper waits at most
+20ms per poll. The cleanup test's p95 target is 50ms over 20 idle samples per
+exit mode with no-op event callbacks; callback runtime and OS scheduling affect
+latency. Requires SBCL thread support; otherwise signals UNSUPPORTED-FEATURE.
+The helper does not flush partial UTF-8, escape, or paste
 input when it stops; those raw bytes remain in the returned vector. FD is not
 closed and its blocking mode is unchanged."
   (%assert-fd fd)

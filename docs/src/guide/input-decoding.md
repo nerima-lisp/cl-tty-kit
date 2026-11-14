@@ -54,9 +54,11 @@ instead.
 ## Monitoring input during a caller operation
 
 `call-with-input-monitor` runs a function on the calling thread while a helper
-reads a terminal file descriptor. Each decoded event reaches `on-event` on the
-helper thread. Its private decoder collects bracketed paste, so a C-g inside a
-paste remains part of the paste event. The helper waits at most 20 ms per poll.
+reads a terminal file descriptor. While monitoring is active, decoded events
+reach `on-event` on the helper thread. Shutdown can leave captured bytes without
+event notifications; the raw result still preserves every byte read for replay.
+The helper waits at most 20 ms per poll. This API requires SBCL thread support;
+without it, the call signals `unsupported-feature`.
 
 ```lisp
 (call-with-input-monitor terminal-fd
@@ -72,6 +74,12 @@ keeps it open until the monitor returns. The monitor neither closes it nor
 changes its blocking mode. Drain bytes already buffered by a Lisp stream before
 entering this scope and replay them before the monitor's bytes.
 
+Begin monitoring at a complete input-sequence boundary. The private decoder
+does not inherit another decoder's buffered UTF-8, escape, or paste state.
+Complete any sequence pending in the application's decoder before entering
+the scope. Bracketed paste is collected only when the monitor reads its opening
+marker; a C-g inside such a paste remains part of the paste event.
+
 After the operation returns or exits nonlocally, cleanup requests a stop and
 joins the helper before invoking `on-finish` on the caller. The callback receives
 the captured vector even during a nonlocal exit. Use it to recover input when
@@ -82,18 +90,14 @@ return; an operation's nonlocal exit takes priority. An error in `on-finish`
 propagates from cleanup under the ordinary `unwind-protect` rules.
 
 Event callbacks must return promptly without waiting for the operation or
-performing blocking I/O. With that precondition, stopping and joining takes at
-most 50 ms, apart from OS scheduling delays. Cleanup inhibits asynchronous Lisp
-interrupts until joining and input delivery finish. It does not flush the
-decoder: an unfinished UTF-8 sequence, escape sequence, or paste remains in the
+performing blocking I/O. The cleanup regression test measures 20 samples each
+for normal return and nonlocal exit, with no incoming input and a no-op event
+callback. Its p95 stop-and-join target is 50 ms. Callback runtime and OS
+scheduling affect latency; this is not a time bound for arbitrary callbacks.
+Cleanup inhibits asynchronous Lisp interrupts until joining and input delivery
+finish. It does not flush the decoder: an unfinished UTF-8 sequence, escape
+sequence, or paste remains in the
 raw bytes for the application's existing decoder to finish later.
-
-### v1.8.0 release notes draft
-
-Adds `call-with-input-monitor` for observing terminal input while an operation
-runs on the caller. The API preserves raw byte order, collects bracketed paste,
-and delivers captured input after joining the helper on normal and nonlocal
-exits. Existing exports and input-decoding behavior are unchanged.
 
 ## The `key-event` struct
 
