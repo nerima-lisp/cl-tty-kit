@@ -68,11 +68,11 @@ case below.")
     (expect (lambda () (terminal-size "fd")) :to-throw))
   (it "reports size unavailable for an FD that overflows the ioctl's C int, rather than erroring"
     ;; An FD that passes %ASSERT-TERMINAL-FD's own validation (a non-negative
-    ;; integer) but overflows the C int SB-UNIX:UNIX-IOCTL marshals it into
-    ;; raises a genuine Lisp error at the FFI boundary -- distinct from an
-    ;; ordinary ioctl failure (e.g. a closed FD), which UNIX-IOCTL reports by
-    ;; returning NIL, not by signaling. TERMINAL-SIZE/%SET-TERMINAL-SIZE catch
-    ;; that error too, reporting it the same as "size unavailable".
+    ;; integer) but overflows the C int SB-POSIX:IOCTL marshals it into raises
+    ;; a TYPE-ERROR at the FFI boundary -- distinct from an ordinary ioctl
+    ;; failure (e.g. a closed FD), which SB-POSIX:IOCTL reports as
+    ;; SB-POSIX:SYSCALL-ERROR. TERMINAL-SIZE/%SET-TERMINAL-SIZE catch that
+    ;; error too, reporting it the same as "size unavailable".
     (expect (multiple-value-list (terminal-size (expt 2 40))) :to-equal '(nil nil))
     (expect (cl-tty-kit::%set-terminal-size (expt 2 40) 80 24) :to-be-falsy))
   (it "reports size unavailable for an unrecognized platform (no known ioctl constant)"
@@ -163,6 +163,16 @@ case below.")
             (cl-tty-kit::%set-terminal-size fd 80 24)
           (expect successp :to-be-falsy)
           (expect (search "errno" (format nil "~A" reason)))))))
+  (it "issues ioctl through SB-POSIX, not SB-UNIX:UNIX-IOCTL, which SBCL 2.6.10 removed"
+    ;; A reference to a symbol SBCL no longer exports fails at read time, so
+    ;; one surviving call would stop the whole library from loading on 2.6.10+.
+    (let ((sources (directory (cl-tty-kit/bootstrap:project-pathname "src/*.lisp"))))
+      (expect (member "terminal-size" sources :key #'pathname-name :test #'string=))
+      (dolist (source sources)
+        (expect (cons (pathname-name source)
+                      (search "sb-unix:unix-ioctl"
+                              (string-downcase (uiop:read-file-string source))))
+                :to-equal (cons (pathname-name source) nil)))))
   (it "reports :UNSUPPORTED-PLATFORM when the host's TIOCSWINSZ constant is unknown"
     ;; +TIOCSWINSZ+ is an ordinary special variable, so rebinding it to NIL is
     ;; how the unrecognized-platform path is reached on a platform that is in

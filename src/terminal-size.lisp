@@ -4,7 +4,7 @@
 ;;; --------------------------------------------------------------------------
 ;;; Runtime terminal window size (SBCL, Linux/Darwin)
 ;;;
-;;; Queries ioctl(TIOCGWINSZ) via SB-UNIX:UNIX-IOCTL. The request constant differs
+;;; Queries ioctl(TIOCGWINSZ) via SB-POSIX:IOCTL. The request constant differs
 ;;; by platform; on anything else, or off a real terminal, TERMINAL-SIZE reports
 ;;; the size as unavailable (NIL) rather than signaling, so callers can fall back
 ;;; to a default (e.g. 80x24) or a cursor-position probe.
@@ -15,11 +15,20 @@
 ;;; was never applied leaves the child process believing a window it does not
 ;;; have, and no fallback repairs that.
 ;;;
-;;; SB-UNIX:UNIX-IOCTL (rather than a hand-rolled DEFINE-ALIEN-ROUTINE) is used
-;;; deliberately: ioctl is variadic, and on the arm64 ABI variadic arguments pass
-;;; on the stack while a fixed-prototype alien call passes them in registers,
-;;; producing EFAULT. SBCL's own ioctl wrapper marshals the pointer correctly.
+;;; SB-POSIX:IOCTL (rather than a hand-rolled DEFINE-ALIEN-ROUTINE) is used
+;;; deliberately: ioctl is variadic, and on the arm64 Darwin ABI variadic
+;;; arguments pass on the stack while a fixed-prototype alien call passes them in
+;;; registers, producing EFAULT. SB-POSIX declares the pointer argument after
+;;; &OPTIONAL, which SBCL's alien layer treats as the start of the varargs, so it
+;;; is marshalled correctly. The UNIX-IOCTL wrapper in SB-UNIX, used here before,
+;;; was removed in SBCL 2.6.10 with no successor. SB-POSIX:IOCTL returns on success and signals
+;;; SB-POSIX:SYSCALL-ERROR on failure; both callers below turn that back into
+;;; the NIL / errno-string results they have always returned.
 ;;; --------------------------------------------------------------------------
+
+#+sbcl
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :sb-posix))
 
 #+sbcl
 (sb-alien:define-alien-type nil
@@ -62,9 +71,8 @@ to standard input (0)."
       (values nil nil)
       (handler-case
           (sb-alien:with-alien ((winsize (sb-alien:struct %winsize)))
-            (if (and (sb-unix:unix-ioctl fd +tiocgwinsz+
-                                         (sb-alien:alien-sap (sb-alien:addr winsize)))
-                     (plusp (sb-alien:slot winsize 'columns))
+            (sb-posix:ioctl fd +tiocgwinsz+ (sb-alien:addr winsize))
+            (if (and (plusp (sb-alien:slot winsize 'columns))
                      (plusp (sb-alien:slot winsize 'rows)))
                 (values (sb-alien:slot winsize 'columns)
                         (sb-alien:slot winsize 'rows))
@@ -119,13 +127,11 @@ turns REASON into a TERMINAL-SIZE-SET-FAILED condition."
                      (sb-alien:slot winsize 'columns) columns
                      (sb-alien:slot winsize 'x-pixels) 0
                      (sb-alien:slot winsize 'y-pixels) 0)
-               (multiple-value-bind (successp errno)
-                   (sb-unix:unix-ioctl fd +tiocswinsz+
-                                       (sb-alien:alien-sap (sb-alien:addr winsize)))
-                 (if successp
-                     (values t nil)
-                     (values nil (format nil "ioctl TIOCSWINSZ failed (errno ~A)"
-                                         errno)))))
+               (sb-posix:ioctl fd +tiocswinsz+ (sb-alien:addr winsize))
+               (values t nil))
+           (sb-posix:syscall-error (condition)
+             (values nil (format nil "ioctl TIOCSWINSZ failed (errno ~A)"
+                                 (sb-posix:syscall-errno condition))))
            (error (condition) (values nil condition))))))
 
 #+sbcl
