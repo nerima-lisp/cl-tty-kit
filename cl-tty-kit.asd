@@ -182,6 +182,7 @@
                (:file "t/raw-mode-test")
                (:file "t/session-test")
                (:file "t/pty-test")
+               (:file "t/input-monitor-test")
                (:file "t/screen-test")
                (:file "t/screen-mutation-test")
                (:file "t/box-test")

@@ -159,3 +159,42 @@
           (screen-put-cell current x y (code-char (+ 33 (mod (+ x y) 90))))))
       (expect (lambda () (render-diff current previous))
               :to-allocate-under (* 2 1024 1024)))))
+
+#+sb-thread
+(describe "input monitoring byte conservation"
+  (it-property "arbitrary write partitions preserve raw bytes and decoded events"
+      ((text (cl-weave:gen-string :min-length 0 :max-length 32 :alphabet "abcXYZ"))
+       (widths (cl-weave:gen-list (cl-weave:gen-integer :min 1 :max 12)
+                                  :min-length 1 :max-length 32)))
+    (monitor-test-partitioned-input
+      (concatenate '(simple-array (unsigned-byte 8) (*))
+                   (map '(vector (unsigned-byte 8)) #'char-code text)
+                   (monitor-test-octets
+                     '(7 27 91 49 48 51 59 53 117 226 156 147
+                       27 91 50 48 48 126 97 7 98 27 91 50 48 49 126)))
+      widths))
+  (it-property "a stop racing with reads loses or duplicates no arbitrary octet"
+      ((octets (cl-weave:gen-list (cl-weave:gen-integer :min 0 :max 255)
+                                  :min-length 1 :max-length 128))
+       (delay (cl-weave:gen-integer :min 0 :max 2)))
+    (with-monitor-pipe (reader writer)
+      (let ((payload (monitor-test-octets octets))
+            (captured nil)
+            (remaining (make-array 256 :element-type '(unsigned-byte 8))))
+        (handler-case
+            (uiop:symbol-call
+              :cl-tty-kit :call-with-input-monitor reader
+              (lambda ()
+                (fd-write-octets writer payload)
+                (sleep (/ delay 1000)))
+              (lambda (event) (declare (ignore event)))
+              :on-finish (lambda (bytes) (setf captured bytes)))
+          (invalid-utf8-sequence () nil))
+        (expect captured)
+        (let ((count (if (fd-wait reader :input 0)
+                         (fd-read-octets reader remaining)
+                         0)))
+          (expect (concatenate '(vector (unsigned-byte 8))
+                               captured (subseq remaining 0 count))
+                  :to-equalp payload))))))
+
