@@ -296,6 +296,7 @@
     "PTY-PID"
     "FD-READ-OCTETS"
     "FD-WRITE-OCTETS"
+    "CALL-WITH-INPUT-MONITOR"
     "ANSI-REQUEST-DEVICE-ATTRIBUTES"))
 
 (defparameter +expected-development-commands+ (list

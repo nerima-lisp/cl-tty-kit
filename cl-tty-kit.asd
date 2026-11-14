@@ -134,7 +134,8 @@
                (:file "src/renderer")
                (:file "src/tick-loop")
                (:file "src/pty")
-               (:file "src/pty-fd"))
+               (:file "src/pty-fd")
+               (:file "src/input-monitor"))
   ;; Mandatory. Without it `asdf:test-system "cl-tty-kit"` reaches only the
   ;; :perform below; the delegation states, in the one place ASDF looks, that
   ;; the test system is what test-op is about. See PACKAGE_STANDARD.md.

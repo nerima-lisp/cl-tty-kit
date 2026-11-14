@@ -317,4 +317,5 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:pty-pid
    #:fd-wait
    #:fd-read-octets
+   #:call-with-input-monitor
    #:fd-write-octets))

@@ -51,6 +51,50 @@ instead.
     [Mouse Input](mouse-input.md) for the `mouse-event` structure. This page
     covers key events.
 
+## Monitoring input during a caller operation
+
+`call-with-input-monitor` runs a function on the calling thread while a helper
+reads a terminal file descriptor. Each decoded event reaches `on-event` on the
+helper thread. Its private decoder collects bracketed paste, so a C-g inside a
+paste remains part of the paste event. The helper waits at most 20 ms per poll.
+
+```lisp
+(call-with-input-monitor terminal-fd
+  (lambda () (perform-operation))
+  (lambda (event) (observe-event event))
+  :on-finish (lambda (octets) (queue-for-replay octets)))
+```
+
+The primary result is an octet vector containing every byte the helper read, in
+order. The secondary result is a list of the operation's multiple return values.
+The caller owns reads from the descriptor exclusively during the operation and
+keeps it open until the monitor returns. The monitor neither closes it nor
+changes its blocking mode. Drain bytes already buffered by a Lisp stream before
+entering this scope and replay them before the monitor's bytes.
+
+After the operation returns or exits nonlocally, cleanup requests a stop and
+joins the helper before invoking `on-finish` on the caller. The callback receives
+the captured vector even during a nonlocal exit. Use it to recover input when
+the primary return value cannot be received. If helper creation fails, cleanup
+delivers an empty vector. Argument validation happens before this cleanup scope.
+An error in the helper is re-signaled on the caller after a normal operation
+return; an operation's nonlocal exit takes priority. An error in `on-finish`
+propagates from cleanup under the ordinary `unwind-protect` rules.
+
+Event callbacks must return promptly without waiting for the operation or
+performing blocking I/O. With that precondition, stopping and joining takes at
+most 50 ms, apart from OS scheduling delays. Cleanup inhibits asynchronous Lisp
+interrupts until joining and input delivery finish. It does not flush the
+decoder: an unfinished UTF-8 sequence, escape sequence, or paste remains in the
+raw bytes for the application's existing decoder to finish later.
+
+### v1.8.0 release notes draft
+
+Adds `call-with-input-monitor` for observing terminal input while an operation
+runs on the caller. The API preserves raw byte order, collects bracketed paste,
+and delivers captured input after joining the helper on normal and nonlocal
+exits. Existing exports and input-decoding behavior are unchanged.
+
 ## The `key-event` struct
 
 Every decoded key is a `key-event`. It is a plain `defstruct`, so the exported

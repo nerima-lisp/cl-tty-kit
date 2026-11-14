@@ -223,3 +223,13 @@ alongside the stream API. See [PTY](../guide/pty.md).
 | --- | --- |
 | Struct / stream | `pty`, `make-pty`, `pty-process`, `pty-stream`, `pty-read`, `pty-write`, `pty-resize`, `pty-alive-p`, `pty-exit-code`, `close-pty` |
 | fd-centric layer | `pty-fd`, `pty-pid`, `stream-fd`, `fd-read-octets`, `fd-write-octets`, `fd-wait` |
+| Input monitoring | `call-with-input-monitor` |
+
+`(call-with-input-monitor fd function on-event &key on-finish)` runs `function`
+on the caller while a helper reads `fd` and calls `on-event` for each event from
+a private decoder with bracketed-paste collection enabled. Returns the captured
+octet vector and a list of `function`'s multiple values. After stopping and
+joining, `on-finish` receives that vector on the caller, including during a
+nonlocal exit. Reads from `fd` must be exclusive and event callbacks must return
+promptly without blocking. See [Input Decoding](../guide/input-decoding.md#monitoring-input-during-a-caller-operation)
+for cleanup, error, and replay behavior.
