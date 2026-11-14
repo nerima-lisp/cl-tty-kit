@@ -184,6 +184,7 @@
                (:file "t/session-test")
                (:file "t/pty-test")
                (:file "t/input-monitor-test")
+               (:file "t/input-monitor-revision-test")
                (:file "t/screen-test")
                (:file "t/screen-mutation-test")
                (:file "t/box-test")

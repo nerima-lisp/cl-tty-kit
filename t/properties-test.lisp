@@ -173,27 +173,38 @@
                      '(7 27 91 49 48 51 59 53 117 226 156 147
                        27 91 50 48 48 126 97 7 98 27 91 50 48 49 126)))
       widths))
-  (it-property "a stop racing with reads loses or duplicates no arbitrary octet"
+)
+
+#+sb-thread
+(describe "input monitor streaming conservation"
+  (let ((trials 0)
+        (both-nonempty 0))
+    (cl-weave:before-all
+      (setf trials 0 both-nonempty 0))
+    (it-property "continuous arbitrary-byte writes survive randomized monitor shutdown"
+        ((octets (cl-weave:gen-list (cl-weave:gen-integer :min 0 :max 255)
+                                    :min-length 8193 :max-length 12289))
+         (delay (cl-weave:gen-integer :min 0 :max 5)))
+      (multiple-value-bind (captured remaining body-values diagnostics)
+          (monitor-test-streaming-trace (monitor-test-octets octets) (/ delay 1000))
+        (incf trials)
+        (when (and (plusp (length captured)) (plusp (length remaining)))
+          (incf both-nonempty))
+        (expect (concatenate '(vector (unsigned-byte 8)) captured remaining)
+                :to-equalp (monitor-test-octets octets))
+        (expect body-values :to-equal '(:body-complete))
+        (expect (<= (length diagnostics) 1))))
+    (cl-weave:after-all
+      (format t "~&monitor streaming property trials=~D both-nonempty=~D~%"
+              trials both-nonempty)
+      (expect (>= trials 100))
+      (expect (>= both-nonempty 20)))))
+
+#+sb-thread
+(describe "input monitor arbitrary byte partitions"
+  (it-property "arbitrary bytes beyond a read buffer keep their exact write order"
       ((octets (cl-weave:gen-list (cl-weave:gen-integer :min 0 :max 255)
-                                  :min-length 1 :max-length 128))
-       (delay (cl-weave:gen-integer :min 0 :max 2)))
-    (with-monitor-pipe (reader writer)
-      (let ((payload (monitor-test-octets octets))
-            (captured nil)
-            (remaining (make-array 256 :element-type '(unsigned-byte 8))))
-        (handler-case
-            (uiop:symbol-call
-              :cl-tty-kit :call-with-input-monitor reader
-              (lambda ()
-                (fd-write-octets writer payload)
-                (sleep (/ delay 1000)))
-              (lambda (event) (declare (ignore event)))
-              :on-finish (lambda (bytes) (setf captured bytes)))
-          (invalid-utf8-sequence () nil))
-        (expect captured)
-        (let ((count (if (fd-wait reader :input 0)
-                         (fd-read-octets reader remaining)
-                         0)))
-          (expect (concatenate '(vector (unsigned-byte 8))
-                               captured (subseq remaining 0 count))
-                  :to-equalp payload))))))
+                                  :min-length 4097 :max-length 8193))
+       (widths (cl-weave:gen-list (cl-weave:gen-integer :min 1 :max 1024)
+                                  :min-length 8 :max-length 24)))
+    (monitor-test-partitioned-raw (monitor-test-octets octets) widths)))

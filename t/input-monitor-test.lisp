@@ -4,7 +4,7 @@
 (defmacro with-monitor-pipe ((reader writer) &body body)
   `(multiple-value-bind (,reader ,writer) (sb-unix:unix-pipe)
      (unwind-protect (progn ,@body)
-       (sb-unix:unix-close ,writer)
+       (when ,writer (sb-unix:unix-close ,writer))
        (sb-unix:unix-close ,reader))))
 
 #+sb-thread
@@ -134,23 +134,27 @@
                   (lambda (event) (push event events)))))
           (expect captured :to-equalp payload)
           (expect events :to-be nil)))))
-  (it "reports a helper error on the caller after cleanup"
+  (it "reports a callback diagnostic without replacing successful body values"
     (with-monitor-pipe (reader writer)
       (let ((arrived (sb-thread:make-semaphore))
             (finished nil))
         (fd-write-octets writer (monitor-test-octets '(97)))
-        (expect
-          (lambda ()
+        (multiple-value-bind (captured body-values diagnostics)
             (uiop:symbol-call
               :cl-tty-kit :call-with-input-monitor reader
-              (lambda () (sb-thread:wait-on-semaphore arrived :timeout 1))
+              (lambda ()
+                (sb-thread:wait-on-semaphore arrived :timeout 1)
+                (values 42 :answer))
               (lambda (event)
                 (declare (ignore event))
                 (sb-thread:signal-semaphore arrived)
                 (error "Monitor callback failed."))
-              :on-finish (lambda (captured) (setf finished captured))))
-          :to-throw 'simple-error)
-        (expect finished :to-equalp #(97)))))
+              :on-finish (lambda (bytes) (setf finished bytes)))
+          (expect captured :to-equalp #(97))
+          (expect finished :to-be captured)
+          (expect body-values :to-equal '(42 :answer))
+          (expect (mapcar #'first diagnostics) :to-equal '(:on-event))
+          (expect (typep (second (first diagnostics)) 'simple-error))))))
   (it "keeps a body nonlocal exit when the helper also fails"
     (with-monitor-pipe (reader writer)
       (let ((arrived (sb-thread:make-semaphore)))
@@ -188,31 +192,9 @@
           :to-be :interrupted)
         (expect finished :to-equalp #(7))
         (expect (sb-thread:thread-alive-p worker) :to-be nil))))
-  (it "stops and joins an idle helper with p95 below 50ms on return and throw"
-    (with-monitor-pipe (reader writer)
+  (it "stops and joins every idle and streaming sample within 50ms"
+    (dolist (streaming '(nil t))
       (dolist (nonlocal '(nil t))
-        (let ((samples nil))
-          (dotimes (trial 20)
-            (let ((body-ended nil)
-                  (elapsed nil))
-              (catch 'monitor-exit
-                (uiop:symbol-call
-                  :cl-tty-kit :call-with-input-monitor reader
-                  (lambda ()
-                    (sleep 0.002)
-                    (setf body-ended (get-internal-real-time))
-                    (when nonlocal (throw 'monitor-exit nil)))
-                  (lambda (event) (declare (ignore event)))
-                  :on-finish
-                  (lambda (captured)
-                    (declare (ignore captured))
-                    (setf elapsed (/ (- (get-internal-real-time) body-ended)
-                                     internal-time-units-per-second)))))
-              (expect elapsed)
-              (push elapsed samples)))
-          (setf samples (sort samples #'<))
-          (format t "~&input-monitor cleanup ~A n=20 median=~,3Fms p95=~,3Fms max=~,3Fms~%"
-                  (if nonlocal :throw :return)
-                  (* 1000 (/ (+ (nth 9 samples) (nth 10 samples)) 2))
-                  (* 1000 (nth 18 samples)) (* 1000 (nth 19 samples)))
-          (expect (< (nth 18 samples) 0.05)))))))
+        (let ((samples (monitor-test-cleanup-samples streaming nonlocal)))
+          (expect (length samples) :to-be 20)
+          (expect (< (reduce #'max samples) 0.05)))))))
