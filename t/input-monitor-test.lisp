@@ -23,14 +23,23 @@
           (uiop:symbol-call
             :cl-tty-kit :call-with-input-monitor reader
             (lambda ()
-              (loop with start = 0
+              (flet ((write-chunk (chunk)
+                       (fd-write-octets writer chunk)
+                       ;; The monitor is the only reader. An empty pipe
+                       ;; acknowledges a read boundary before the next write.
+                       (loop repeat 1000
+                             while (fd-wait reader :input 0)
+                             do (sleep 0.001))
+                       (when (fd-wait reader :input 0)
+                         (error "Input monitor did not read a partition."))))
+                (loop with start = 0
                     for width in widths
                     for end = (min (length payload) (+ start width))
                     while (< start (length payload))
-                    do (fd-write-octets writer (subseq payload start end))
+                    do (write-chunk (subseq payload start end))
                        (setf start end)
                     finally (when (< start (length payload))
-                              (fd-write-octets writer (subseq payload start))))
+                              (write-chunk (subseq payload start)))))
               (dotimes (i (length expected))
                 (unless (sb-thread:wait-on-semaphore arrived :timeout 1)
                   (error "Input monitor did not deliver all events.")))
@@ -158,23 +167,52 @@
                 (sb-thread:signal-semaphore arrived)
                 (error "Monitor callback failed."))))
           :to-be :body-exit))))
-  (it "stops and joins an idle helper within 50ms on return and throw"
+  (it "joins after an asynchronous body exit requested by the helper"
     (with-monitor-pipe (reader writer)
-      (dolist (nonlocal '(nil t))
-        (let ((body-ended nil)
-              (elapsed nil))
-          (catch 'monitor-exit
+      (let ((owner sb-thread:*current-thread*)
+            (worker nil)
+            (finished nil))
+        (fd-write-octets writer (monitor-test-octets '(7)))
+        (expect
+          (catch 'monitor-async-exit
             (uiop:symbol-call
               :cl-tty-kit :call-with-input-monitor reader
               (lambda ()
-                (sleep 0.002)
-                (setf body-ended (get-internal-real-time))
-                (when nonlocal (throw 'monitor-exit nil)))
-              (lambda (event) (declare (ignore event)))
-              :on-finish
-              (lambda (captured)
-                (declare (ignore captured))
-                (setf elapsed (/ (- (get-internal-real-time) body-ended)
-                                 internal-time-units-per-second)))))
-          (expect elapsed)
-          (expect (< elapsed 0.05)))))))
+                (loop (ignore-errors (sleep 0.001))))
+              (lambda (event)
+                (declare (ignore event))
+                (setf worker sb-thread:*current-thread*)
+                (sb-thread:interrupt-thread
+                  owner (lambda () (throw 'monitor-async-exit :interrupted))))
+              :on-finish (lambda (captured) (setf finished captured))))
+          :to-be :interrupted)
+        (expect finished :to-equalp #(7))
+        (expect (sb-thread:thread-alive-p worker) :to-be nil))))
+  (it "stops and joins an idle helper with p95 below 50ms on return and throw"
+    (with-monitor-pipe (reader writer)
+      (dolist (nonlocal '(nil t))
+        (let ((samples nil))
+          (dotimes (trial 20)
+            (let ((body-ended nil)
+                  (elapsed nil))
+              (catch 'monitor-exit
+                (uiop:symbol-call
+                  :cl-tty-kit :call-with-input-monitor reader
+                  (lambda ()
+                    (sleep 0.002)
+                    (setf body-ended (get-internal-real-time))
+                    (when nonlocal (throw 'monitor-exit nil)))
+                  (lambda (event) (declare (ignore event)))
+                  :on-finish
+                  (lambda (captured)
+                    (declare (ignore captured))
+                    (setf elapsed (/ (- (get-internal-real-time) body-ended)
+                                     internal-time-units-per-second)))))
+              (expect elapsed)
+              (push elapsed samples)))
+          (setf samples (sort samples #'<))
+          (format t "~&input-monitor cleanup ~A n=20 median=~,3Fms p95=~,3Fms max=~,3Fms~%"
+                  (if nonlocal :throw :return)
+                  (* 1000 (/ (+ (nth 9 samples) (nth 10 samples)) 2))
+                  (* 1000 (nth 18 samples)) (* 1000 (nth 19 samples)))
+          (expect (< (nth 18 samples) 0.05)))))))
