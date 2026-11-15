@@ -405,4 +405,3 @@ checks both of those slots, never just that some error was signaled."
         (expect (typep (third events) (quote mouse-event)))
         (expect (mouse-event-action (third events)) :to-be :release)
         (expect (%key-event-signature (fourth events)) :to-equal '(:character #\x nil))))))
-
