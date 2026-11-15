@@ -112,7 +112,7 @@
                             (nreverse chunks))))
              (when producer-error (error producer-error))
              (when call-error (error call-error))
-             (values captured remaining body-values diagnostics elapsed))
+             (values captured remaining body-values diagnostics elapsed body-ended))
         (sb-thread:with-mutex (lock) (setf stop-writer t))
         (sb-thread:signal-semaphore continue-writing)
         (when producer (sb-thread:join-thread producer :default nil))))))
@@ -147,48 +147,70 @@
 #+sb-thread
 (defun monitor-test-cleanup-samples (streaming nonlocal)
   (let ((samples nil)
-        (rng (make-random-state t)))
-    (dotimes (trial 20)
-      (let ((phase (/ (random 20 rng) 1000)))
-        (if streaming
-            (multiple-value-bind (captured remaining body-values diagnostics elapsed)
-                (monitor-test-streaming-trace
-                  (make-array 8192 :element-type '(unsigned-byte 8)
-                                   :initial-element 97)
-                  phase :nonlocal nonlocal :measure t)
-              (declare (ignore captured remaining body-values diagnostics))
-              (expect elapsed)
-              (unless (< elapsed 0.05)
-                (format t "~&monitor cleanup failure streaming=~S nonlocal=~S trial=~D phase=~,3Fms elapsed=~,3Fms~%"
-                        streaming nonlocal trial (* 1000 phase) (* 1000 elapsed)))
-              (expect (< elapsed 0.05))
-              (push elapsed samples))
-            (with-monitor-pipe (reader writer)
-              (let ((body-ended nil)
-                    (elapsed nil))
-                (catch 'monitor-idle-exit
-                  (uiop:symbol-call
-                    :cl-tty-kit :call-with-input-monitor reader
-                    (lambda ()
-                      (sleep phase)
-                      (setf body-ended (get-internal-real-time))
-                      (when nonlocal (throw 'monitor-idle-exit nil)))
-                    (lambda (event) (declare (ignore event)) nil)
-                    :on-finish
-                    (lambda (bytes)
-                      (declare (ignore bytes))
-                      (setf elapsed
-                            (/ (- (get-internal-real-time) body-ended)
-                               internal-time-units-per-second)))))
-                (expect elapsed)
-                (unless (< elapsed 0.05)
-                  (format t "~&monitor cleanup failure streaming=~S nonlocal=~S trial=~D phase=~,3Fms elapsed=~,3Fms~%"
-                          streaming nonlocal trial (* 1000 phase) (* 1000 elapsed)))
-                (expect (< elapsed 0.05))
-                (push elapsed samples))))))
-    (format t "~&monitor cleanup streaming=~S nonlocal=~S n=~D max=~,3Fms~%"
-            streaming nonlocal (length samples) (* 1000 (reduce #'max samples)))
+        (acknowledgements nil)
+        (rng (make-random-state t))
+        (original (fdefinition 'cl-tty-kit::%input-monitor-stopped-p))
+        (acknowledged nil))
+    (unwind-protect
+         (progn
+           (sb-sys:without-interrupts
+             (setf (fdefinition 'cl-tty-kit::%input-monitor-stopped-p)
+                   (lambda (&rest arguments)
+                     (let ((stopped (apply original arguments)))
+                       (when (and stopped (null acknowledged)
+                                  (equal (sb-thread:thread-name sb-thread:*current-thread*)
+                                         "cl-tty-kit input monitor"))
+                         (setf acknowledged (get-internal-real-time)))
+                       stopped))))
+           (dotimes (trial 20)
+             (setf acknowledged nil)
+             (let ((phase (/ (random 20 rng) 1000)))
+               (multiple-value-bind (elapsed body-ended)
+                   (if streaming
+                       (multiple-value-bind (captured remaining body-values diagnostics elapsed ended)
+                           (monitor-test-streaming-trace
+                             (make-array 8192 :element-type '(unsigned-byte 8)
+                                              :initial-element 97)
+                             phase :nonlocal nonlocal :measure t)
+                         (declare (ignore captured remaining body-values diagnostics))
+                         (values elapsed ended))
+                       (with-monitor-pipe (reader writer)
+                         (let ((body-ended nil)
+                               (elapsed nil))
+                           (catch 'monitor-idle-exit
+                             (uiop:symbol-call
+                               :cl-tty-kit :call-with-input-monitor reader
+                               (lambda ()
+                                 (sleep phase)
+                                 (setf body-ended (get-internal-real-time))
+                                 (when nonlocal (throw 'monitor-idle-exit nil)))
+                               (lambda (event) (declare (ignore event)) nil)
+                               :on-finish
+                               (lambda (bytes)
+                                 (declare (ignore bytes))
+                                 (setf elapsed
+                                       (/ (- (get-internal-real-time) body-ended)
+                                          internal-time-units-per-second)))))
+                           (values elapsed body-ended))))
+                 ;; Save every measured row before its maximum assertion.
+                 (let ((ack (when (and acknowledged body-ended)
+                              (/ (- acknowledged body-ended)
+                                 internal-time-units-per-second))))
+                   (format t "~&monitor cleanup sample streaming=~S nonlocal=~S trial=~D phase=~,3Fms elapsed=~,3Fms stopack=~S~%"
+                           streaming nonlocal trial (* 1000 phase) (* 1000 elapsed)
+                           (and ack (* 1000d0 ack)))
+                   (expect elapsed)
+                   (expect (< elapsed 0.05))
+                   (expect ack)
+                   (push elapsed samples)
+                   (push ack acknowledgements))))))
+      (sb-sys:without-interrupts
+        (setf (fdefinition 'cl-tty-kit::%input-monitor-stopped-p) original)))
+    (format t "~&monitor cleanup streaming=~S nonlocal=~S n=~D max=~,3Fms stopacks-ms=~S~%"
+            streaming nonlocal (length samples) (* 1000 (reduce #'max samples))
+            (mapcar (lambda (sample) (* 1000d0 sample)) (nreverse acknowledgements)))
     samples))
+
 
 #+sb-thread
 (describe "input monitor revision"

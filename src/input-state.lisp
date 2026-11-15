@@ -12,8 +12,6 @@
   (pending-paste-start-source nil :type (or null string))
   (max-pending 4194304 :type (integer 0 *)))
 
-(defparameter +bracketed-paste-start-sequence+ (concatenate 'string (string #\Esc) "[200~"))
-
 (defparameter +bracketed-paste-end-sequence+ (concatenate 'string (string #\Esc) "[201~"))
 
 (defmacro with-input-decoder-state ((decoder) &body body)
