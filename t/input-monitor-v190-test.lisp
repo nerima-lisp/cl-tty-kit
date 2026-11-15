@@ -50,7 +50,6 @@
         (setf (fdefinition 'fd-read-octets) read-original
               (fdefinition 'cl-concurrent-kit:join-thread) join-original)))))
 
-#+sb-thread
 (describe "input monitor v190 contracts"
   (it "retains the completed read when stop arrives before read-result return"
     (let ((payload (make-array 8193 :element-type '(unsigned-byte 8) :initial-element 97)))
@@ -135,4 +134,70 @@
           (expect (mapcar #'%key-event-signature (flush-input-decoder decoder))
                   :to-equal expected))
         (expect (reduce #'+ lengths) :to-be
-                (length (cl-codec-kit:string-to-octets source :encoding :utf-8)))))))
+                (length (cl-codec-kit:string-to-octets source :encoding :utf-8))))))
+  (it "consumes inherited parameterized paste without retaining its opening prefix"
+    (with-monitor-pipe (reader writer)
+      (let ((decoder (make-input-decoder :collect-bracketed-paste t))
+            (done (sb-thread:make-semaphore)))
+        (decode-input-chunk decoder (%esc "[200;5~a"))
+        (multiple-value-bind (captured values diagnostics)
+            (call-with-input-monitor
+              reader
+              (lambda ()
+                (fd-write-octets writer
+                  (cl-codec-kit:string-to-octets
+                    (concatenate 'string "b" (%esc "[201~") "z") :encoding :utf-8))
+                (unless (sb-thread:wait-on-semaphore done :timeout 1)
+                  (error "Trailing key was not observed.")))
+              (lambda (event)
+                (cond ((eq (key-event-type event) :paste) :consume)
+                      ((eql (key-event-code event) #\z)
+                       (sb-thread:signal-semaphore done) nil)))
+              :decoder decoder)
+          (declare (ignore values))
+          (expect captured :to-equalp #(122))
+          (expect diagnostics :to-be nil)
+          (expect (mapcar #'%key-event-signature (decode-input-chunk decoder captured))
+                  :to-equal '((:character #\z nil)))))))
+  (it "wakes an idle helper without waiting for the fd-wait timer"
+    (let ((original (fdefinition 'fd-wait))
+          (entered (sb-thread:make-semaphore))
+          (body-ended nil)
+          (elapsed nil)
+          (calls 0))
+      (unwind-protect
+           (progn
+             (sb-sys:without-interrupts
+               (setf (fdefinition 'fd-wait)
+                     (lambda (fd direction &optional timeout)
+                       (if (equal (sb-thread:thread-name sb-thread:*current-thread*)
+                                  "cl-tty-kit input monitor")
+                           (progn
+                             (incf calls)
+                             (sb-thread:signal-semaphore entered)
+                             ;; A readiness wake must work independently of
+                             ;; the ordinary timer, even before select enters.
+                             (funcall original fd direction 0.2))
+                           (funcall original fd direction timeout)))))
+             (with-monitor-pipe (reader writer)
+               (multiple-value-bind (captured values diagnostics)
+                   (call-with-input-monitor
+                     reader
+                     (lambda ()
+                       (unless (sb-thread:wait-on-semaphore entered :timeout 1)
+                         (error "Helper did not enter the wait."))
+                       (setf body-ended (get-internal-real-time))
+                       :body-complete)
+                     (lambda (event) (declare (ignore event)) nil)
+                     :on-finish
+                     (lambda (bytes)
+                       (declare (ignore bytes))
+                       (setf elapsed (/ (- (get-internal-real-time) body-ended)
+                                        internal-time-units-per-second))))
+                 (expect captured :to-equalp #())
+                 (expect values :to-equal '(:body-complete))
+                 (expect diagnostics :to-be nil))))
+        (sb-sys:without-interrupts (setf (fdefinition 'fd-wait) original)))
+      (format t "~&readiness wake calls=~D elapsed=~,3Fms~%" calls (* 1000 elapsed))
+      (expect (plusp calls))
+      (expect (< elapsed 0.05)))))
