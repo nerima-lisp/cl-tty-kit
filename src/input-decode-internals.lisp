@@ -29,7 +29,9 @@
              (t nil))))))
 
 (defun %paste-marker-event-p (event marker)
-  (and (eq :special (key-event-type event)) (eq marker (key-event-code event))))
+  (and (key-event-p event)
+       (eq :special (key-event-type event))
+       (eq marker (key-event-code event))))
 
 (defun %make-paste-event (payload)
   (make-key-event :type :paste :code payload :modifiers nil))

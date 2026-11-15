@@ -12,11 +12,12 @@
 
 #+sb-thread
 (defun monitor-test-cg-p (event)
-  (or (and (eq (key-event-type event) :special)
-           (eq (key-event-code event) :control-g))
-      (and (eq (key-event-type event) :character)
-           (eql (key-event-code event) #\g)
-           (member :control (key-event-modifiers event)))))
+  (and (typep event 'key-event)
+       (or (and (eq (key-event-type event) :special)
+                (eq (key-event-code event) :control-g))
+           (and (eq (key-event-type event) :character)
+                (eql (key-event-code event) #\g)
+                (member :control (key-event-modifiers event))))))
 
 #+sb-thread
 (defun monitor-test-streaming-trace (payload delay &key nonlocal measure)
