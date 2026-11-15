@@ -241,9 +241,15 @@ decoder. After stopping and joining, `on-finish` receives the same array on the
 caller, including during a nonlocal exit; save it there and do not replay both
 references. Reads from `fd` must be exclusive. `on-event` must not block or wait
 for the caller; `on-finish` runs with interrupts inhibited and must only save
-bytes. The contract requires stop and join within 50 ms on each exit, including
-callback execution; nonblocking `on-event` callbacks are a precondition. Cleanup joins
-cooperatively and does not return with a live helper on timeout. Requires SBCL
+bytes. Cleanup wakes the helper with a private nonblocking self-pipe, then joins
+and closes both private descriptors. This wake is independent of the wait timer.
+CI asserts the 50 ms maximum for 20 samples of each idle/streaming and
+normal/nonlocal exit mode on Linux and macOS. Timing runs from the body-end
+marker immediately before return or nonlocal exit to the timing marker at the
+start of `on-finish`, including pending `on-event` execution, join, pipe closure,
+and retained-array construction. The rest of `on-finish` and replay are excluded.
+Evidence is limited to those measured conditions. Cleanup always joins before
+returning. Requires SBCL
 thread support; otherwise signals
 `unsupported-feature`. See [Input Decoding](../guide/input-decoding.md#monitoring-input-during-a-caller-operation)
 for callback and shutdown requirements, errors, and replay behavior.

@@ -117,9 +117,13 @@ other readers. Cleanup publishes stop, wakes the helper through a private
 nonblocking self-pipe, joins it, then closes both private descriptors. The
 readiness wake does not depend on the ordinary 5ms wait timeout. Stop is also
 checked between bytes. ON-EVENT must never block or wait for the caller.
-CI checks the 50ms maximum, including callback execution, over 20 samples of
-each idle/streaming and normal/nonlocal exit mode on Linux and macOS. Evidence
-is limited to those measured conditions, not arbitrary callbacks or scheduling.
+CI checks the 50ms maximum over 20 samples of each idle/streaming and
+normal/nonlocal exit mode on Linux and macOS. Timing runs from the body-end
+marker immediately before return or nonlocal exit to the timing marker at the
+start of ON-FINISH. It includes pending ON-EVENT execution, join, pipe closure,
+and retained-array construction; it excludes the rest of ON-FINISH and replay.
+Evidence is limited to those measured conditions, not arbitrary callbacks or
+scheduling.
 ON-FINISH runs with interrupts inhibited and must only save its bytes. The
 helper does not flush unfinished input or change FD's mode. Requires SBCL
 thread support; otherwise signals UNSUPPORTED-FEATURE."

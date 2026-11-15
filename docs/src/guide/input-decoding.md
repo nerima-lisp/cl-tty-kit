@@ -62,8 +62,10 @@ event and monitoring continues. Shutdown can leave read bytes without event
 notifications; those bytes remain available for replay.
 Parameterized paste starts such as `ESC[200;5~` retain their original framing
 bytes, including when inherited from the supplied decoder.
-The helper requests a 5 ms readiness timeout per poll, leaving time in the
-stop-and-join budget for cleanup and thread scheduling. This API requires SBCL
+Cleanup wakes the helper through a private nonblocking self-pipe monitored
+alongside the input fd. Stop readiness does not depend on the ordinary 5 ms
+wait timeout. Both private descriptors stay open until the helper joins,
+then close; the input fd stays open with its original mode. This API requires SBCL
 thread support; without it, the call signals `unsupported-feature`.
 
 ```lisp
@@ -122,14 +124,19 @@ Diagnostics have the form `((phase condition) ...)`. The phases are `:decode`,
 retained, in first-occurrence order, so repeated malformed bytes do not accumulate
 unbounded error objects. Recording a diagnostic never discards input bytes.
 
-Cleanup cooperatively requests a stop and joins the helper; it does not return
-on a timeout while leaving the helper alive. The contract requires stop and join
-within 50 ms on each normal or nonlocal exit, including time spent in `on-event`.
-This is a per-operation maximum. The callback must return promptly without
-blocking or waiting for the caller; the API does not preempt callback code.
-An unexplained overrun still fails the 50 ms requirement. `on-finish` runs with interrupts
-inhibited and must only save its bytes; replay them after cleanup. An error in
-`on-finish` propagates under the ordinary `unwind-protect` rules.
+Cleanup publishes stop, writes a wake byte, and joins the helper before returning.
+CI asserts the 50 ms maximum for 20 samples of each idle/streaming and
+normal/nonlocal exit mode on Linux and macOS. The measured interval starts at the
+body-end marker immediately before return or nonlocal exit and ends at the
+timing marker at the start of `on-finish`. It includes pending `on-event`
+execution, join, closure of both private pipe descriptors, and construction of
+the retained array. It excludes the rest of `on-finish` and replay.
+
+The timing evidence covers those measured conditions. It does not establish a
+bound for arbitrary callback execution or OS scheduling. `on-event` must return
+promptly without blocking or waiting for the caller. `on-finish` runs with
+interrupts inhibited and must only save its bytes; replay them after cleanup.
+An error in `on-finish` propagates under the ordinary `unwind-protect` rules.
 
 ## The `key-event` struct
 
