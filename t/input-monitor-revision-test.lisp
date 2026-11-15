@@ -20,7 +20,7 @@
                 (member :control (key-event-modifiers event))))))
 
 #+sb-thread
-(defun monitor-test-streaming-trace (payload delay &key nonlocal measure)
+(defun monitor-test-streaming-trace (payload delay &key nonlocal measure read-ack)
   (with-monitor-pipe (reader writer)
     (let ((first-written (sb-thread:make-semaphore))
           (continue-writing (sb-thread:make-semaphore))
@@ -28,6 +28,7 @@
           (stop-writer nil)
           (producer nil)
           (producer-error nil)
+          (producer-finished nil)
           (call-error nil)
           (captured #())
           (body-values nil)
@@ -49,7 +50,8 @@
                          (setf producer
                                (sb-thread:make-thread
                                  (lambda ()
-                                   (handler-case
+                                   (unwind-protect
+                                     (handler-case
                                        (progn
                                          (fd-write-octets writer (subseq payload 0 1))
                                          (sb-thread:signal-semaphore first-written)
@@ -68,11 +70,14 @@
                                                           (subseq payload offset end)))
                                                   (sleep 0.0002)))
                                      (serious-condition (condition)
-                                       (setf producer-error condition))))
+                                       (setf producer-error condition)))
+                                     (sb-thread:with-mutex (lock)
+                                       (setf producer-finished t))))
                                  :name "input-monitor test writer"))
                          (unless (sb-thread:wait-on-semaphore first-written :timeout 1)
                            (error "Writer did not start."))
                          (monitor-test-wait-for-read reader)
+                         (when read-ack (funcall read-ack))
                          (sb-thread:signal-semaphore continue-writing)
                          (sleep delay)
                          (when measure (setf body-ended (get-internal-real-time)))
@@ -91,17 +96,17 @@
              ;; the test's producer join depend on the monitor still reading.
              (let ((buffer (make-array 4096 :element-type '(unsigned-byte 8)))
                    (chunks nil)
-                   (total (length captured))
                    (deadline (+ (get-internal-real-time)
                                 (* 3 internal-time-units-per-second))))
-               (loop while (< total (length payload))
-                     do (when (> (get-internal-real-time) deadline)
-                          (error "Writer/drainer did not deliver the payload."))
-                        (when (fd-wait reader :input 0.01)
-                          (let ((count (fd-read-octets reader buffer)))
-                            (when (and count (plusp count))
-                              (push (subseq buffer 0 count) chunks)
-                              (incf total count)))))
+               (loop
+                 do (when (> (get-internal-real-time) deadline)
+                      (error "Writer/drainer did not finish."))
+                    (when (fd-wait reader :input 0.01)
+                      (let ((count (fd-read-octets reader buffer)))
+                        (when (and count (plusp count))
+                          (push (subseq buffer 0 count) chunks))))
+                 until (and (sb-thread:with-mutex (lock) producer-finished)
+                            (not (fd-wait reader :input 0))))
                (setf remaining
                      (apply #'concatenate '(vector (unsigned-byte 8))
                             (nreverse chunks))))

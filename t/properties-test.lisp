@@ -178,16 +178,18 @@
 #+sb-thread
 (describe "input monitor streaming conservation"
   (let ((trials 0)
-        (both-nonempty 0))
+        (both-nonempty 0)
+        (read-inflight 0))
     (cl-weave:before-all
-      (setf trials 0 both-nonempty 0))
+      (setf trials 0 both-nonempty 0 read-inflight 0))
     (it-property "continuous arbitrary-byte writes survive randomized monitor shutdown"
         ((octets (cl-weave:gen-list (cl-weave:gen-integer :min 0 :max 255)
                                     :min-length 8193 :max-length 12289))
          (delay (cl-weave:gen-integer :min 0 :max 5)))
-      (multiple-value-bind (captured remaining body-values diagnostics)
-          (monitor-test-streaming-trace (monitor-test-octets octets) (/ delay 1000))
+      (multiple-value-bind (captured remaining body-values diagnostics race-observed)
+          (monitor-test-read-race-trace (monitor-test-octets octets) (/ delay 1000))
         (incf trials)
+        (when race-observed (incf read-inflight))
         (when (and (plusp (length captured)) (plusp (length remaining)))
           (incf both-nonempty))
         (expect (concatenate '(vector (unsigned-byte 8)) captured remaining)
@@ -195,10 +197,11 @@
         (expect body-values :to-equal '(:body-complete))
         (expect (<= (length diagnostics) 1))))
     (cl-weave:after-all
-      (format t "~&monitor streaming property trials=~D both-nonempty=~D~%"
-              trials both-nonempty)
+      (format t "~&monitor streaming property trials=~D both-nonempty=~D read-inflight=~D~%"
+              trials both-nonempty read-inflight)
       (expect (>= trials 100))
-      (expect (>= both-nonempty 20)))))
+      (expect (>= both-nonempty 20))
+      (expect (>= read-inflight 20)))))
 
 #+sb-thread
 (describe "input monitor arbitrary byte partitions"
