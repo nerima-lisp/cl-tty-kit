@@ -166,6 +166,51 @@ string payload, so these helpers sanitize their input before framing.
 (cl-tty-kit:ansi-set-palette-color 1 255 0 0)   ; palette slot 1 -> pure red
 ```
 
+## Shell integration marks
+
+Shells and REPLs can tell the terminal where prompts, commands, and output
+begin, so it can jump between prompts or select a command's output. These
+helpers emit the OSC 133 semantic prompt marks and the OSC 7 working-directory
+report, all ST-terminated:
+
+- **`ansi-prompt-start`**: `ESC ] 133 ; A ST`, before the prompt is drawn.
+- **`ansi-command-start`**: `ESC ] 133 ; B ST`, after the prompt, where input begins.
+- **`ansi-command-output-start`**: `ESC ] 133 ; C ST`, when the command runs.
+- **`ansi-command-finished`**: `ESC ] 133 ; D ST`, or `ESC ] 133 ; D ; status ST`
+  given a non-negative exit status.
+- **`ansi-set-working-directory`**: `ESC ] 7 ; file://host/path ST`. `path` must
+  be absolute; its UTF-8 octets are percent-encoded except unreserved URI
+  characters and `/`. `:host` defaults to `(machine-instance)`.
+
+```lisp
+(cl-tty-kit:ansi-command-finished 1)
+(cl-tty-kit:ansi-set-working-directory "/home/me/my project" :host "box")
+;; => "<ESC>]7;file://box/home/me/my%20project<ESC>\"
+```
+
+## Desktop notifications
+
+`ansi-notify` asks the terminal to raise a desktop notification. Terminals
+disagree on the escape sequence, so `:protocol` selects the dialect:
+
+- **`:osc-777`** (default; from rxvt-unicode): `ESC ] 777 ; notify ;
+  title ; body ST`. `;` is removed from the title because it separates the fields.
+- **`:osc-9`** (from iTerm2): `ESC ] 9 ; text ST`. OSC 9 has
+  no title field, so a title is folded in as `title: body`. Terminals that
+  implement ConEmu's OSC 9 subcommands read text starting with digits and `;`
+  (such as `4;...`) as a subcommand instead of a notification.
+- **`:osc-99`** (kitty): `ESC ] 99 ; p=body ; body ST`. With a title, two
+  sequences share an `:id`: one carrying the title, then the body. The id must match
+  `[A-Za-z0-9_+.-]+` and defaults to `"1"`, so pass distinct ids to keep titled
+  notifications from replacing each other.
+
+All payloads have control characters stripped before framing.
+
+```lisp
+(cl-tty-kit:ansi-notify "Build finished" :title "make")
+(cl-tty-kit:ansi-notify "Build finished" :title "make" :protocol :osc-99 :id "build")
+```
+
 ## Querying the terminal
 
 Some helpers issue a request the terminal answers on stdin; the toolkit pairs each

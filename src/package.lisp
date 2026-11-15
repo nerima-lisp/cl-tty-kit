@@ -81,6 +81,12 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:ansi-disable-focus-reporting
    #:ansi-request-cursor-position
    #:ansi-request-device-attributes
+   #:ansi-prompt-start
+   #:ansi-command-start
+   #:ansi-command-output-start
+   #:ansi-command-finished
+   #:ansi-set-working-directory
+   #:ansi-notify
    #:ansi-set-keyboard-enhancements
    #:ansi-push-keyboard-enhancements
    #:ansi-pop-keyboard-enhancements

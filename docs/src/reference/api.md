@@ -59,7 +59,7 @@ and SGR text attributes. All return strings. See [ANSI Helpers](../guide/ansi-he
 | Scrolling / modes | `ansi-scroll-up`, `ansi-scroll-down`, `ansi-set-scroll-region`, `ansi-reset-scroll-region`, `ansi-set-mode`, `ansi-reset-mode`, `ansi-enable-line-wrap`, `ansi-disable-line-wrap` |
 | Input modes | `ansi-enable-bracketed-paste`, `ansi-disable-bracketed-paste`, `ansi-enable-focus-reporting`, `ansi-disable-focus-reporting`, `ansi-set-keyboard-enhancements`, `ansi-push-keyboard-enhancements`, `ansi-pop-keyboard-enhancements`, `ansi-enable-mouse`, `ansi-disable-mouse` |
 | Requests / reports | `ansi-request-cursor-position`, `ansi-request-device-attributes`, `ansi-request-foreground-color`, `ansi-request-background-color` |
-| OSC | `ansi-set-window-title`, `ansi-hyperlink`, `ansi-set-clipboard`, `ansi-set-palette-color`, `ansi-reset-palette`, `ansi-set-cursor-style` |
+| OSC | `ansi-set-window-title`, `ansi-hyperlink`, `ansi-set-clipboard`, `ansi-set-palette-color`, `ansi-reset-palette`, `ansi-set-cursor-style`, `ansi-prompt-start`, `ansi-command-start`, `ansi-command-output-start`, `ansi-command-finished`, `ansi-set-working-directory`, `ansi-notify` |
 | Session / misc | `ansi-bell`, `ansi-reset-terminal`, `ansi-begin-synchronized-update`, `ansi-end-synchronized-update` |
 | SGR attributes | `ansi-default-foreground`, `ansi-default-background`, `ansi-bold`, `ansi-dim`, `ansi-italic`, `ansi-underline`, `ansi-blink`, `ansi-reverse`, `ansi-hidden`, `ansi-strikethrough`, `ansi-reset-style`, `ansi-sgr` |
 
