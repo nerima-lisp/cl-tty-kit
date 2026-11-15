@@ -14,7 +14,12 @@
         ((>= y height))
       (declare (type fixnum y row-start))
       (%write-cell-range cells row-start (+ row-start width) stream)
+      ;; Raw mode clears OPOST, so a bare LF keeps the column. After a
+      ;; full-width row the cursor sits in the last column, and the next row
+      ;; would start there and wrap, scrolling the screen. CR returns to
+      ;; column 1 first.
       (unless (= y (1- height))
+        (write-char #\Return stream)
         (write-char #\Newline stream)))
     stream))
 

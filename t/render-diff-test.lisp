@@ -266,8 +266,8 @@ CELLS are literal specifications, so callers write them inline without quoting."
   (it "matches render-screen's actual output length and its exceeds-p boundary"
     (let ((screen (make-screen 2 3)))
       (expect (cl-tty-kit::%screen-render-length screen) :to-be (length (render-screen screen)))
-      (expect (cl-tty-kit::%screen-render-length-exceeds-p screen 17))
-      (expect (not (cl-tty-kit::%screen-render-length-exceeds-p screen 18))))))
+      (expect (cl-tty-kit::%screen-render-length-exceeds-p screen 19))
+      (expect (not (cl-tty-kit::%screen-render-length-exceeds-p screen 20))))))
 
 (describe "the reusable diff-plan primitives"
   (it "an explicit plan computed via %plan-diff-length matches render-diff, is reusable by %render-diff-output, and clears when unchanged since its own generation"

@@ -323,7 +323,8 @@ of the frame contract.
 ### Full repaint
 
 `render-screen` emits a complete frame: clear the screen, home the cursor, then
-every cell row by row.
+every cell row by row. Each row but the last ends with CR LF, because raw mode
+clears OPOST and a bare LF would leave the cursor in the last column.
 
 ```lisp
 (let ((screen (make-screen 20 3)))
