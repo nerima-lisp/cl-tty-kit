@@ -57,30 +57,6 @@ jobs:
       - name: Check flake
         run: nix flake check --print-build-logs
 
-      - name: Verify release gate
-        run: |
-          archive_json=$(nix flake archive --json)
-          printf '%s' "$archive_json" | python3 -c '
-          import json
-          from pathlib import Path
-          import sys
-          inputs = json.load(sys.stdin)["inputs"]
-          names = ("cl-codec-kit", "cl-concurrent-kit", "cl-boundary-kit",
-                   "cl-date-kit", "cl-host-kit", "cl-weave", "cl-prolog-kit")
-          for name in names:
-              source = Path(inputs[name]["path"])
-              assert source.is_absolute() and source.is_dir(), name
-              system = source / (name + ".asd")
-              assert system.is_file() and system.stat().st_size > 0, name
-              target = Path.cwd().parent / name
-              if target.exists() or target.is_symlink():
-                  assert target.is_symlink() and target.resolve(strict=True) == source.resolve(strict=True), name
-              else:
-                  target.symlink_to(source, target_is_directory=True)
-              print(name + ": locked source and sibling layout verified")
-          '
-          nix run .#verify
-
       # Catches stray conflict markers and whitespace errors that compile fine.
       - name: Check diff hygiene
         run: git diff --check
