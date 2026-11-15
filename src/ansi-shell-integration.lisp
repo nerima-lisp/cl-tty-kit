@@ -73,20 +73,57 @@ same way, `/' included. A NIL HOST yields an empty authority (`file:///PATH')."
                     (find character "_+.-")))
               string)))
 
+;;; kitty's spec: "The size of the payload must be no longer than 2048 bytes,
+;;; before being encoded or 4096 encoded bytes." The payload is the part after
+;;; the second `;'; we send plain UTF-8 (no e=1), so the 2048-byte figure
+;;; applies. "You can specify the title or body multiple times and the
+;;; terminal emulator will concatenate them", with chunks joined by a shared
+;;; `i' and held back while `d=0'.
+;;; https://sw.kovidgoyal.net/kitty/desktop-notifications/
+(defconstant +osc-99-max-payload-octets+ 2048)
+
+(defun %utf-8-octet-count (character)
+  (let ((code (char-code character)))
+    (cond ((< code #x80) 1)
+          ((< code #x800) 2)
+          ((< code #x10000) 3)
+          (t 4))))
+
+(defun %osc-99-chunks (string)
+  "Split STRING at character boundaries into substrings of at most
++OSC-99-MAX-PAYLOAD-OCTETS+ UTF-8 octets each. An empty STRING yields one
+empty chunk."
+  (let ((chunks '())
+        (start 0)
+        (octets 0))
+    (loop for index from 0 below (length string)
+          for size = (%utf-8-octet-count (char string index))
+          do (when (> (+ octets size) +osc-99-max-payload-octets+)
+               (push (subseq string start index) chunks)
+               (setf start index
+                     octets 0))
+             (incf octets size))
+    (push (subseq string start) chunks)
+    (nreverse chunks)))
+
 (defun %osc-99-notification (body title id)
-  (let ((body (%sanitize-osc-string body))
+  (let ((body-chunks (%osc-99-chunks (%sanitize-osc-string body)))
+        (title-chunks (and title (%osc-99-chunks (%sanitize-osc-string title))))
         (id (and id (princ-to-string id))))
     (when (and id (not (%kitty-identifier-p id)))
       (error "OSC 99 notification id must match [A-Za-z0-9_+.-]+: ~S." id))
-    (if title
-        ;; Title and body travel as two chunks; only a shared id lets kitty
-        ;; join them, so one is required here.
+    (if (and (null title-chunks) (null (rest body-chunks)))
+        (%osc-st (format nil "99;~@[i=~A:~]p=body;~A" id (first body-chunks)))
+        ;; Several chunks: only a shared id lets kitty join them, so one is
+        ;; required here.
         (let ((id (or id "1")))
-          (concatenate 'string
-                       (%osc-st (format nil "99;i=~A:d=0:p=title;~A"
-                                        id (%sanitize-osc-string title)))
-                       (%osc-st (format nil "99;i=~A:d=1:p=body;~A" id body))))
-        (%osc-st (format nil "99;~@[i=~A:~]p=body;~A" id body)))))
+          (with-output-to-string (out)
+            (dolist (chunk title-chunks)
+              (write-string (%osc-st (format nil "99;i=~A:d=0:p=title;~A" id chunk)) out))
+            (loop for (chunk . more) on body-chunks
+                  do (write-string (%osc-st (format nil "99;i=~A:d=~:[1~;0~]:p=body;~A"
+                                                    id more chunk))
+                                   out)))))))
 
 (defun ansi-notify (body &key title (protocol :osc-777) id)
   "Return a desktop-notification sequence showing BODY, optionally with TITLE.
@@ -104,7 +141,10 @@ PROTOCOL selects the dialect; all payloads are stripped of control characters.
   match [A-Za-z0-9_+.-]+; it is omitted when not given and there is no
   TITLE, and defaults to \"1\" with a TITLE, so pass distinct ids to keep
   successive titled notifications from replacing each other. kitty limits
-  each payload to 2048 bytes. ID is ignored by the other protocols."
+  each payload to 2048 bytes, so a TITLE or BODY longer than that in UTF-8 is
+  split at character boundaries into several `p=title' or `p=body' sequences
+  sharing the id (again defaulting to \"1\"), each `d=0' except the last body
+  chunk. ID is ignored by the other protocols."
   (case protocol
     (:osc-777
      (%osc-st (format nil "777;notify;~A;~A"

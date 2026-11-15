@@ -205,7 +205,9 @@ disagree on the escape sequence, so `:protocol` selects the dialect:
   carrying the title, then the body. The id must match `[A-Za-z0-9_+.-]+`.
   Without a title it is omitted unless given; with a title it defaults to
   `"1"`, so pass distinct ids to keep titled notifications from replacing each
-  other.
+  other. kitty caps each payload at 2048 bytes, so a longer title or body is
+  split at character boundaries into several sequences sharing the id (again
+  `"1"` by default); every sequence but the last carries `d=0`.
 
 Titles and bodies have control characters stripped before framing.
 
