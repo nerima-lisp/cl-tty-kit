@@ -93,11 +93,11 @@ An empty string yields an empty list rather than signaling.
 
 ### Walking clusters without allocating
 
-`string-graphemes` builds a fresh string per cluster. When you only need where
-clusters start and end, for example to move a cursor or measure a line every
+When you only need where clusters start and end rather than the
+fresh strings `string-graphemes` returns, for example to move a cursor or measure a line every
 frame, use the boundary API instead. It applies the same rules, and every
-function below except `grapheme-boundaries` without `:into` runs without
-allocating. Each takes `:start` and `:end` to work on a substring without
+function below runs without allocating, except `grapheme-boundaries` without
+`:into` and an `:into` vector that has to grow. Each takes `:start` and `:end` to work on a substring without
 copying it.
 
 - `next-grapheme-boundary` returns the index after the cluster that starts at
@@ -109,10 +109,12 @@ copying it.
 - `grapheme-boundaries` returns every cluster start followed by `:end`, so N
   clusters give N+1 offsets; the second value is that count. By default it
   returns a fresh list. Pass a vector as `:into` to have it filled and
-  returned instead. A vector with a fill pointer is reset and grows as needed;
-  a vector without one is written from index 0 and must be long enough.
+  returned instead. A vector with a fill pointer is reset and, when adjustable,
+  grows as needed (which allocates); a vector without one is written from
+  index 0 and must be long enough.
 - `string-display-width` sums `grapheme-width` over the clusters, where
-  `string-width` sums every code point.
+  `string-width` sums every code point. The truncation, padding, and wrapping
+  helpers on this page measure with `string-width`.
 
 ```lisp
 ;; e + U+0301 COMBINING ACUTE ACCENT, then a

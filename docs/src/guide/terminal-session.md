@@ -118,14 +118,15 @@ window size down to the child. If you already hold a `pty` object,
     no fallback repairs that. `columns` and `rows` must be positive integers and
     `fd` a non-negative integer; those are rejected before any ioctl is issued.
 
-!!! note "Why SBCL's ioctl wrapper, not a hand-declared alien routine"
-    Both directions go through `sb-unix:unix-ioctl` rather than a
+!!! note "Why `sb-posix:ioctl`, not a hand-declared alien routine"
+    Both directions go through `sb-posix:ioctl` rather than a
     `define-alien-routine` (or an equivalent generic FFI `foreign-funcall`)
     declaration of `ioctl`. `ioctl` is variadic, and on the arm64 ABI variadic
     arguments are passed on the stack while a fixed-prototype alien call passes
     them in registers — so the kernel reads the `winsize` pointer from the wrong
-    place and the call fails with `EFAULT`. SBCL's own wrapper marshals it
-    correctly. This is why the operation lives here rather than being
+    place and the call fails with `EFAULT`. `sb-posix:ioctl` declares the
+    pointer as a variadic argument, so SBCL passes it correctly. Earlier
+    releases used `sb-unix:unix-ioctl`, which SBCL 2.6.10 removed. This is why the operation lives here rather than being
     reimplemented by each caller.
 
 ## with-terminal-session

@@ -169,18 +169,18 @@ string payload, so these helpers sanitize their input before framing.
 ## Shell integration marks
 
 Shells and REPLs can tell the terminal where prompts, commands, and output
-begin, so it can jump between prompts or select a command's output. These
-helpers emit the OSC 133 semantic prompt marks and the OSC 7 working-directory
+begin. These helpers emit the OSC 133 semantic prompt marks and the OSC 7 working-directory
 report, all ST-terminated:
 
 - **`ansi-prompt-start`**: `ESC ] 133 ; A ST`, before the prompt is drawn.
 - **`ansi-command-start`**: `ESC ] 133 ; B ST`, after the prompt, where input begins.
-- **`ansi-command-output-start`**: `ESC ] 133 ; C ST`, when the command runs.
+- **`ansi-command-output-start`**: `ESC ] 133 ; C ST`, just before the command's output begins.
 - **`ansi-command-finished`**: `ESC ] 133 ; D ST`, or `ESC ] 133 ; D ; status ST`
   given a non-negative exit status.
 - **`ansi-set-working-directory`**: `ESC ] 7 ; file://host/path ST`. `path` must
   be absolute; its UTF-8 octets are percent-encoded except unreserved URI
-  characters and `/`. `:host` defaults to `(machine-instance)`.
+  characters and `/`. `:host` defaults to `(machine-instance)` and is
+  percent-encoded the same way; pass `:host nil` for `file:///path`.
 
 ```lisp
 (cl-tty-kit:ansi-command-finished 1)
@@ -194,17 +194,20 @@ report, all ST-terminated:
 disagree on the escape sequence, so `:protocol` selects the dialect:
 
 - **`:osc-777`** (default; from rxvt-unicode): `ESC ] 777 ; notify ;
-  title ; body ST`. `;` is removed from the title because it separates the fields.
+  title ; body ST`. `;` is removed from the title because it separates the
+  fields; the body may contain `;`.
 - **`:osc-9`** (from iTerm2): `ESC ] 9 ; text ST`. OSC 9 has
   no title field, so a title is folded in as `title: body`. Terminals that
   implement ConEmu's OSC 9 subcommands read text starting with digits and `;`
   (such as `4;...`) as a subcommand instead of a notification.
-- **`:osc-99`** (kitty): `ESC ] 99 ; p=body ; body ST`. With a title, two
-  sequences share an `:id`: one carrying the title, then the body. The id must match
-  `[A-Za-z0-9_+.-]+` and defaults to `"1"`, so pass distinct ids to keep titled
-  notifications from replacing each other.
+- **`:osc-99`** (kitty): `ESC ] 99 ; p=body ; TEXT ST`, with `i=ID:` before
+  `p=body` when `:id` is given. With a title, two sequences share an id: one
+  carrying the title, then the body. The id must match `[A-Za-z0-9_+.-]+`.
+  Without a title it is omitted unless given; with a title it defaults to
+  `"1"`, so pass distinct ids to keep titled notifications from replacing each
+  other.
 
-All payloads have control characters stripped before framing.
+Titles and bodies have control characters stripped before framing.
 
 ```lisp
 (cl-tty-kit:ansi-notify "Build finished" :title "make")
@@ -243,9 +246,14 @@ with a decoder for the reply.
 - **Keyboard enhancement flags**: `ansi-request-keyboard-enhancements` emits
   `ESC [ ? u`. A terminal that implements the kitty keyboard protocol answers
   `ESC [ ? flags u`, parsed by `decode-keyboard-enhancements-report` into
-  `(values flags consumed)`. A terminal without the protocol sends no reply.
+  `(values flags consumed)`. A terminal without the protocol sends no reply,
+  so bound the wait with a timeout of your own.
 
-Each decoder declines cleanly (returning `nil` and `0`) when the input is not a
+`decode-input` does not recognize these three replies: it returns their bytes
+as key events. Offer the buffer to the matching decoder before passing it to
+`decode-input`.
+
+Each decoder declines cleanly (returning `nil` values and `0` consumed) when the input is not a
 complete report, so you can call it against a buffer that may not have the reply yet.
 
 ## Kitty keyboard enhancement

@@ -35,8 +35,9 @@ Broader multi-implementation support is a possible future direction — see
 shipping the Unicode tables the library currently borrows from `sb-unicode`,
 which runs against the project's small scope. Today the
 supported and tested target is SBCL, on both Linux and macOS (the CI matrix
-runs both). Window-size ioctls go through `sb-posix:ioctl`, so the library
-also loads on SBCL 2.6.10 and later, which removed `sb-unix:unix-ioctl`.
+runs both). `terminal-size`, `set-terminal-size`, and `pty-resize` issue their
+ioctls through `sb-posix:ioctl`, so the library also loads on SBCL 2.6.10 and
+later, which removed `sb-unix:unix-ioctl`.
 
 ## The `unsupported-feature` contract
 

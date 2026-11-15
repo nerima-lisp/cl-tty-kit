@@ -28,6 +28,29 @@ The `examples/` directory holds 21 more runnable programs, from a full repaint
 to a double-buffered render loop; see
 [Examples](https://nerima-lisp.github.io/cl-tty-kit/guide/examples/).
 
+## Shell integration, terminal queries, and grapheme clusters
+
+Added in 1.8.0: the kit builds the sequences a shell prompt emits and parses the
+replies a terminal sends back. Every builder returns a string; nothing is
+written to the terminal until you write it.
+
+- OSC 133 prompt marks: `ansi-prompt-start`, `ansi-command-start`,
+  `ansi-command-output-start`, `ansi-command-finished`.
+- OSC 7 working directory: `ansi-set-working-directory`.
+- Desktop notifications over OSC 777, OSC 9, or kitty's OSC 99: `ansi-notify`
+  with `:protocol`.
+- Queries and their reply decoders: XTVERSION (`ansi-request-terminal-version`,
+  `decode-terminal-version`), DECRQM/DECRPM (`ansi-request-mode`,
+  `decode-mode-report`), and kitty keyboard flags
+  (`ansi-request-keyboard-enhancements`,
+  `decode-keyboard-enhancements-report`).
+
+For grapheme clusters, `next-grapheme-boundary`, `do-grapheme-boundaries`,
+`grapheme-boundaries` (with `:into`), and `string-display-width` walk a string
+without allocating, using the same width table as `string-width`. See
+[Text Layout](https://nerima-lisp.github.io/cl-tty-kit/guide/text-layout/) and
+[ANSI Helpers](https://nerima-lisp.github.io/cl-tty-kit/guide/ansi-helpers/).
+
 ## Install
 
 The core `cl-tty-kit` system is dependency-free, but its test system depends on
