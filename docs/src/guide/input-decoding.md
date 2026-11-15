@@ -55,8 +55,11 @@ instead.
 
 `call-with-input-monitor` runs a function on the calling thread while a helper
 reads a terminal file descriptor. While monitoring is active, decoded events
-reach `on-event` on the helper thread. Shutdown can leave captured bytes without
-event notifications; the raw result still preserves every byte read for replay.
+reach `on-event` on the helper thread. A normal callback return of `:consume`
+removes that event's original byte range from the result. Any other return value,
+including other non-nil values, retains it. A callback failure also retains the
+event and monitoring continues. Shutdown can leave read bytes without event
+notifications; those bytes remain available for replay.
 The helper waits at most 20 ms per poll. This API requires SBCL thread support;
 without it, the call signals `unsupported-feature`.
 
@@ -64,40 +67,60 @@ without it, the call signals `unsupported-feature`.
 (call-with-input-monitor terminal-fd
   (lambda () (perform-operation))
   (lambda (event) (observe-event event))
-  :on-finish (lambda (octets) (queue-for-replay octets)))
+  :decoder decoder
+  :on-finish (lambda (octets) (setf pending-replay octets)))
 ```
 
-The primary result is an octet vector containing every byte the helper read, in
-order. The secondary result is a list of the operation's multiple return values.
+The primary result is an octet vector containing the retained bytes in order.
+The secondary result is a list of the operation's multiple return values.
+The third result is a diagnostics list described below.
 The caller owns reads from the descriptor exclusively during the operation and
 keeps it open until the monitor returns. The monitor neither closes it nor
-changes its blocking mode. Drain bytes already buffered by a Lisp stream before
-entering this scope and replay them before the monitor's bytes.
+changes its blocking mode. It reads the bare descriptor, not a Lisp stream's
+prefetched buffer. Before handoff, feed such buffered bytes through the supplied
+decoder and preserve any completed events in application order. Do not queue
+those same raw bytes again: only the decoder's still-pending prefix transfers
+into the monitor and appears in its returned bytes.
 
-Begin monitoring at a complete input-sequence boundary. The private decoder
-does not inherit another decoder's buffered UTF-8, escape, or paste state.
-Complete any sequence pending in the application's decoder before entering
-the scope. Bracketed paste is collected only when the monitor reads its opening
-marker; a C-g inside such a paste remains part of the paste event.
+`:decoder` transfers ownership of that decoder's pending input to the scope.
+The supplied decoder is emptied while preserving its settings; do not use it
+during monitoring. The helper uses an independent copy of its pending UTF-8,
+escape, and paste state, with bracketed-paste collection enabled. The returned
+bytes include the initial pending prefix followed by newly read bytes, excluding
+only consumed events. Replay the result once through the now-empty supplied
+decoder. A paste's C-g stays inside its paste event, including when its opening
+marker was buffered before monitoring. Consuming a paste removes its original
+framing and payload bytes even when its event text normalizes CRLF to LF.
 
 After the operation returns or exits nonlocally, cleanup requests a stop and
 joins the helper before invoking `on-finish` on the caller. The callback receives
 the captured vector even during a nonlocal exit. Use it to recover input when
-the primary return value cannot be received. If helper creation fails, cleanup
-delivers an empty vector. Argument validation happens before this cleanup scope.
-An error in the helper is re-signaled on the caller after a normal operation
-return; an operation's nonlocal exit takes priority. An error in `on-finish`
-propagates from cleanup under the ordinary `unwind-protect` rules.
+the primary return value cannot be received. The callback receives the same
+array as the normal primary result: choose one reference for replay, never both.
+If helper creation fails after state transfer, cleanup delivers the initial
+pending prefix through `on-finish`. Argument validation precedes state transfer.
+An operation's nonlocal exit takes priority and has no normal diagnostics return.
 
-Event callbacks must return promptly without waiting for the operation or
-performing blocking I/O. The cleanup regression test measures 20 samples each
-for normal return and nonlocal exit, with no incoming input and a no-op event
-callback. Its p95 stop-and-join target is 50 ms. Callback runtime and OS
-scheduling affect latency; this is not a time bound for arbitrary callbacks.
-Cleanup inhibits asynchronous Lisp interrupts until joining and input delivery
-finish. It does not flush the decoder: an unfinished UTF-8 sequence, escape
-sequence, or paste remains in the
-raw bytes for the application's existing decoder to finish later.
+Decoder failures reset the helper's decoder and retry the current byte once.
+Failed pending input remains in the retained bytes; for example, an incomplete
+UTF-8 prefix does not prevent a following C-g from reaching the callback.
+An unrecoverable I/O or worker failure ends the helper without replacing the
+operation's return values. EOF ends the helper normally, without flushing
+unfinished input.
+
+Diagnostics have the form `((phase condition) ...)`. The phases are `:decode`,
+`:on-event`, `:io`, and `:worker`. Only the first serious condition per phase is
+retained, in first-occurrence order, so repeated malformed bytes do not accumulate
+unbounded error objects. Recording a diagnostic never discards input bytes.
+
+Cleanup cooperatively requests a stop and joins the helper; it does not return
+on a timeout while leaving the helper alive. The stop-and-join requirement is
+50 ms on both normal and nonlocal exits, and `on-event` execution counts against
+that budget. The callback must therefore return promptly without blocking or
+waiting for the caller. This cooperative join cannot force arbitrary callback
+code or an OS-descheduled thread to finish. `on-finish` runs with interrupts
+inhibited and must only save its bytes; replay them after cleanup. An error in
+`on-finish` propagates under the ordinary `unwind-protect` rules.
 
 ## The `key-event` struct
 

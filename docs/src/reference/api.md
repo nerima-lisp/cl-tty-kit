@@ -225,15 +225,24 @@ alongside the stream API. See [PTY](../guide/pty.md).
 | fd-centric layer | `pty-fd`, `pty-pid`, `stream-fd`, `fd-read-octets`, `fd-write-octets`, `fd-wait` |
 | Input monitoring | `call-with-input-monitor` |
 
-`(call-with-input-monitor fd function on-event &key on-finish)` runs `function`
+`(call-with-input-monitor fd function on-event &key on-finish decoder)` runs `function`
 on the caller while a helper reads `fd` and calls `on-event` for decoded events
-while active. Shutdown may leave captured bytes without notifications; every
-byte read remains in the raw result. The private decoder collects bracketed
-paste and must start at a complete input-sequence boundary, since it does not
-inherit another decoder's pending state. Returns the captured octet vector and
-a list of `function`'s multiple values. After stopping and
-joining, `on-finish` receives that vector on the caller, including during a
-nonlocal exit. Reads from `fd` must be exclusive and event callbacks must return
-promptly without blocking. Requires SBCL thread support; otherwise signals
+while active. Only a normal `:consume` callback return removes that event's
+original byte range. Returns retained octets, a list of `function`'s multiple
+values, and bounded diagnostics `((phase condition) ...)`, keeping the first
+serious condition per `:decode`, `:on-event`, `:io`, or `:worker` phase in order.
+Helper failures do not replace `function`'s values. Decoder failures recover and
+callback failures retain their event while monitoring continues.
+
+`:decoder` transfers pending input into an independent helper decoder with paste
+collection enabled and empties the supplied decoder without changing its settings.
+Retained bytes include that initial prefix. Replay them once through the emptied
+decoder. After stopping and joining, `on-finish` receives the same array on the
+caller, including during a nonlocal exit; save it there and do not replay both
+references. Reads from `fd` must be exclusive. `on-event` must not block or wait
+for the caller; `on-finish` runs with interrupts inhibited and must only save
+bytes. The 50 ms stop-and-join budget includes callback execution. Cleanup joins
+cooperatively and does not return with a live helper on timeout. Requires SBCL
+thread support; otherwise signals
 `unsupported-feature`. See [Input Decoding](../guide/input-decoding.md#monitoring-input-during-a-caller-operation)
-for cleanup latency measurements, errors, and replay behavior.
+for callback and shutdown requirements, errors, and replay behavior.
