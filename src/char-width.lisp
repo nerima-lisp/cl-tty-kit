@@ -139,10 +139,6 @@ per-code-point iteration."
       '()
       (sb-unicode:graphemes string)))
 
-(defun grapheme-count (string)
-  "Return the number of grapheme clusters in STRING (see STRING-GRAPHEMES)."
-  (length (string-graphemes string)))
-
   (defun grapheme-width (grapheme)
     "Return the terminal column width of the grapheme cluster GRAPHEME (a string).
   The width is the maximum width of its code points, so a base plus combining

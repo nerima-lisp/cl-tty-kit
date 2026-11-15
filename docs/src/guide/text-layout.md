@@ -91,6 +91,47 @@ unit for cursor movement and grapheme-aware truncation.
 
 An empty string yields an empty list rather than signaling.
 
+### Walking clusters without allocating
+
+`string-graphemes` builds a fresh string per cluster. When you only need where
+clusters start and end, for example to move a cursor or measure a line every
+frame, use the boundary API instead. It applies the same rules, and every
+function below except `grapheme-boundaries` without `:into` runs without
+allocating. Each takes `:start` and `:end` to work on a substring without
+copying it.
+
+- `next-grapheme-boundary` returns the index after the cluster that starts at
+  `index`, or `nil` when `index` has reached `:end` (default: the string's
+  length). `index` must be a cluster start: the regional-indicator pairing of
+  flags restarts there.
+- `do-grapheme-boundaries` binds the start and end of each cluster in turn,
+  like `dolist`: `return` leaves the loop and `:result` gives its value.
+- `grapheme-boundaries` returns every cluster start followed by `:end`, so N
+  clusters give N+1 offsets; the second value is that count. By default it
+  returns a fresh list. Pass a vector as `:into` to have it filled and
+  returned instead. A vector with a fill pointer is reset and grows as needed;
+  a vector without one is written from index 0 and must be long enough.
+- `string-display-width` sums `grapheme-width` over the clusters, where
+  `string-width` sums every code point.
+
+```lisp
+;; e + U+0301 COMBINING ACUTE ACCENT, then a
+(defparameter *text* (coerce (list #\e (code-char #x0301) #\a) 'string))
+;; family emoji: man ZWJ woman ZWJ girl
+(defparameter *family* (map 'string #'code-char
+                            '(#x1F468 #x200D #x1F469 #x200D #x1F467)))
+
+(next-grapheme-boundary *text* 0)              ; => 2
+(do-grapheme-boundaries (start end *text*)
+  (print (list start end)))                    ; prints (0 2) then (2 3)
+(let ((offsets (make-array 8 :element-type 'fixnum :fill-pointer 0)))
+  (grapheme-boundaries *text* :into offsets))  ; => #(0 2 3), 3
+(string-display-width *family*)                ; => 2 columns
+(string-width *family*)                        ; => 6 columns
+```
+
+`grapheme-count` is built on the same walk, so it does not allocate either.
+
 ## Width-aware truncation, padding, and wrapping
 
 These three functions are the workhorses. Each measures in columns, so they stay

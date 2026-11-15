@@ -162,6 +162,10 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:string-graphemes
    #:grapheme-count
    #:grapheme-width
+   #:next-grapheme-boundary
+   #:do-grapheme-boundaries
+   #:grapheme-boundaries
+   #:string-display-width
    ;; text layout
    #:truncate-string
    #:pad-string

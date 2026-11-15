@@ -88,7 +88,8 @@ Unicode terminal column width and grapheme segmentation. See
 [Text Layout and Unicode Width](../guide/text-layout.md).
 
 `char-width`, `string-width`, `string-graphemes`, `grapheme-count`,
-`grapheme-width`.
+`grapheme-width`, `next-grapheme-boundary`, `do-grapheme-boundaries`,
+`grapheme-boundaries`, `string-display-width`.
 
 ## Text layout
 
