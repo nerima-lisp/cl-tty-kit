@@ -276,7 +276,8 @@
                    (let ((result
                            (catch 'pipe-exit
                              (handler-case
-                                 (call-with-input-monitor
+                                 (multiple-value-list
+                                   (call-with-input-monitor
                                    reader
                                    (lambda ()
                                      (when (eq mode :nonlocal) (throw 'pipe-exit :escaped))
@@ -289,13 +290,14 @@
                                    (lambda (event) (declare (ignore event)) nil)
                                    :decoder decoder
                                    :on-finish (lambda (bytes)
-                                                (incf finish-count) (setf saved bytes)))
+                                                (incf finish-count) (setf saved bytes))))
                                (error (condition) (setf observed condition))))))
                      (case mode
                        (:nonlocal (expect result :to-be :escaped))
                        (:creation-interrupt (expect result :to-be :interrupted))
                        (:creation-error (expect observed :to-be injected))
-                       (t (expect observed :to-be nil))))
+                       (t (expect observed :to-be nil)
+                          (expect (third result) :to-be nil))))
                    (expect finish-count :to-be 1)
                    (expect saved :to-equalp (cl-codec-kit:string-to-octets prefix :encoding :utf-8))
                    (expect (cl-tty-kit::%input-monitor-prefix decoder) :to-equalp #())

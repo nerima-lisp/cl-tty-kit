@@ -175,6 +175,7 @@
       widths))
 )
 
+#+sb-thread
 (describe "input monitor streaming conservation"
   (let ((trials 0)
         (both-nonempty 0))
