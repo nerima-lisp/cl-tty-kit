@@ -19,11 +19,11 @@
 ;;;   GB9c  \p{InCB=Linker} \p{InCB=Extend}* x \p{InCB=Consonant}
 ;;;
 ;;; Revisions 43-48 (Unicode 15.1-17.0) additionally required a Consonant
-;;; before the Linker. With that one difference, STRING-GRAPHEMES (which
-;;; still calls SB-UNICODE:GRAPHEMES) and these functions agree on every
-;;; cluster on SBCL 2.6.10, and on every string without an InCB=Linker
-;;; code point on older SBCLs; t/grapheme-test.lisp checks the latter and
-;;; checks GB9c itself against Unicode's GraphemeBreakTest.txt.
+;;; before the Linker. STRING-GRAPHEMES and GRAPHEME-COUNT are built on the
+;;; same walker below, so every API here returns the same clusters. They
+;;; match SB-UNICODE:GRAPHEMES on SBCL 2.6.10, and on older SBCLs on every
+;;; string without an InCB=Linker code point; t/grapheme-test.lisp checks
+;;; the latter and checks GB9c itself against Unicode's GraphemeBreakTest.txt.
 
 (deftype %string-index ()
   '(integer 0 (#.array-dimension-limit)))
