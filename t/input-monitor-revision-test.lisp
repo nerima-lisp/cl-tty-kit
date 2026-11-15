@@ -439,3 +439,83 @@
     (monitor-test-partitioned-raw
       (make-array 12289 :element-type '(unsigned-byte 8) :initial-element 97)
       '(4095 1 1 4096 4096))))
+
+#+sb-thread
+(describe "input monitor shutdown diagnostic"
+  (it "records all idle nonlocal shutdown stages against the 50ms maximum"
+    (let* ((phases #(5 0 1 2 3 4 6 7 8 9 10 11 12 13 14 15 16 17 18 19))
+           (records (make-array 20))
+           (captured (make-array 20 :initial-element nil))
+           (results (make-array 20 :initial-element nil))
+           (original (fdefinition 'cl-concurrent-kit:join-thread))
+           (active-record nil)
+           (hook-hits 0))
+      (dotimes (trial 20)
+        (setf (aref records trial) (make-array 4 :initial-element nil)))
+      (flet ((milliseconds (record start end)
+               (when (and (aref record start) (aref record end))
+                 (* 1000d0 (/ (- (aref record end) (aref record start))
+                              internal-time-units-per-second)))))
+        (unwind-protect
+             (unwind-protect
+                  (progn
+                    (sb-sys:without-interrupts
+                      (setf (fdefinition 'cl-concurrent-kit:join-thread)
+                            (lambda (thread &rest options)
+                              (if (and active-record
+                                       (equal (cl-concurrent-kit:thread-name thread)
+                                              "cl-tty-kit input monitor"))
+                                  (progn
+                                    (incf hook-hits)
+                                    (setf (aref active-record 1) (get-internal-real-time))
+                                    (multiple-value-prog1
+                                        (apply original thread options)
+                                      (setf (aref active-record 2)
+                                            (get-internal-real-time))))
+                                  (apply original thread options)))))
+                    (progn
+                        (dotimes (trial 20)
+                          (with-monitor-pipe (reader writer)
+                            (let ((record (aref records trial)))
+                              (setf active-record record
+                                    (aref results trial)
+                                    (catch 'monitor-diagnostic-exit
+                                      (call-with-input-monitor
+                                        reader
+                                        (lambda ()
+                                          (sleep (/ (aref phases trial) 1000))
+                                          (setf (aref record 0) (get-internal-real-time))
+                                          (throw 'monitor-diagnostic-exit :escaped))
+                                        (lambda (event) (declare (ignore event)) nil)
+                                        :on-finish
+                                        (lambda (bytes)
+                                          (setf (aref record 3) (get-internal-real-time)
+                                                (aref captured trial) bytes))))))))))
+               (sb-sys:without-interrupts
+                 (setf (fdefinition 'cl-concurrent-kit:join-thread) original)))
+          ;; Log outside both the measured intervals and the installed wrapper,
+          ;; also when an unexpected condition leaves only partial records.
+          (format t "~&shutdown diagnostic sbcl=~A units=~D samples=20 hooks=~D~%"
+                  (lisp-implementation-version) internal-time-units-per-second hook-hits)
+          (dotimes (trial 20)
+            (let ((record (aref records trial)))
+              (format t "~&shutdown diagnostic trial=~D phase=~Dms stamps=~S prejoin=~S join=~S postjoin=~S total=~Sms~%"
+                      trial (aref phases trial) record
+                      (milliseconds record 0 1) (milliseconds record 1 2)
+                      (milliseconds record 2 3) (milliseconds record 0 3))))
+          (finish-output))
+        (expect (eq (fdefinition 'cl-concurrent-kit:join-thread) original))
+        (expect (plusp hook-hits))
+        (expect hook-hits :to-be 20)
+        (dotimes (trial 20)
+          (let ((record (aref records trial)))
+            (expect (every #'integerp record))
+            (expect (<= (aref record 0) (aref record 1)
+                        (aref record 2) (aref record 3)))
+            (expect (aref results trial) :to-be :escaped)
+            (expect (aref captured trial) :to-equalp #())))
+        (let ((maximum (loop for record across records
+                             maximize (/ (- (aref record 3) (aref record 0))
+                                         internal-time-units-per-second))))
+          (format t "~&shutdown diagnostic maximum=~,3Fms limit=50ms~%" (* 1000 maximum))
+          (expect (< maximum 0.05)))))))
