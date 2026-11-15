@@ -159,3 +159,52 @@
           (screen-put-cell current x y (code-char (+ 33 (mod (+ x y) 90))))))
       (expect (lambda () (render-diff current previous))
               :to-allocate-under (* 2 1024 1024)))))
+
+#+sb-thread
+(describe "input monitoring byte conservation"
+  (it-property "arbitrary write partitions preserve raw bytes and decoded events"
+      ((text (cl-weave:gen-string :min-length 0 :max-length 32 :alphabet "abcXYZ"))
+       (widths (cl-weave:gen-list (cl-weave:gen-integer :min 1 :max 12)
+                                  :min-length 1 :max-length 32)))
+    (monitor-test-partitioned-input
+      (concatenate '(simple-array (unsigned-byte 8) (*))
+                   (map '(vector (unsigned-byte 8)) #'char-code text)
+                   (monitor-test-octets
+                     '(7 27 91 49 48 51 59 53 117 226 156 147
+                       27 91 50 48 48 126 97 7 98 27 91 50 48 49 126)))
+      widths))
+)
+
+#+sb-thread
+(describe "input monitor streaming conservation"
+  (let ((trials 0)
+        (both-nonempty 0))
+    (cl-weave:before-all
+      (setf trials 0 both-nonempty 0))
+    (it-property "continuous arbitrary-byte writes survive randomized monitor shutdown"
+        ((octets (cl-weave:gen-list (cl-weave:gen-integer :min 0 :max 255)
+                                    :min-length 8193 :max-length 12289))
+         (delay (cl-weave:gen-integer :min 0 :max 5)))
+      (multiple-value-bind (captured remaining body-values diagnostics)
+          (monitor-test-streaming-trace (monitor-test-octets octets) (/ delay 1000))
+        (incf trials)
+        (when (and (plusp (length captured)) (plusp (length remaining)))
+          (incf both-nonempty))
+        (expect (concatenate '(vector (unsigned-byte 8)) captured remaining)
+                :to-equalp (monitor-test-octets octets))
+        (expect body-values :to-equal '(:body-complete))
+        (expect (<= (length diagnostics) 1))))
+    (cl-weave:after-all
+      (format t "~&monitor streaming property trials=~D both-nonempty=~D~%"
+              trials both-nonempty)
+      (expect (>= trials 100))
+      (expect (>= both-nonempty 20)))))
+
+#+sb-thread
+(describe "input monitor arbitrary byte partitions"
+  (it-property "arbitrary bytes beyond a read buffer keep their exact write order"
+      ((octets (cl-weave:gen-list (cl-weave:gen-integer :min 0 :max 255)
+                                  :min-length 4097 :max-length 8193))
+       (widths (cl-weave:gen-list (cl-weave:gen-integer :min 1 :max 1024)
+                                  :min-length 8 :max-length 24)))
+    (monitor-test-partitioned-raw (monitor-test-octets octets) widths)))

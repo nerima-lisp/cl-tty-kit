@@ -54,7 +54,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "1.8.0"
+  :version "1.9.0"
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
@@ -134,7 +134,8 @@
                (:file "src/renderer")
                (:file "src/tick-loop")
                (:file "src/pty")
-               (:file "src/pty-fd"))
+               (:file "src/pty-fd")
+               (:file "src/input-monitor"))
   ;; Mandatory. Without it `asdf:test-system "cl-tty-kit"` reaches only the
   ;; :perform below; the delegation states, in the one place ASDF looks, that
   ;; the test system is what test-op is about. See PACKAGE_STANDARD.md.
@@ -149,7 +150,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "1.8.0"
+  :version "1.9.0"
   :homepage "https://github.com/nerima-lisp/cl-tty-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-tty-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-tty-kit.git")
@@ -182,6 +183,9 @@
                (:file "t/raw-mode-test")
                (:file "t/session-test")
                (:file "t/pty-test")
+               (:file "t/input-monitor-test")
+               (:file "t/input-monitor-revision-test")
+               (:file "t/input-monitor-v190-test")
                (:file "t/screen-test")
                (:file "t/screen-mutation-test")
                (:file "t/box-test")

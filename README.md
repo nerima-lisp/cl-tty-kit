@@ -28,6 +28,14 @@ The `examples/` directory holds 21 more runnable programs, from a full repaint
 to a double-buffered render loop; see
 [Examples](https://nerima-lisp.github.io/cl-tty-kit/guide/examples/).
 
+## Scoped input monitoring
+
+Added in 1.9.0: `call-with-input-monitor` observes a selected terminal fd while
+an operation runs on the calling thread. It preserves unconsumed bytes for
+replay and can inherit a decoder's pending input. See
+[Input Decoding](https://nerima-lisp.github.io/cl-tty-kit/guide/input-decoding/#monitoring-input-during-a-caller-operation)
+for consumption, replay, and callback requirements.
+
 ## Shell integration, terminal queries, and grapheme clusters
 
 Added in 1.8.0: the kit builds the sequences a shell prompt emits and parses the

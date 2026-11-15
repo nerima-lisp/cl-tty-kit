@@ -380,3 +380,28 @@ checks both of those slots, never just that some error was signaled."
         (let* ((example (symbol-function (load-example-symbol example-file)))
                (events (funcall example)))
           (expect (mapcar #'%key-event-signature events) :to-equal expected))))))
+
+(describe "paste collection with SGR mouse events"
+  (dolist (fragmented '(nil t))
+    (it (if fragmented
+            "preserves consecutive fragmented mouse, paste and key events"
+            "preserves consecutive mouse, paste and key events in one chunk")
+      (let* ((decoder (make-input-decoder :collect-bracketed-paste t))
+             (input (%esc "[<0;5;3M" (string #\Esc) "[200~hello"
+                          (string #\Esc) "[201~" (string #\Esc) "[<0;5;3mx"))
+             (chunks (if fragmented
+                         (loop for character across input collect (string character))
+                         (list input)))
+             (events nil))
+        (expect (typep decoder (quote cl-tty-kit::input-decoder)))
+        (dolist (chunk chunks)
+          (setf events (nconc events (decode-input-chunk decoder chunk))))
+        (expect (length events) :to-be 4)
+        (expect (typep (first events) (quote mouse-event)))
+        (expect (mouse-event-action (first events)) :to-be :press)
+        (expect (list (mouse-event-x (first events)) (mouse-event-y (first events)))
+                :to-equal '(4 2))
+        (expect (%key-event-signature (second events)) :to-equal '(:paste "hello" nil))
+        (expect (typep (third events) (quote mouse-event)))
+        (expect (mouse-event-action (third events)) :to-be :release)
+        (expect (%key-event-signature (fourth events)) :to-equal '(:character #\x nil))))))

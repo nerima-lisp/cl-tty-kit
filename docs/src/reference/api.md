@@ -223,3 +223,34 @@ alongside the stream API. See [PTY](../guide/pty.md).
 | --- | --- |
 | Struct / stream | `pty`, `make-pty`, `pty-process`, `pty-stream`, `pty-read`, `pty-write`, `pty-resize`, `pty-alive-p`, `pty-exit-code`, `close-pty` |
 | fd-centric layer | `pty-fd`, `pty-pid`, `stream-fd`, `fd-read-octets`, `fd-write-octets`, `fd-wait` |
+| Input monitoring | `call-with-input-monitor` |
+
+Added in 1.9.0: `(call-with-input-monitor fd function on-event &key on-finish decoder)` runs `function`
+on the caller while a helper reads `fd` and calls `on-event` for decoded events
+while active. Only a normal `:consume` callback return removes that event's
+original byte range. Returns retained octets, a list of `function`'s multiple
+values, and bounded diagnostics `((phase condition) ...)`, keeping the first
+serious condition per `:decode`, `:on-event`, `:io`, or `:worker` phase in order.
+Helper failures do not replace `function`'s values. Decoder failures recover and
+callback failures retain their event while monitoring continues.
+
+`:decoder` transfers pending input into an independent helper decoder with paste
+collection enabled and empties the supplied decoder without changing its settings.
+Retained bytes include that initial prefix. Replay them once through the emptied
+decoder. After stopping and joining, `on-finish` receives the same array on the
+caller, including during a nonlocal exit; save it there and do not replay both
+references. Reads from `fd` must be exclusive. `on-event` must not block or wait
+for the caller; `on-finish` runs with interrupts inhibited and must only save
+bytes. Cleanup wakes the helper with a private nonblocking self-pipe, then joins
+and closes both private descriptors. This wake is independent of the wait timer.
+This repository's Linux CI asserts the 50 ms maximum for 20 samples of each
+idle/streaming and normal/nonlocal exit mode. macOS timing results are measured
+in loom's macOS CI using those four modes and sample counts. Timing runs from the body-end
+marker immediately before return or nonlocal exit to the timing marker at the
+start of `on-finish`, including pending `on-event` execution, join, pipe closure,
+and retained-array construction. The rest of `on-finish` and replay are excluded.
+Evidence is limited to those measured conditions. Cleanup always joins before
+returning. Requires SBCL
+thread support; otherwise signals
+`unsupported-feature`. See [Input Decoding](../guide/input-decoding.md#monitoring-input-during-a-caller-operation)
+for callback and shutdown requirements, errors, and replay behavior.

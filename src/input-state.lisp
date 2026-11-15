@@ -9,9 +9,8 @@
   (collect-bracketed-paste-p nil)
   (normalize-paste-line-endings-p nil)
   (pending-paste nil :type (or null string))
+  (pending-paste-start-source nil :type (or null string))
   (max-pending 4194304 :type (integer 0 *)))
-
-(defparameter +bracketed-paste-start-sequence+ (concatenate 'string (string #\Esc) "[200~"))
 
 (defparameter +bracketed-paste-end-sequence+ (concatenate 'string (string #\Esc) "[201~"))
 

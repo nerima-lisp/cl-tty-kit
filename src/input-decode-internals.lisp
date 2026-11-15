@@ -1,5 +1,7 @@
 (in-package #:cl-tty-kit)
 
+(defvar *input-decoder-source-length-sink* nil)
+
 (defconstant +max-incomplete-escape-length+ 1024
   "Maximum bytes retained for an escape sequence that has not reached a final byte.")
 
@@ -27,7 +29,9 @@
              (t nil))))))
 
 (defun %paste-marker-event-p (event marker)
-  (and (eq :special (key-event-type event)) (eq marker (key-event-code event))))
+  (and (key-event-p event)
+       (eq :special (key-event-type event))
+       (eq marker (key-event-code event))))
 
 (defun %make-paste-event (payload)
   (make-key-event :type :paste :code payload :modifiers nil))
@@ -91,7 +95,7 @@ second copy for the usual LF-only paste."
     (%incomplete-escape-sequence-p string index)
     (subseq string index)))
 
-(defun %decode-plain-events (string eof continuation)
+(defun %decode-plain-events (string eof continuation &optional source-length-sink)
   "Call CONTINUATION with each event STRING decodes, in order.
 Returns the still-undecoded pending tail: an incomplete escape fragment held
 for a later chunk, or \"\" once STRING is fully consumed. Streaming events to
@@ -106,13 +110,19 @@ top of it."
              (when pending
                (return pending)))
            (multiple-value-bind (event consumed) (%decode-next-event string index)
+             (when source-length-sink
+               (funcall source-length-sink
+                        (length (cl-codec-kit:string-to-octets
+                                  (subseq string index (+ index consumed))
+                                  :encoding :utf-8))))
              (funcall continuation event)
              (setf index (+ index consumed)))))
 
 (defun %collect-plain-events (string eof)
   (let* ((events '())
          (pending (%decode-plain-events string eof
-                    (lambda (event) (push event events)))))
+                    (lambda (event) (push event events))
+                    *input-decoder-source-length-sink*)))
     (values (nreverse events) pending)))
 
 (defun %append-paste-string (decoder pending-paste chunk &optional (start 0) (end (length chunk)))
@@ -136,8 +146,8 @@ top of it."
     (replace pending-paste chunk :start1 old-length :start2 start :end2 end))
   pending-paste)
 
-(defun %fallback-paste-source (pending-paste suffix)
-  (concatenate 'string +bracketed-paste-start-sequence+ pending-paste suffix))
+(defun %fallback-paste-source (decoder pending-paste suffix)
+  (concatenate 'string (input-decoder-pending-paste-start-source decoder) pending-paste suffix))
 
 (defun %bracketed-paste-suffix-length (string start eof)
   (if eof
@@ -163,13 +173,14 @@ top of it."
 Events are returned in input order; callers maintain their own accumulation
 order."
   (multiple-value-bind (flushed-events pending-string) (%collect-plain-events
-      (%fallback-paste-source (input-decoder-pending-paste decoder) suffix)
+      (%fallback-paste-source decoder (input-decoder-pending-paste decoder) suffix)
       t)
     (declare (ignore pending-string))
-    (setf (input-decoder-pending-paste decoder) nil)
+    (setf (input-decoder-pending-paste decoder) nil
+          (input-decoder-pending-paste-start-source decoder) nil)
     flushed-events))
 
-(defun %decode-paste-events (decoder string eof continuation)
+(defun %decode-paste-events (decoder string eof continuation &optional source-length-sink)
   "Call CONTINUATION with each event STRING decodes while DECODER's paste
 buffer may be open, in order. Returns the still-undecoded pending tail, the
 same contract %DECODE-PLAIN-EVENTS documents -- %COLLECT-PASTE-EVENTS is the
@@ -181,7 +192,16 @@ list-collecting policy built on top of it, the paste-aware sibling of
     (declare (type fixnum index limit end-sequence-length))
     (flet ((finish-paste ()
              (let ((text (%copy-paste-buffer-string (input-decoder-pending-paste decoder))))
-               (setf (input-decoder-pending-paste decoder) nil)
+               (when source-length-sink
+                 ;; The paste event's text may normalize CRLF after this point.
+                 (funcall source-length-sink
+                          (+ (length (cl-codec-kit:string-to-octets
+                                       (input-decoder-pending-paste-start-source decoder)
+                                       :encoding :utf-8))
+                             (length (cl-codec-kit:string-to-octets text :encoding :utf-8))
+                             end-sequence-length)))
+               (setf (input-decoder-pending-paste decoder) nil
+                     (input-decoder-pending-paste-start-source decoder) nil)
                (%make-paste-event
                  (if (input-decoder-normalize-paste-line-endings-p decoder)
                      (%normalize-paste-line-endings text)
@@ -221,14 +241,23 @@ list-collecting policy built on top of it, the paste-aware sibling of
                   (return pending)
                 (multiple-value-bind (event consumed) (%decode-next-event string index)
                   (if (%paste-marker-event-p event :paste-start)
-                      (setf (input-decoder-pending-paste decoder) (%make-paste-buffer))
-                      (funcall continuation event))
+                      (setf (input-decoder-pending-paste-start-source decoder)
+                            (subseq string index (+ index consumed))
+                            (input-decoder-pending-paste decoder) (%make-paste-buffer))
+                      (progn
+                        (when source-length-sink
+                          (funcall source-length-sink
+                                   (length (cl-codec-kit:string-to-octets
+                                             (subseq string index (+ index consumed))
+                                             :encoding :utf-8))))
+                        (funcall continuation event)))
                   (incf index consumed)))))))))
 
 (defun %collect-paste-events (decoder string eof)
   (let* ((events '())
          (pending (%decode-paste-events decoder string eof
-                    (lambda (event) (push event events)))))
+                    (lambda (event) (push event events))
+                    *input-decoder-source-length-sink*)))
     (values (nreverse events) pending)))
 
 (defun %decode-string-events-with-paste (decoder string &key eof)

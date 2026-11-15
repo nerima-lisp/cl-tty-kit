@@ -7,7 +7,7 @@
     (:homepage . "https://github.com/nerima-lisp/cl-tty-kit")
     (:bug-tracker . "https://github.com/nerima-lisp/cl-tty-kit/issues")
     (:source-control . (:git "https://github.com/nerima-lisp/cl-tty-kit.git"))
-    (:version . "1.8.0")))
+    (:version . "1.9.0")))
 
 (defparameter +expected-external-symbols+ '("CHAR-WIDTH"
     "STRING-WIDTH"
@@ -296,6 +296,7 @@
     "PTY-PID"
     "FD-READ-OCTETS"
     "FD-WRITE-OCTETS"
+    "CALL-WITH-INPUT-MONITOR"
     "ANSI-REQUEST-DEVICE-ATTRIBUTES"))
 
 (defparameter +expected-development-commands+ (list
