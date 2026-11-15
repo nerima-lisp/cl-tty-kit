@@ -12,9 +12,11 @@
 
 #+sb-thread
 (defun monitor-test-cg-p (event)
-  (and (eq (key-event-type event) :character)
-       (eql (key-event-code event) #\g)
-       (member :control (key-event-modifiers event))))
+  (or (and (eq (key-event-type event) :special)
+           (eq (key-event-code event) :control-g))
+      (and (eq (key-event-type event) :character)
+           (eql (key-event-code event) #\g)
+           (member :control (key-event-modifiers event)))))
 
 #+sb-thread
 (defun monitor-test-streaming-trace (payload delay &key nonlocal measure)
@@ -258,7 +260,7 @@
           (expect (length captured) :to-be 21)
           (expect body-values :to-equal '(:continued))
           (expect (mapcar #'first diagnostics) :to-equal '(:decode))
-          (expect (typep (second (first diagnostics)) 'input-buffer-exceeded))))))
+          (expect (typep (second (first diagnostics)) 'cl-tty-kit::input-buffer-exceeded))))))
   (it "consumes only the source ranges of explicit legacy and CSI-u C-g events"
     (with-monitor-pipe (reader writer)
       (let ((arrived (sb-thread:make-semaphore)))
