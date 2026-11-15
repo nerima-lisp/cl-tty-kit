@@ -243,8 +243,9 @@ references. Reads from `fd` must be exclusive. `on-event` must not block or wait
 for the caller; `on-finish` runs with interrupts inhibited and must only save
 bytes. Cleanup wakes the helper with a private nonblocking self-pipe, then joins
 and closes both private descriptors. This wake is independent of the wait timer.
-CI asserts the 50 ms maximum for 20 samples of each idle/streaming and
-normal/nonlocal exit mode on Linux and macOS. Timing runs from the body-end
+This repository's Linux CI asserts the 50 ms maximum for 20 samples of each
+idle/streaming and normal/nonlocal exit mode. macOS timing results are measured
+in loom's macOS CI using those four modes and sample counts. Timing runs from the body-end
 marker immediately before return or nonlocal exit to the timing marker at the
 start of `on-finish`, including pending `on-event` execution, join, pipe closure,
 and retained-array construction. The rest of `on-finish` and replay are excluded.

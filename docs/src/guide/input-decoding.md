@@ -125,8 +125,9 @@ retained, in first-occurrence order, so repeated malformed bytes do not accumula
 unbounded error objects. Recording a diagnostic never discards input bytes.
 
 Cleanup publishes stop, writes a wake byte, and joins the helper before returning.
-CI asserts the 50 ms maximum for 20 samples of each idle/streaming and
-normal/nonlocal exit mode on Linux and macOS. The measured interval starts at the
+This repository's Linux CI asserts the 50 ms maximum for 20 samples of each
+idle/streaming and normal/nonlocal exit mode. macOS timing results are measured
+in loom's macOS CI using those four modes and sample counts. The measured interval starts at the
 body-end marker immediately before return or nonlocal exit and ends at the
 timing marker at the start of `on-finish`. It includes pending `on-event`
 execution, join, closure of both private pipe descriptors, and construction of

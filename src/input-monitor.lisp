@@ -117,8 +117,9 @@ other readers. Cleanup publishes stop, wakes the helper through a private
 nonblocking self-pipe, joins it, then closes both private descriptors. The
 readiness wake does not depend on the ordinary 5ms wait timeout. Stop is also
 checked between bytes. ON-EVENT must never block or wait for the caller.
-CI checks the 50ms maximum over 20 samples of each idle/streaming and
-normal/nonlocal exit mode on Linux and macOS. Timing runs from the body-end
+This repository's Linux CI checks the 50ms maximum over 20 samples of each
+idle/streaming and normal/nonlocal exit mode. macOS timing results are measured
+in loom's macOS CI using those four modes and sample counts. Timing runs from the body-end
 marker immediately before return or nonlocal exit to the timing marker at the
 start of ON-FINISH. It includes pending ON-EVENT execution, join, pipe closure,
 and retained-array construction; it excludes the rest of ON-FINISH and replay.
