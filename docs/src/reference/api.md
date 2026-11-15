@@ -225,7 +225,7 @@ alongside the stream API. See [PTY](../guide/pty.md).
 | fd-centric layer | `pty-fd`, `pty-pid`, `stream-fd`, `fd-read-octets`, `fd-write-octets`, `fd-wait` |
 | Input monitoring | `call-with-input-monitor` |
 
-`(call-with-input-monitor fd function on-event &key on-finish decoder)` runs `function`
+Added in 1.9.0: `(call-with-input-monitor fd function on-event &key on-finish decoder)` runs `function`
 on the caller while a helper reads `fd` and calls `on-event` for decoded events
 while active. Only a normal `:consume` callback return removes that event's
 original byte range. Returns retained octets, a list of `function`'s multiple
@@ -241,7 +241,8 @@ decoder. After stopping and joining, `on-finish` receives the same array on the
 caller, including during a nonlocal exit; save it there and do not replay both
 references. Reads from `fd` must be exclusive. `on-event` must not block or wait
 for the caller; `on-finish` runs with interrupts inhibited and must only save
-bytes. The 50 ms stop-and-join budget includes callback execution. Cleanup joins
+bytes. The contract requires stop and join within 50 ms on each exit, including
+callback execution; nonblocking `on-event` callbacks are a precondition. Cleanup joins
 cooperatively and does not return with a live helper on timeout. Requires SBCL
 thread support; otherwise signals
 `unsupported-feature`. See [Input Decoding](../guide/input-decoding.md#monitoring-input-during-a-caller-operation)

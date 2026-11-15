@@ -1,8 +1,8 @@
 # Input Decoding
 
-`cl-tty-kit` turns the raw byte stream a terminal sends on stdin into a list of
-structured `key-event` objects. Decoding is pure logic with no OS calls: callers
-pass a string or an octet vector and receive events.
+The pure decoder entry points turn strings or octet vectors into structured
+`key-event` objects without OS calls. The monitoring API below reads a terminal
+file descriptor before passing bytes to its decoder.
 
 There are two entry points:
 
@@ -53,13 +53,15 @@ instead.
 
 ## Monitoring input during a caller operation
 
-`call-with-input-monitor` runs a function on the calling thread while a helper
+Added in 1.9.0, `call-with-input-monitor` runs a function on the calling thread while a helper
 reads a terminal file descriptor. While monitoring is active, decoded events
 reach `on-event` on the helper thread. A normal callback return of `:consume`
 removes that event's original byte range from the result. Any other return value,
 including other non-nil values, retains it. A callback failure also retains the
 event and monitoring continues. Shutdown can leave read bytes without event
 notifications; those bytes remain available for replay.
+Parameterized paste starts such as `ESC[200;5~` retain their original framing
+bytes, including when inherited from the supplied decoder.
 The helper requests a 5 ms readiness timeout per poll, leaving time in the
 stop-and-join budget for cleanup and thread scheduling. This API requires SBCL
 thread support; without it, the call signals `unsupported-feature`.
@@ -75,8 +77,9 @@ thread support; without it, the call signals `unsupported-feature`.
 The primary result is an octet vector containing the retained bytes in order.
 The secondary result is a list of the operation's multiple return values.
 The third result is a diagnostics list described below.
-The caller owns reads from the descriptor exclusively during the operation and
-keeps it open until the monitor returns. The monitor neither closes it nor
+The monitor helper is the descriptor's exclusive reader during the operation.
+The caller must suspend other readers and keep it open until the monitor
+returns. The monitor neither closes it nor
 changes its blocking mode. It reads the bare descriptor, not a Lisp stream's
 prefetched buffer. Before handoff, feed such buffered bytes through the supplied
 decoder and preserve any completed events in application order. Do not queue
@@ -92,6 +95,11 @@ only consumed events. Replay the result once through the now-empty supplied
 decoder. A paste's C-g stays inside its paste event, including when its opening
 marker was buffered before monitoring. Consuming a paste removes its original
 framing and payload bytes even when its event text normalizes CRLF to LF.
+
+If `:decoder` is omitted, the helper starts with fresh decoder state. Feed the
+retained octets once through the application's decoder; it keeps any incomplete
+UTF-8, escape, or paste tail for the next feed. Supply that decoder through
+`:decoder` when it already has pending input that monitoring must inherit.
 
 After the operation returns or exits nonlocally, cleanup requests a stop and
 joins the helper before invoking `on-finish` on the caller. The callback receives
@@ -115,11 +123,11 @@ retained, in first-occurrence order, so repeated malformed bytes do not accumula
 unbounded error objects. Recording a diagnostic never discards input bytes.
 
 Cleanup cooperatively requests a stop and joins the helper; it does not return
-on a timeout while leaving the helper alive. The stop-and-join requirement is
-50 ms on both normal and nonlocal exits, and `on-event` execution counts against
-that budget. The callback must therefore return promptly without blocking or
-waiting for the caller. This cooperative join cannot force arbitrary callback
-code or an OS-descheduled thread to finish. `on-finish` runs with interrupts
+on a timeout while leaving the helper alive. The contract requires stop and join
+within 50 ms on each normal or nonlocal exit, including time spent in `on-event`.
+This is a per-operation maximum. The callback must return promptly without
+blocking or waiting for the caller; the API does not preempt callback code.
+An unexplained overrun still fails the 50 ms requirement. `on-finish` runs with interrupts
 inhibited and must only save its bytes; replay them after cleanup. An error in
 `on-finish` propagates under the ordinary `unwind-protect` rules.
 
