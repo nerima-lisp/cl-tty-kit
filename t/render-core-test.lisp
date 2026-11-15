@@ -188,7 +188,17 @@
       (screen-put-cell screen 0 0 #\H)
       (screen-put-cell screen 1 0 #\i)
       (expect-render-stream-output (stream (render-screen screen stream))
-                                    (render-screen screen)))))
+                                    (render-screen screen))))
+  (it "ends each row but the last with CR LF, since raw mode clears OPOST"
+    (let ((screen (make-screen 2 3)))
+      (screen-put-cell screen 0 0 #\A)
+      (screen-put-cell screen 1 2 #\B)
+      (expect (render-screen screen)
+              :to-equal (%ansi-string (ansi-clear-screen)
+                                      (ansi-move-cursor 1 1)
+                                      "A " (format nil "~C~C" #\Return #\Newline)
+                                      "  " (format nil "~C~C" #\Return #\Newline)
+                                      " B")))))
 
 (describe "render-cursor"
   (it "writes directly to a stream and returns it"

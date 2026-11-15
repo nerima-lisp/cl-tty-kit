@@ -102,11 +102,11 @@
                (ansi-move-cursor 1 1)
                "Hi"
                (make-string 18 :initial-element #\Space)
-               (string #\Newline)
+               (format nil "~C~C" #\Return #\Newline)
                (make-string 20 :initial-element #\Space)
-               (string #\Newline)
+               (format nil "~C~C" #\Return #\Newline)
                (make-string 20 :initial-element #\Space)
-               (string #\Newline)
+               (format nil "~C~C" #\Return #\Newline)
                (make-string 20 :initial-element #\Space)))
 
 (defun %simple-render-expected-output ()
@@ -115,10 +115,10 @@
                (ansi-move-cursor 1 1)
                "Hi"
                (make-string 18 :initial-element #\Space)
-               (string #\Newline)
+               (format nil "~C~C" #\Return #\Newline)
                "!"
                (make-string 19 :initial-element #\Space)
-               (string #\Newline)
+               (format nil "~C~C" #\Return #\Newline)
                (make-string 20 :initial-element #\Space)))
 
 (defun %styled-render-expected-output ()
@@ -164,10 +164,10 @@
                (ansi-reset-style)
                " demo"
                (make-string 10 :initial-element #\Space)
-               (string #\Newline)
+               (format nil "~C~C" #\Return #\Newline)
                "Press q to exit"
                (make-string 3 :initial-element #\Space)
-               (string #\Newline)
+               (format nil "~C~C" #\Return #\Newline)
                (make-string 18 :initial-element #\Space)
                (ansi-pop-keyboard-enhancements)
                (ansi-disable-bracketed-paste)

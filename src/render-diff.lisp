@@ -116,7 +116,8 @@
       (declare (type fixnum row row-start))
       (incf length
             (%cell-range-rendered-length cells row-start (+ row-start width))))
-    (incf length (max 0 (1- height)))
+    ;; CR LF between rows.
+    (incf length (* 2 (max 0 (1- height))))
     length))
 
 (defun %screen-render-length-exceeds-p (screen maximum)
@@ -137,15 +138,17 @@
             (%cell-range-rendered-length cells row-start (+ row-start width)))
       (when (> length maximum)
         (return-from %screen-render-length-exceeds-p t)))
-    (> (+ length (max 0 (1- height))) maximum)))
+    ;; CR LF between rows.
+    (> (+ length (* 2 (max 0 (1- height)))) maximum)))
 
 (defun %minimum-screen-render-length (screen)
   "Return a lower bound for a complete repaint of SCREEN."
   (+ 10
      (length (screen-cells screen))
+     ;; CR LF between rows.
      (let ((height (screen-height screen)))
        (declare (type fixnum height))
-       (if (zerop height) 0 (1- height)))))
+       (if (zerop height) 0 (* 2 (1- height))))))
 
 (defun %write-diff-plan (screen plan stream)
   (let* ((cells (screen-cells screen))
