@@ -153,6 +153,9 @@
                   phase :nonlocal nonlocal :measure t)
               (declare (ignore captured remaining body-values diagnostics))
               (expect elapsed)
+              (unless (< elapsed 0.05)
+                (format t "~&monitor cleanup failure streaming=~S nonlocal=~S trial=~D phase=~,3Fms elapsed=~,3Fms~%"
+                        streaming nonlocal trial (* 1000 phase) (* 1000 elapsed)))
               (expect (< elapsed 0.05))
               (push elapsed samples))
             (with-monitor-pipe (reader writer)
@@ -173,6 +176,9 @@
                             (/ (- (get-internal-real-time) body-ended)
                                internal-time-units-per-second)))))
                 (expect elapsed)
+                (unless (< elapsed 0.05)
+                  (format t "~&monitor cleanup failure streaming=~S nonlocal=~S trial=~D phase=~,3Fms elapsed=~,3Fms~%"
+                          streaming nonlocal trial (* 1000 phase) (* 1000 elapsed)))
                 (expect (< elapsed 0.05))
                 (push elapsed samples))))))
     (format t "~&monitor cleanup streaming=~S nonlocal=~S n=~D max=~,3Fms~%"

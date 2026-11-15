@@ -85,8 +85,8 @@ stop and joins cooperatively, without returning on timeout with a live helper.
 ON-EVENT's execution counts against the 50ms stop-and-join requirement, so it
 must return promptly and never block or wait for the caller. This cannot force
 arbitrary callback code or an OS-descheduled thread to finish. ON-FINISH runs
-with interrupts inhibited and must only save its bytes. The helper polls for
-at most 20ms and checks stop between bytes. It does not flush unfinished input
+with interrupts inhibited and must only save its bytes. The helper polls with
+a 5ms timeout and checks stop between bytes. It does not flush unfinished input
 or change FD's mode. Requires SBCL
 thread support; otherwise signals UNSUPPORTED-FEATURE."
   (%assert-fd fd)
@@ -157,7 +157,7 @@ thread support; otherwise signals UNSUPPORTED-FEATURE."
                        (loop until (stopped-p)
                              do (let ((count
                                         (handler-case
-                                            (when (fd-wait fd :input 0.02)
+                                            (when (fd-wait fd :input 0.005)
                                               (unless (stopped-p)
                                                 (fd-read-octets fd buffer)))
                                           (serious-condition (condition)

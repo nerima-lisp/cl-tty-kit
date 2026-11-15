@@ -60,8 +60,9 @@ removes that event's original byte range from the result. Any other return value
 including other non-nil values, retains it. A callback failure also retains the
 event and monitoring continues. Shutdown can leave read bytes without event
 notifications; those bytes remain available for replay.
-The helper waits at most 20 ms per poll. This API requires SBCL thread support;
-without it, the call signals `unsupported-feature`.
+The helper requests a 5 ms readiness timeout per poll, leaving time in the
+stop-and-join budget for cleanup and thread scheduling. This API requires SBCL
+thread support; without it, the call signals `unsupported-feature`.
 
 ```lisp
 (call-with-input-monitor terminal-fd
