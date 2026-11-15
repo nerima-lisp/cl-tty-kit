@@ -57,6 +57,9 @@ jobs:
       - name: Check flake
         run: nix flake check --print-build-logs
 
+      - name: Verify release gate
+        run: nix run .#verify
+
       # Catches stray conflict markers and whitespace errors that compile fine.
       - name: Check diff hygiene
         run: git diff --check
