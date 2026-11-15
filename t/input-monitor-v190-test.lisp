@@ -385,4 +385,3 @@
           (when (aref workers index) (sb-thread:join-thread (aref workers index) :default nil)))
         (sb-sys:without-interrupts (setf (fdefinition 'fd-wait) original)))))
 )
-
