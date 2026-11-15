@@ -6,7 +6,7 @@
       '(vector (unsigned-byte 8))
       (cl-codec-kit:string-to-octets
         (if paste
-            (concatenate 'string +bracketed-paste-start-sequence+
+            (concatenate 'string (input-decoder-pending-paste-start-source decoder)
                          paste (input-decoder-pending-string decoder))
             (input-decoder-pending-string decoder))
         :encoding :utf-8)
@@ -15,7 +15,8 @@
 (defun %empty-input-monitor-decoder (decoder)
   (setf (input-decoder-pending-string decoder) ""
         (input-decoder-pending-octets decoder) +empty-octet-vector+
-        (input-decoder-pending-paste decoder) nil))
+        (input-decoder-pending-paste decoder) nil
+        (input-decoder-pending-paste-start-source decoder) nil))
 
 (defun %fresh-input-monitor-decoder (decoder)
   (make-input-decoder
@@ -31,6 +32,8 @@
           (copy-seq (input-decoder-pending-string decoder))
           (input-decoder-pending-octets copy)
           (copy-seq (input-decoder-pending-octets decoder))
+          (input-decoder-pending-paste-start-source copy)
+          (when paste (copy-seq (input-decoder-pending-paste-start-source decoder)))
           (input-decoder-pending-paste copy)
           (when paste
             (make-array (length paste) :element-type 'character
@@ -57,6 +60,12 @@
             (setf source-offset (cdr range)))
           (replace result source :start1 target-offset :start2 source-offset)
           result))))
+
+(declaim (notinline %input-monitor-stopped-p))
+
+#+sb-thread
+(defun %input-monitor-stopped-p (lock stop-state)
+  (cl-concurrent-kit:with-lock-held (lock) (car stop-state)))
 
 #+sb-thread
 (defun call-with-input-monitor (fd function on-event &key on-finish decoder)
@@ -101,7 +110,7 @@ thread support; otherwise signals UNSUPPORTED-FEATURE."
   (when (and decoder (not (typep decoder 'input-decoder)))
     (error "Input monitor decoder must be an INPUT-DECODER, got ~S." decoder))
   (let ((lock (cl-concurrent-kit:make-lock :name "cl-tty-kit input monitor"))
-        (stopped nil)
+        (stop-state (list nil))
         (thread nil)
         (private-decoder nil)
         (chunks nil)
@@ -113,7 +122,7 @@ thread support; otherwise signals UNSUPPORTED-FEATURE."
         (body-values nil)
         (byte-buffer (make-array 1 :element-type '(unsigned-byte 8))))
     (labels ((stopped-p ()
-               (cl-concurrent-kit:with-lock-held (lock) stopped))
+               (%input-monitor-stopped-p lock stop-state))
              (note-condition (phase condition)
                (unless (assoc phase diagnostics)
                  (push (list phase condition) diagnostics)))
@@ -193,7 +202,7 @@ thread support; otherwise signals UNSUPPORTED-FEATURE."
                (setf body-values
                      (multiple-value-list
                        (sb-sys:with-local-interrupts (funcall function)))))
-          (cl-concurrent-kit:with-lock-held (lock) (setf stopped t))
+          (cl-concurrent-kit:with-lock-held (lock) (setf (car stop-state) t))
           (when thread (cl-concurrent-kit:join-thread thread :default nil))
           (setf octets (%input-monitor-retained-octets chunks size consumed))
           (when on-finish (funcall on-finish octets))))

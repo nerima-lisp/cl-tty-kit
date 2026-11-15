@@ -450,14 +450,22 @@
   (it "records all idle nonlocal shutdown stages against the 50ms maximum"
     (let* ((phases #(5 0 1 2 3 4 6 7 8 9 10 11 12 13 14 15 16 17 18 19))
            (records (make-array 20))
+           (gc-records (make-array 20))
            (captured (make-array 20 :initial-element nil))
            (results (make-array 20 :initial-element nil))
            (original (fdefinition 'cl-concurrent-kit:join-thread))
+           (stop-original (fdefinition 'cl-tty-kit::%input-monitor-stopped-p))
            (active-record nil)
-           (hook-hits 0))
+           (active-gc nil)
+           (hook-hits 0)
+           (ack-hits 0))
       (dotimes (trial 20)
-        (setf (aref records trial) (make-array 4 :initial-element nil)))
-      (flet ((milliseconds (record start end)
+        (setf (aref records trial) (make-array 5 :initial-element nil)
+              (aref gc-records trial) (make-array 5 :initial-element nil)))
+      (flet ((difference (record start end)
+               (when (and (aref record start) (aref record end))
+                 (- (aref record end) (aref record start))))
+             (milliseconds (record start end)
                (when (and (aref record start) (aref record end))
                  (* 1000d0 (/ (- (aref record end) (aref record start))
                               internal-time-units-per-second)))))
@@ -472,51 +480,78 @@
                                               "cl-tty-kit input monitor"))
                                   (progn
                                     (incf hook-hits)
-                                    (setf (aref active-record 1) (get-internal-real-time))
+                                    (setf (aref active-record 1) (get-internal-real-time)
+                                          (aref active-gc 1) sb-ext:*gc-run-time*)
                                     (multiple-value-prog1
                                         (apply original thread options)
-                                      (setf (aref active-record 2)
-                                            (get-internal-real-time))))
-                                  (apply original thread options)))))
-                    (progn
-                        (dotimes (trial 20)
-                          (with-monitor-pipe (reader writer)
-                            (let ((record (aref records trial)))
-                              (setf active-record record
-                                    (aref results trial)
-                                    (catch 'monitor-diagnostic-exit
-                                      (call-with-input-monitor
-                                        reader
-                                        (lambda ()
-                                          (sleep (/ (aref phases trial) 1000))
-                                          (setf (aref record 0) (get-internal-real-time))
-                                          (throw 'monitor-diagnostic-exit :escaped))
-                                        (lambda (event) (declare (ignore event)) nil)
-                                        :on-finish
-                                        (lambda (bytes)
-                                          (setf (aref record 3) (get-internal-real-time)
-                                                (aref captured trial) bytes))))))))))
+                                      (setf (aref active-record 2) (get-internal-real-time)
+                                            (aref active-gc 2) sb-ext:*gc-run-time*)))
+                                  (apply original thread options)))
+                            (fdefinition 'cl-tty-kit::%input-monitor-stopped-p)
+                            (lambda (lock stop-state)
+                              (let ((stopped (funcall stop-original lock stop-state)))
+                                ;; The real predicate has released its mutex.
+                                ;; This observes its first true return, not native exit.
+                                (when (and stopped active-record
+                                           (null (aref active-record 4))
+                                           (equal (sb-thread:thread-name sb-thread:*current-thread*)
+                                                  "cl-tty-kit input monitor"))
+                                  (incf ack-hits)
+                                  (setf (aref active-record 4) (get-internal-real-time)
+                                        (aref active-gc 4) sb-ext:*gc-run-time*))
+                                stopped))))
+                    (dotimes (trial 20)
+                      (with-monitor-pipe (reader writer)
+                        (let ((record (aref records trial))
+                              (gc (aref gc-records trial)))
+                          (setf active-record record
+                                active-gc gc
+                                (aref results trial)
+                                (catch 'monitor-diagnostic-exit
+                                  (call-with-input-monitor
+                                    reader
+                                    (lambda ()
+                                      (sleep (/ (aref phases trial) 1000))
+                                      (setf (aref record 0) (get-internal-real-time)
+                                            (aref gc 0) sb-ext:*gc-run-time*)
+                                      (throw 'monitor-diagnostic-exit :escaped))
+                                    (lambda (event) (declare (ignore event)) nil)
+                                    :on-finish
+                                    (lambda (bytes)
+                                      (setf (aref record 3) (get-internal-real-time)
+                                            (aref gc 3) sb-ext:*gc-run-time*
+                                            (aref captured trial) bytes)))))))))
                (sb-sys:without-interrupts
-                 (setf (fdefinition 'cl-concurrent-kit:join-thread) original)))
-          ;; Log outside both the measured intervals and the installed wrapper,
-          ;; also when an unexpected condition leaves only partial records.
-          (format t "~&shutdown diagnostic sbcl=~A units=~D samples=20 hooks=~D~%"
-                  (lisp-implementation-version) internal-time-units-per-second hook-hits)
+                 (setf (fdefinition 'cl-concurrent-kit:join-thread) original
+                       (fdefinition 'cl-tty-kit::%input-monitor-stopped-p) stop-original)))
+          ;; Preserve partial rows on errors and log before any timing assertion.
+          (format t "~&shutdown diagnostic sbcl=~A units=~D samples=20 hooks=~D stopacks=~D gc-cpu-units=~D~%"
+                  (lisp-implementation-version) internal-time-units-per-second
+                  hook-hits ack-hits internal-time-units-per-second)
           (dotimes (trial 20)
-            (let ((record (aref records trial)))
-              (format t "~&shutdown diagnostic trial=~D phase=~Dms stamps=~S prejoin=~S join=~S postjoin=~S total=~Sms~%"
+            (let ((record (aref records trial))
+                  (gc (aref gc-records trial)))
+              (format t "~&shutdown diagnostic trial=~D phase=~Dms stamps=~S prejoin=~S join=~S postjoin=~S total=~Sms stopack=~Sms gc=~S gc-prejoin=~S gc-join=~S gc-postjoin=~S gc-total=~S gc-stopack-to-join=~S~%"
                       trial (aref phases trial) record
                       (milliseconds record 0 1) (milliseconds record 1 2)
-                      (milliseconds record 2 3) (milliseconds record 0 3))))
+                      (milliseconds record 2 3) (milliseconds record 0 3)
+                      (milliseconds record 0 4) gc
+                      (difference gc 0 1) (difference gc 1 2)
+                      (difference gc 2 3) (difference gc 0 3) (difference gc 4 2))))
           (finish-output))
         (expect (eq (fdefinition 'cl-concurrent-kit:join-thread) original))
+        (expect (eq (fdefinition 'cl-tty-kit::%input-monitor-stopped-p) stop-original))
         (expect (plusp hook-hits))
         (expect hook-hits :to-be 20)
+        (expect (plusp ack-hits))
+        (expect ack-hits :to-be 20)
         (dotimes (trial 20)
           (let ((record (aref records trial)))
             (expect (every #'integerp record))
+            (expect (every #'integerp (aref gc-records trial)))
             (expect (<= (aref record 0) (aref record 1)
                         (aref record 2) (aref record 3)))
+            (expect (<= (aref record 0) (aref record 4) (aref record 2)))
             (expect (aref results trial) :to-be :escaped)
             (expect (aref captured trial) :to-equalp #())))
         (let ((maximum (loop for record across records

@@ -128,10 +128,11 @@
     (let* ((decoder (make-input-decoder :collect-bracketed-paste t))
            (source (%esc "[200;5~a")))
       (decode-input-chunk decoder source)
-      (let ((lengths nil))
+      (let ((lengths nil)
+            (expected (mapcar #'%key-event-signature (decode-input source))))
         (let ((cl-tty-kit::*input-decoder-source-length-sink*
                 (lambda (length) (push length lengths))))
           (expect (mapcar #'%key-event-signature (flush-input-decoder decoder))
-                  :to-equal (mapcar #'%key-event-signature (decode-input source))))
+                  :to-equal expected))
         (expect (reduce #'+ lengths) :to-be
                 (length (cl-codec-kit:string-to-octets source :encoding :utf-8)))))))

@@ -146,8 +146,8 @@ top of it."
     (replace pending-paste chunk :start1 old-length :start2 start :end2 end))
   pending-paste)
 
-(defun %fallback-paste-source (pending-paste suffix)
-  (concatenate 'string +bracketed-paste-start-sequence+ pending-paste suffix))
+(defun %fallback-paste-source (decoder pending-paste suffix)
+  (concatenate 'string (input-decoder-pending-paste-start-source decoder) pending-paste suffix))
 
 (defun %bracketed-paste-suffix-length (string start eof)
   (if eof
@@ -173,10 +173,11 @@ top of it."
 Events are returned in input order; callers maintain their own accumulation
 order."
   (multiple-value-bind (flushed-events pending-string) (%collect-plain-events
-      (%fallback-paste-source (input-decoder-pending-paste decoder) suffix)
+      (%fallback-paste-source decoder (input-decoder-pending-paste decoder) suffix)
       t)
     (declare (ignore pending-string))
-    (setf (input-decoder-pending-paste decoder) nil)
+    (setf (input-decoder-pending-paste decoder) nil
+          (input-decoder-pending-paste-start-source decoder) nil)
     flushed-events))
 
 (defun %decode-paste-events (decoder string eof continuation &optional source-length-sink)
@@ -194,10 +195,13 @@ list-collecting policy built on top of it, the paste-aware sibling of
                (when source-length-sink
                  ;; The paste event's text may normalize CRLF after this point.
                  (funcall source-length-sink
-                          (+ (length +bracketed-paste-start-sequence+)
+                          (+ (length (cl-codec-kit:string-to-octets
+                                       (input-decoder-pending-paste-start-source decoder)
+                                       :encoding :utf-8))
                              (length (cl-codec-kit:string-to-octets text :encoding :utf-8))
                              end-sequence-length)))
-               (setf (input-decoder-pending-paste decoder) nil)
+               (setf (input-decoder-pending-paste decoder) nil
+                     (input-decoder-pending-paste-start-source decoder) nil)
                (%make-paste-event
                  (if (input-decoder-normalize-paste-line-endings-p decoder)
                      (%normalize-paste-line-endings text)
@@ -237,7 +241,9 @@ list-collecting policy built on top of it, the paste-aware sibling of
                   (return pending)
                 (multiple-value-bind (event consumed) (%decode-next-event string index)
                   (if (%paste-marker-event-p event :paste-start)
-                      (setf (input-decoder-pending-paste decoder) (%make-paste-buffer))
+                      (setf (input-decoder-pending-paste-start-source decoder)
+                            (subseq string index (+ index consumed))
+                            (input-decoder-pending-paste decoder) (%make-paste-buffer))
                       (progn
                         (when source-length-sink
                           (funcall source-length-sink
