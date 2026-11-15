@@ -58,7 +58,7 @@ and SGR text attributes. All return strings. See [ANSI Helpers](../guide/ansi-he
 | In-place editing | `ansi-insert-line`, `ansi-delete-line`, `ansi-insert-char`, `ansi-delete-char`, `ansi-erase-char`, `ansi-repeat` |
 | Scrolling / modes | `ansi-scroll-up`, `ansi-scroll-down`, `ansi-set-scroll-region`, `ansi-reset-scroll-region`, `ansi-set-mode`, `ansi-reset-mode`, `ansi-enable-line-wrap`, `ansi-disable-line-wrap` |
 | Input modes | `ansi-enable-bracketed-paste`, `ansi-disable-bracketed-paste`, `ansi-enable-focus-reporting`, `ansi-disable-focus-reporting`, `ansi-set-keyboard-enhancements`, `ansi-push-keyboard-enhancements`, `ansi-pop-keyboard-enhancements`, `ansi-enable-mouse`, `ansi-disable-mouse` |
-| Requests / reports | `ansi-request-cursor-position`, `ansi-request-device-attributes`, `ansi-request-foreground-color`, `ansi-request-background-color` |
+| Requests / reports | `ansi-request-cursor-position`, `ansi-request-device-attributes`, `ansi-request-foreground-color`, `ansi-request-background-color`, `ansi-request-terminal-version`, `ansi-request-mode`, `ansi-request-keyboard-enhancements` |
 | OSC | `ansi-set-window-title`, `ansi-hyperlink`, `ansi-set-clipboard`, `ansi-set-palette-color`, `ansi-reset-palette`, `ansi-set-cursor-style`, `ansi-prompt-start`, `ansi-command-start`, `ansi-command-output-start`, `ansi-command-finished`, `ansi-set-working-directory`, `ansi-notify` |
 | Session / misc | `ansi-bell`, `ansi-reset-terminal`, `ansi-begin-synchronized-update`, `ansi-end-synchronized-update` |
 | SGR attributes | `ansi-default-foreground`, `ansi-default-background`, `ansi-bold`, `ansi-dim`, `ansi-italic`, `ansi-underline`, `ansi-blink`, `ansi-reverse`, `ansi-hidden`, `ansi-strikethrough`, `ansi-reset-style`, `ansi-sgr` |
@@ -72,7 +72,7 @@ Terminal input to `key-event` objects, plus reverse SGR/report parsers. See
 | --- | --- |
 | Key events | `key-event`, `make-key-event`, `key-event-type`, `key-event-code`, `key-event-modifiers`, `key-event-kind`, `key-event-text`, `key-event-shifted-key`, `key-event-base-key`, `key-event->string` |
 | Decoders | `input-decoder`, `make-input-decoder`, `decode-input`, `decode-input-chunk`, `decode-key-sequence`, `flush-input-decoder`, `make-stream-input-poller` |
-| Report / SGR parsing | `decode-cursor-position-report`, `decode-color-report`, `decode-device-attributes`, `decode-sgr`, `parse-styled-string` |
+| Report / SGR parsing | `decode-cursor-position-report`, `decode-color-report`, `decode-device-attributes`, `decode-terminal-version`, `decode-mode-report`, `decode-keyboard-enhancements-report`, `decode-sgr`, `parse-styled-string` |
 
 ## Mouse input
 

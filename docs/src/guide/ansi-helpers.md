@@ -229,6 +229,21 @@ with a decoder for the reply.
 - **Default colors** — `decode-color-report` parses the OSC 10/11 reply
   `ESC ] 10 ; rgb:RR../GG../BB.. ST` into `(values r g b consumed)`, each channel
   scaled to 0-255. The ST terminator may be BEL or `ESC \`.
+- **Terminal version**: `ansi-request-terminal-version` emits the XTVERSION
+  query `ESC [ > 0 q`. The DCS reply `ESC P > | NAME(VERSION) ESC \` is parsed by
+  `decode-terminal-version` into `(values text consumed)`. Only the `ESC \`
+  terminator is accepted.
+- **Mode state**: `(ansi-request-mode mode)` emits the DECRQM query
+  `ESC [ ? mode $ p` (pass `:private nil` for an ANSI mode, `ESC [ mode $ p`).
+  `decode-mode-report` parses the DECRPM reply `ESC [ ? mode ; state $ y` into
+  `(values mode state private-p consumed)`, where `state` is one of
+  `:not-recognized`, `:set`, `:reset`, `:permanently-set`, or
+  `:permanently-reset`. Use it to check, for example, whether a terminal knows
+  synchronized output (mode 2026) before relying on it.
+- **Keyboard enhancement flags**: `ansi-request-keyboard-enhancements` emits
+  `ESC [ ? u`. A terminal that implements the kitty keyboard protocol answers
+  `ESC [ ? flags u`, parsed by `decode-keyboard-enhancements-report` into
+  `(values flags consumed)`. A terminal without the protocol sends no reply.
 
 Each decoder declines cleanly (returning `nil` and `0`) when the input is not a
 complete report, so you can call it against a buffer that may not have the reply yet.

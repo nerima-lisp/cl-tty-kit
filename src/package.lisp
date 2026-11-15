@@ -81,6 +81,9 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:ansi-disable-focus-reporting
    #:ansi-request-cursor-position
    #:ansi-request-device-attributes
+   #:ansi-request-terminal-version
+   #:ansi-request-mode
+   #:ansi-request-keyboard-enhancements
    #:ansi-prompt-start
    #:ansi-command-start
    #:ansi-command-output-start
@@ -150,6 +153,9 @@ and sb-ext). See the \"Compatibility\" section of the README for details.")
    #:decode-cursor-position-report
    #:decode-color-report
    #:decode-device-attributes
+   #:decode-terminal-version
+   #:decode-mode-report
+   #:decode-keyboard-enhancements-report
    #:decode-sgr
    #:parse-styled-string
    #:key-event->string
