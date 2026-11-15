@@ -4,17 +4,42 @@
 ;;;
 ;;; This is a port of SBCL's internal MAP-GRAPHEME-BOUNDARIES (the extended
 ;;; UAX #29 rules behind SB-UNICODE:GRAPHEMES: GB3-GB5, GB6-GB8 Hangul, GB9,
-;;; GB9a, GB9b, the GB11 Extended_Pictographic/ZWJ state machine and GB12/GB13
-;;; regional-indicator parity; SBCL implements no GB9c) built only on the
-;;; exported SB-UNICODE:GRAPHEME-BREAK-CLASS and SB-UNICODE:PROPLIST-P, neither
-;;; of which conses. Keeping the rules identical to SBCL's is what lets
-;;; STRING-GRAPHEMES (which still calls SB-UNICODE:GRAPHEMES) and these
-;;; functions agree on every cluster; t/grapheme-test.lisp checks that.
+;;; GB9a, GB9b, GB9c, the GB11 Extended_Pictographic/ZWJ state machine and
+;;; GB12/GB13 regional-indicator parity) built on the exported
+;;; SB-UNICODE:GRAPHEME-BREAK-CLASS and SB-UNICODE:PROPLIST-P, neither of which
+;;; conses.
+;;;
+;;; GB9c is the exception: it reads Indic_Conjunct_Break from the static
+;;; tables in src/grapheme-data.lisp instead of the runtime, because SBCL
+;;; before 2.6.10 (Unicode 15.0 data) has neither the InCB property nor the
+;;; rule, and a cluster count that changed with the SBCL version would be
+;;; worse than either answer. The rule is the Unicode 18.0.0 form (UAX #29
+;;; revision 49), which is what SBCL 2.6.10 implements:
+;;;
+;;;   GB9c  \p{InCB=Linker} \p{InCB=Extend}* x \p{InCB=Consonant}
+;;;
+;;; Revisions 43-48 (Unicode 15.1-17.0) additionally required a Consonant
+;;; before the Linker. With that one difference, STRING-GRAPHEMES (which
+;;; still calls SB-UNICODE:GRAPHEMES) and these functions agree on every
+;;; cluster on SBCL 2.6.10, and on every string without an InCB=Linker
+;;; code point on older SBCLs; t/grapheme-test.lisp checks the latter and
+;;; checks GB9c itself against Unicode's GraphemeBreakTest.txt.
 
 (deftype %string-index ()
   '(integer 0 (#.array-dimension-limit)))
 
-(declaim (inline %grapheme-class %extended-pictographic-p))
+(defparameter +incb-linker-vector+ (coerce +incb-linker-ranges+ 'simple-vector))
+(defparameter +incb-consonant-vector+ (coerce +incb-consonant-ranges+ 'simple-vector))
+(defparameter +incb-extend-vector+ (coerce +incb-extend-ranges+ 'simple-vector))
+
+(declaim (inline %grapheme-class %extended-pictographic-p %incb-p))
+
+(defun %incb-p (char ranges)
+  "True when CHAR has the InCB value whose ranges are the vector RANGES."
+  ;; U+0300 is the lowest code point with an InCB value other than None.
+  (let ((code (char-code char)))
+    (and (>= code #x300)
+         (%code-point-in-sorted-ranges-p code ranges))))
 
 (defun %grapheme-class (char)
   "SB-UNICODE:GRAPHEME-BREAK-CLASS of CHAR, with ASCII classified inline."
@@ -36,12 +61,15 @@
 
 (defun %next-grapheme-boundary (string index end)
   "Return the first grapheme boundary after INDEX, which must be < END. The
-Extended_Pictographic and regional-indicator state starts fresh at INDEX."
+Extended_Pictographic, Indic conjunct, and regional-indicator state starts
+fresh at INDEX."
   (declare (type string string)
            (type %string-index index end))
   (let* ((char2 (char string index))
          (class2 (%grapheme-class char2))
          (pictographic-state nil)
+         ;; True when CHAR1 ends \p{InCB=Linker} \p{InCB=Extend}*.
+         (after-linker nil)
          (regional-indicators (if (eq class2 :regional-indicator) 1 0)))
     (declare (type %string-index regional-indicators))
     (do ((position (1+ index) (1+ position)))
@@ -65,6 +93,11 @@ Extended_Pictographic and regional-indicator state starts fresh at INDEX."
                           (eq class1 :zwj))
                      :zwj)
                     (t nil)))
+        (setf after-linker
+              (if after-linker
+                  (or (%incb-p char1 +incb-linker-vector+)
+                      (%incb-p char1 +incb-extend-vector+))
+                  (%incb-p char1 +incb-linker-vector+)))
         (unless (cond
                   ;; GB3
                   ((and (eq class1 :cr) (eq class2 :lf)) t)
@@ -85,6 +118,8 @@ Extended_Pictographic and regional-indicator state starts fresh at INDEX."
                   ((or (eq class2 :extend) (eq class2 :zwj)) t)
                   ;; GB9a, GB9b
                   ((or (eq class2 :spacing-mark) (eq class1 :prepend)) t)
+                  ;; GB9c
+                  ((and after-linker (%incb-p char2 +incb-consonant-vector+)) t)
                   ;; GB11
                   ((and (eq pictographic-state :zwj)
                         (%extended-pictographic-p char2))
@@ -221,6 +256,18 @@ clusters as single glyphs displays. Does not allocate."
             (when (> char-width cluster-width)
               (setf cluster-width char-width))))
         (incf width cluster-width)))))
+
+(defun string-graphemes (string)
+  "Return STRING split into a list of grapheme-cluster strings.
+A cluster is what a reader perceives as one character -- a base plus its
+combining marks, or a ZWJ emoji sequence. The clusters are the ones
+DO-GRAPHEME-BOUNDARIES walks, so the list agrees with GRAPHEME-COUNT and
+GRAPHEME-BOUNDARIES on every SBCL version. This is the right unit for cursor
+movement and grapheme-aware truncation, unlike per-code-point iteration."
+  (let ((clusters '()))
+    (do-grapheme-boundaries (cluster-start cluster-end string
+                             :result (nreverse clusters))
+      (push (subseq string cluster-start cluster-end) clusters))))
 
 (defun grapheme-count (string)
   "Return the number of grapheme clusters in STRING (see STRING-GRAPHEMES)."

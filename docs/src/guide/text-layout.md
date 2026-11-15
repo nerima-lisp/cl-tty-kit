@@ -74,9 +74,10 @@ skin-toned emoji is a *sequence* of code points joined into a single visible
 glyph. The unit a reader sees is the **grapheme cluster**, and it is the right
 unit for cursor movement and grapheme-aware truncation.
 
-- `string-graphemes` splits a string into cluster strings using SB-UNICODE's
-  Unicode grapheme-break rules (no data tables are shipped — they are already in
-  the SBCL image).
+- `string-graphemes` splits a string into cluster strings. The break rules
+  come from SB-UNICODE's grapheme-break classes, plus a table shipped with this
+  library for UAX #29 rule GB9c (Unicode 18.0.0), which keeps an Indic conjunct
+  such as क्ष (U+0915 U+094D U+0937) in one cluster on every SBCL version.
 - `grapheme-count` is the number of clusters.
 - `grapheme-width` is the display width of one cluster — the width of its widest
   code point, so a base plus combining marks is the base's width, and a wide
@@ -95,8 +96,8 @@ An empty string yields an empty list rather than signaling.
 
 When you only need where clusters start and end rather than the
 fresh strings `string-graphemes` returns, for example to move a cursor or measure a line every
-frame, use the boundary API instead. It applies the same rules, and every
-function below runs without allocating, except `grapheme-boundaries` without
+frame, use the boundary API instead. It applies the same rules.
+Every function below runs without allocating, except `grapheme-boundaries` without
 `:into` and an `:into` vector that has to grow. Each takes `:start` and `:end` to work on a substring without
 copying it.
 

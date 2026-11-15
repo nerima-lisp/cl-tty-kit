@@ -126,19 +126,6 @@ since the ambiguous check runs only when this is true.")
           (declare (type fixnum index))
           (incf width (%character-width (char string index)))))))
 
-(defun string-graphemes (string)
-  "Return STRING split into a list of grapheme-cluster strings.
-A cluster is what a reader perceives as one character -- a base plus its
-combining marks, or a ZWJ emoji sequence -- via SB-UNICODE's Unicode
-grapheme-break rules (already in the image, so no data tables are shipped). This
-is the right unit for cursor movement and grapheme-aware truncation, unlike
-per-code-point iteration."
-  ;; SB-UNICODE:GRAPHEMES indexes position 0 unconditionally, so it errors on an
-  ;; empty string; guard that edge here.
-  (if (zerop (length string))
-      '()
-      (sb-unicode:graphemes string)))
-
   (defun grapheme-width (grapheme)
     "Return the terminal column width of the grapheme cluster GRAPHEME (a string).
   The width is the maximum width of its code points, so a base plus combining

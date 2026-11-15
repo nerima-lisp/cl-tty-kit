@@ -18,8 +18,20 @@
         while end
         collect (- end start)))
 
+(defun %linker-free-p (string)
+  "True when STRING has no InCB=Linker code point, so GB9c cannot apply to it.
+GB9c needs a Linker before the Consonant it joins, so on such a string the
+rules this library implements are exactly the ones every SB-UNICODE:GRAPHEMES
+implements: SBCL 2.6.10 has GB9c and older SBCLs have no GB9c at all. Only
+these strings are compared against the runtime, which keeps the comparison
+valid on every SBCL version without branching on it; GB9c itself is checked
+against Unicode's GraphemeBreakTest.txt below."
+  (notany (lambda (char)
+            (cl-tty-kit::%incb-p char cl-tty-kit::+incb-linker-vector+))
+          string))
+
 (defparameter *grapheme-cases*
-  ;; (code points, cluster lengths SB-UNICODE:GRAPHEMES produces)
+  ;; (code points, cluster lengths UAX #29 for Unicode 18.0.0 gives)
   '(((#x0D #x0A) (2))
     ((#x0D #x0A #x61) (2 1))
     ((#x65 #x301 #x302) (3))
@@ -36,7 +48,10 @@
     ((#xE01 #xE33) (2))
     ((#x61 #x200D #x1F600) (2 1))
     ((#x1F600 #x301 #x200D #x1F600) (4))
-    ((#x915 #x94D #x937) (2 1))))
+    ;; GB9c: KA VIRAMA SSA is the conjunct KSSA.
+    ((#x915 #x94D #x937) (3))
+    ;; GB9c needs a Consonant after the Linker.
+    ((#x915 #x94D #x61) (2 1))))
 
 (defparameter *grapheme-code-point-pool*
   #(#x61 #x41 #x20 #x0D #x0A #x09 #x00 #x7F #xAD #xA9 #x301 #x302 #x200D #x200B
@@ -65,23 +80,319 @@ congruential generator, so every run checks the same corpus."
           (list "" "abc" (%code-points->string '(#x4E00 #x4E8C #x0301 #x61)))
           (%pseudo-random-grapheme-strings 400)))
 
+(defparameter *grapheme-runtime-corpus*
+  (remove-if-not #'%linker-free-p *grapheme-corpus*)
+  "The part of *GRAPHEME-CORPUS* that can be compared against the runtime,
+SB-UNICODE:GRAPHEMES directly or through STRING-GRAPHEMES (see %LINKER-FREE-P).")
+
+(defparameter *grapheme-break-test-incb-lines*
+  ;; Every test line of GraphemeBreakTest-18.0.0.txt
+  ;; (https://www.unicode.org/Public/18.0.0/ucd/auxiliary/GraphemeBreakTest.txt)
+  ;; whose comment marks a character as Extend_ConjunctLinker,
+  ;; ConjunctLinkermExtend, or LinkingConsonant, that is, every line with an
+  ;; InCB=Linker or InCB=Consonant code point. The break strings are verbatim;
+  ;; the trailing "# ..." comments are dropped.
+  '("÷ 000D ÷ 094D ÷"
+    "÷ 000D ÷ 0308 × 094D ÷"
+    "÷ 000D ÷ 1CF5 ÷"
+    "÷ 000D ÷ 0308 ÷ 1CF5 ÷"
+    "÷ 000D ÷ 0915 ÷"
+    "÷ 000D ÷ 0308 ÷ 0915 ÷"
+    "÷ 000A ÷ 094D ÷"
+    "÷ 000A ÷ 0308 × 094D ÷"
+    "÷ 000A ÷ 1CF5 ÷"
+    "÷ 000A ÷ 0308 ÷ 1CF5 ÷"
+    "÷ 000A ÷ 0915 ÷"
+    "÷ 000A ÷ 0308 ÷ 0915 ÷"
+    "÷ 0000 ÷ 094D ÷"
+    "÷ 0000 ÷ 0308 × 094D ÷"
+    "÷ 0000 ÷ 1CF5 ÷"
+    "÷ 0000 ÷ 0308 ÷ 1CF5 ÷"
+    "÷ 0000 ÷ 0915 ÷"
+    "÷ 0000 ÷ 0308 ÷ 0915 ÷"
+    "÷ 094D ÷ 000D ÷"
+    "÷ 094D × 0308 ÷ 000D ÷"
+    "÷ 094D ÷ 000A ÷"
+    "÷ 094D × 0308 ÷ 000A ÷"
+    "÷ 094D ÷ 0000 ÷"
+    "÷ 094D × 0308 ÷ 0000 ÷"
+    "÷ 094D × 094D ÷"
+    "÷ 094D × 0308 × 094D ÷"
+    "÷ 094D × 0300 ÷"
+    "÷ 094D × 0308 × 0300 ÷"
+    "÷ 094D × 200C ÷"
+    "÷ 094D × 0308 × 200C ÷"
+    "÷ 094D × 200D ÷"
+    "÷ 094D × 0308 × 200D ÷"
+    "÷ 094D ÷ 1F1E6 ÷"
+    "÷ 094D × 0308 ÷ 1F1E6 ÷"
+    "÷ 094D ÷ 06DD ÷"
+    "÷ 094D × 0308 ÷ 06DD ÷"
+    "÷ 094D × 0903 ÷"
+    "÷ 094D × 0308 × 0903 ÷"
+    "÷ 094D ÷ 1100 ÷"
+    "÷ 094D × 0308 ÷ 1100 ÷"
+    "÷ 094D ÷ 1160 ÷"
+    "÷ 094D × 0308 ÷ 1160 ÷"
+    "÷ 094D ÷ 11A8 ÷"
+    "÷ 094D × 0308 ÷ 11A8 ÷"
+    "÷ 094D ÷ AC00 ÷"
+    "÷ 094D × 0308 ÷ AC00 ÷"
+    "÷ 094D ÷ AC01 ÷"
+    "÷ 094D × 0308 ÷ AC01 ÷"
+    "÷ 094D ÷ 1CF5 ÷"
+    "÷ 094D × 0308 ÷ 1CF5 ÷"
+    "÷ 094D × 0915 ÷"
+    "÷ 094D × 0308 × 0915 ÷"
+    "÷ 094D ÷ 00A9 ÷"
+    "÷ 094D × 0308 ÷ 00A9 ÷"
+    "÷ 094D ÷ 0020 ÷"
+    "÷ 094D × 0308 ÷ 0020 ÷"
+    "÷ 094D ÷ 0378 ÷"
+    "÷ 094D × 0308 ÷ 0378 ÷"
+    "÷ 0300 × 094D ÷"
+    "÷ 0300 × 0308 × 094D ÷"
+    "÷ 0300 ÷ 1CF5 ÷"
+    "÷ 0300 × 0308 ÷ 1CF5 ÷"
+    "÷ 0300 ÷ 0915 ÷"
+    "÷ 0300 × 0308 ÷ 0915 ÷"
+    "÷ 200C × 094D ÷"
+    "÷ 200C × 0308 × 094D ÷"
+    "÷ 200C ÷ 1CF5 ÷"
+    "÷ 200C × 0308 ÷ 1CF5 ÷"
+    "÷ 200C ÷ 0915 ÷"
+    "÷ 200C × 0308 ÷ 0915 ÷"
+    "÷ 200D × 094D ÷"
+    "÷ 200D × 0308 × 094D ÷"
+    "÷ 200D ÷ 1CF5 ÷"
+    "÷ 200D × 0308 ÷ 1CF5 ÷"
+    "÷ 200D ÷ 0915 ÷"
+    "÷ 200D × 0308 ÷ 0915 ÷"
+    "÷ 1F1E6 × 094D ÷"
+    "÷ 1F1E6 × 0308 × 094D ÷"
+    "÷ 1F1E6 ÷ 1CF5 ÷"
+    "÷ 1F1E6 × 0308 ÷ 1CF5 ÷"
+    "÷ 1F1E6 ÷ 0915 ÷"
+    "÷ 1F1E6 × 0308 ÷ 0915 ÷"
+    "÷ 06DD × 094D ÷"
+    "÷ 06DD × 0308 × 094D ÷"
+    "÷ 06DD × 1CF5 ÷"
+    "÷ 06DD × 0308 ÷ 1CF5 ÷"
+    "÷ 06DD × 0915 ÷"
+    "÷ 06DD × 0308 ÷ 0915 ÷"
+    "÷ 0903 × 094D ÷"
+    "÷ 0903 × 0308 × 094D ÷"
+    "÷ 0903 ÷ 1CF5 ÷"
+    "÷ 0903 × 0308 ÷ 1CF5 ÷"
+    "÷ 0903 ÷ 0915 ÷"
+    "÷ 0903 × 0308 ÷ 0915 ÷"
+    "÷ 1100 × 094D ÷"
+    "÷ 1100 × 0308 × 094D ÷"
+    "÷ 1100 ÷ 1CF5 ÷"
+    "÷ 1100 × 0308 ÷ 1CF5 ÷"
+    "÷ 1100 ÷ 0915 ÷"
+    "÷ 1100 × 0308 ÷ 0915 ÷"
+    "÷ 1160 × 094D ÷"
+    "÷ 1160 × 0308 × 094D ÷"
+    "÷ 1160 ÷ 1CF5 ÷"
+    "÷ 1160 × 0308 ÷ 1CF5 ÷"
+    "÷ 1160 ÷ 0915 ÷"
+    "÷ 1160 × 0308 ÷ 0915 ÷"
+    "÷ 11A8 × 094D ÷"
+    "÷ 11A8 × 0308 × 094D ÷"
+    "÷ 11A8 ÷ 1CF5 ÷"
+    "÷ 11A8 × 0308 ÷ 1CF5 ÷"
+    "÷ 11A8 ÷ 0915 ÷"
+    "÷ 11A8 × 0308 ÷ 0915 ÷"
+    "÷ AC00 × 094D ÷"
+    "÷ AC00 × 0308 × 094D ÷"
+    "÷ AC00 ÷ 1CF5 ÷"
+    "÷ AC00 × 0308 ÷ 1CF5 ÷"
+    "÷ AC00 ÷ 0915 ÷"
+    "÷ AC00 × 0308 ÷ 0915 ÷"
+    "÷ AC01 × 094D ÷"
+    "÷ AC01 × 0308 × 094D ÷"
+    "÷ AC01 ÷ 1CF5 ÷"
+    "÷ AC01 × 0308 ÷ 1CF5 ÷"
+    "÷ AC01 ÷ 0915 ÷"
+    "÷ AC01 × 0308 ÷ 0915 ÷"
+    "÷ 1CF5 ÷ 000D ÷"
+    "÷ 1CF5 × 0308 ÷ 000D ÷"
+    "÷ 1CF5 ÷ 000A ÷"
+    "÷ 1CF5 × 0308 ÷ 000A ÷"
+    "÷ 1CF5 ÷ 0000 ÷"
+    "÷ 1CF5 × 0308 ÷ 0000 ÷"
+    "÷ 1CF5 × 094D ÷"
+    "÷ 1CF5 × 0308 × 094D ÷"
+    "÷ 1CF5 × 0300 ÷"
+    "÷ 1CF5 × 0308 × 0300 ÷"
+    "÷ 1CF5 × 200C ÷"
+    "÷ 1CF5 × 0308 × 200C ÷"
+    "÷ 1CF5 × 200D ÷"
+    "÷ 1CF5 × 0308 × 200D ÷"
+    "÷ 1CF5 ÷ 1F1E6 ÷"
+    "÷ 1CF5 × 0308 ÷ 1F1E6 ÷"
+    "÷ 1CF5 ÷ 06DD ÷"
+    "÷ 1CF5 × 0308 ÷ 06DD ÷"
+    "÷ 1CF5 × 0903 ÷"
+    "÷ 1CF5 × 0308 × 0903 ÷"
+    "÷ 1CF5 ÷ 1100 ÷"
+    "÷ 1CF5 × 0308 ÷ 1100 ÷"
+    "÷ 1CF5 ÷ 1160 ÷"
+    "÷ 1CF5 × 0308 ÷ 1160 ÷"
+    "÷ 1CF5 ÷ 11A8 ÷"
+    "÷ 1CF5 × 0308 ÷ 11A8 ÷"
+    "÷ 1CF5 ÷ AC00 ÷"
+    "÷ 1CF5 × 0308 ÷ AC00 ÷"
+    "÷ 1CF5 ÷ AC01 ÷"
+    "÷ 1CF5 × 0308 ÷ AC01 ÷"
+    "÷ 1CF5 ÷ 1CF5 ÷"
+    "÷ 1CF5 × 0308 ÷ 1CF5 ÷"
+    "÷ 1CF5 × 0915 ÷"
+    "÷ 1CF5 × 0308 × 0915 ÷"
+    "÷ 1CF5 ÷ 00A9 ÷"
+    "÷ 1CF5 × 0308 ÷ 00A9 ÷"
+    "÷ 1CF5 ÷ 0020 ÷"
+    "÷ 1CF5 × 0308 ÷ 0020 ÷"
+    "÷ 1CF5 ÷ 0378 ÷"
+    "÷ 1CF5 × 0308 ÷ 0378 ÷"
+    "÷ 0915 ÷ 000D ÷"
+    "÷ 0915 × 0308 ÷ 000D ÷"
+    "÷ 0915 ÷ 000A ÷"
+    "÷ 0915 × 0308 ÷ 000A ÷"
+    "÷ 0915 ÷ 0000 ÷"
+    "÷ 0915 × 0308 ÷ 0000 ÷"
+    "÷ 0915 × 094D ÷"
+    "÷ 0915 × 0308 × 094D ÷"
+    "÷ 0915 × 0300 ÷"
+    "÷ 0915 × 0308 × 0300 ÷"
+    "÷ 0915 × 200C ÷"
+    "÷ 0915 × 0308 × 200C ÷"
+    "÷ 0915 × 200D ÷"
+    "÷ 0915 × 0308 × 200D ÷"
+    "÷ 0915 ÷ 1F1E6 ÷"
+    "÷ 0915 × 0308 ÷ 1F1E6 ÷"
+    "÷ 0915 ÷ 06DD ÷"
+    "÷ 0915 × 0308 ÷ 06DD ÷"
+    "÷ 0915 × 0903 ÷"
+    "÷ 0915 × 0308 × 0903 ÷"
+    "÷ 0915 ÷ 1100 ÷"
+    "÷ 0915 × 0308 ÷ 1100 ÷"
+    "÷ 0915 ÷ 1160 ÷"
+    "÷ 0915 × 0308 ÷ 1160 ÷"
+    "÷ 0915 ÷ 11A8 ÷"
+    "÷ 0915 × 0308 ÷ 11A8 ÷"
+    "÷ 0915 ÷ AC00 ÷"
+    "÷ 0915 × 0308 ÷ AC00 ÷"
+    "÷ 0915 ÷ AC01 ÷"
+    "÷ 0915 × 0308 ÷ AC01 ÷"
+    "÷ 0915 ÷ 1CF5 ÷"
+    "÷ 0915 × 0308 ÷ 1CF5 ÷"
+    "÷ 0915 ÷ 0915 ÷"
+    "÷ 0915 × 0308 ÷ 0915 ÷"
+    "÷ 0915 ÷ 00A9 ÷"
+    "÷ 0915 × 0308 ÷ 00A9 ÷"
+    "÷ 0915 ÷ 0020 ÷"
+    "÷ 0915 × 0308 ÷ 0020 ÷"
+    "÷ 0915 ÷ 0378 ÷"
+    "÷ 0915 × 0308 ÷ 0378 ÷"
+    "÷ 00A9 × 094D ÷"
+    "÷ 00A9 × 0308 × 094D ÷"
+    "÷ 00A9 ÷ 1CF5 ÷"
+    "÷ 00A9 × 0308 ÷ 1CF5 ÷"
+    "÷ 00A9 ÷ 0915 ÷"
+    "÷ 00A9 × 0308 ÷ 0915 ÷"
+    "÷ 0020 × 094D ÷"
+    "÷ 0020 × 0308 × 094D ÷"
+    "÷ 0020 ÷ 1CF5 ÷"
+    "÷ 0020 × 0308 ÷ 1CF5 ÷"
+    "÷ 0020 ÷ 0915 ÷"
+    "÷ 0020 × 0308 ÷ 0915 ÷"
+    "÷ 0378 × 094D ÷"
+    "÷ 0378 × 0308 × 094D ÷"
+    "÷ 0378 ÷ 1CF5 ÷"
+    "÷ 0378 × 0308 ÷ 1CF5 ÷"
+    "÷ 0378 ÷ 0915 ÷"
+    "÷ 0378 × 0308 ÷ 0915 ÷"
+    "÷ 0915 ÷ 0924 ÷"
+    "÷ 0915 × 094D × 0924 ÷"
+    "÷ 0915 × 094D × 094D × 0924 ÷"
+    "÷ 0915 × 094D × 200D × 0924 ÷"
+    "÷ 0915 × 093C × 200D × 094D × 0924 ÷"
+    "÷ 0915 × 093C × 094D × 200D × 0924 ÷"
+    "÷ 0915 × 094D × 0924 × 094D × 092F ÷"
+    "÷ 0915 × 094D ÷ 0061 ÷"
+    "÷ 0061 × 094D × 0924 ÷"
+    "÷ 003F × 094D × 0924 ÷"
+    "÷ 0915 × 094D × 094D × 0924 ÷"
+    "÷ 0AB8 × 0AFB × 0ACD × 0AB8 × 0AFB ÷"
+    "÷ 1019 × 1039 × 1018 ÷ 102C × 1037 ÷"
+    "÷ 1004 × 103A × 1039 × 1011 × 1039 × 1011 ÷"
+    "÷ 1B12 × 1B01 ÷ 1B32 × 1B44 × 1B2F ÷ 1B32 × 1B44 × 1B22 × 1B44 × 1B2C ÷ 1B32 × 1B44 × 1B22 × 1B38 ÷"
+    "÷ 179F × 17D2 × 178F × 17D2 × 179A × 17B8 ÷"
+    "÷ 1B26 ÷ 1B17 × 1B44 × 1B13 ÷"
+    "÷ 1B27 ÷ 1B13 × 1B44 × 1B0B ÷ 1B0B × 1B04 ÷"
+    "÷ 1795 × 17D2 × 17AF ÷ 1798 ÷"
+    "÷ 17A0 × 17D2 × 17AB ÷ 1791 × 17D0 ÷ 1799 ÷"
+    "÷ 1B05 × 1B44 × 1B33 × 1B03 ÷"
+    "÷ 1CF5 × 0995 ÷"
+    "÷ 1CF6 × 09AA ÷"
+    "÷ 1CF5 × 200C ÷ 0995 ÷"
+    "÷ 1CF6 × 200C ÷ 09AA ÷"
+    "÷ 11A3A × 11A0B ÷"))
+
+(defun %parse-grapheme-break-test-line (line)
+  "Return the code points of a GraphemeBreakTest.txt break string such as
+\"÷ 0915 × 094D × 0924 ÷\" and its boundary offsets (the ÷ positions)."
+  (let ((code-points '())
+        (boundaries '())
+        (start 0))
+    (loop
+      (let* ((token-start (position #\Space line :start start :test-not #'char=))
+             (token-end (and token-start
+                             (or (position #\Space line :start token-start)
+                                 (length line)))))
+        (unless token-start
+          (return (values (nreverse code-points) (nreverse boundaries))))
+        (let ((token (subseq line token-start token-end)))
+          (cond ((string= token "÷") (push (length code-points) boundaries))
+                ((string= token "×"))
+                (t (push (parse-integer token :radix 16) code-points))))
+        (setf start token-end)))))
+
 (defun %error-type-of (thunk)
   (handler-case (progn (funcall thunk) nil)
     (error (condition) (type-of condition))))
 
 (describe "next-grapheme-boundary"
-  (it "agrees with SB-UNICODE:GRAPHEMES on the named UAX #29 cases"
+  (it "segments the named UAX #29 cases, agreeing with SB-UNICODE:GRAPHEMES without a Linker"
     (dolist (case *grapheme-cases*)
       (let ((string (%code-points->string (first case))))
         (expect (%boundaries->lengths (grapheme-boundaries string))
                 :to-equal (second case))
-        (expect (grapheme-boundaries string)
-                :to-equal (%sbcl-grapheme-boundaries string)))))
-  (it "agrees with SB-UNICODE:GRAPHEMES on a fixed-seed pseudo-random corpus"
+        (when (%linker-free-p string)
+          (expect (grapheme-boundaries string)
+                  :to-equal (%sbcl-grapheme-boundaries string))))))
+  (it "agrees with SB-UNICODE:GRAPHEMES on a fixed-seed pseudo-random corpus without a Linker"
     (expect (length *grapheme-corpus*) :to-be-greater-than 400)
-    (dolist (string *grapheme-corpus*)
+    (expect (length *grapheme-runtime-corpus*) :to-be-greater-than 200)
+    (dolist (string *grapheme-runtime-corpus*)
       (expect (grapheme-boundaries string)
               :to-equal (%sbcl-grapheme-boundaries string))))
+  (it "matches every InCB line of Unicode 18.0.0 GraphemeBreakTest.txt (GB9c)"
+    (expect (length *grapheme-break-test-incb-lines*) :to-be 248)
+    (dolist (line *grapheme-break-test-incb-lines*)
+      (multiple-value-bind (code-points boundaries)
+          (%parse-grapheme-break-test-line line)
+        (expect (list line (grapheme-boundaries (%code-points->string code-points)))
+                :to-equal (list line boundaries)))))
+  ;; U+200C ZERO WIDTH NON-JOINER is Grapheme_Cluster_Break=Extend but
+  ;; InCB=None, so it joins by GB9 yet ends the Linker run GB9c looks back on.
+  (it "lets an InCB=None Extend before the Linker pass but end GB9c after it"
+    (dolist (case '(((#x915 #x200C #x94D #x924) (0 4))
+                    ((#x915 #x94D #x200C #x924) (0 3 4))))
+      (expect (grapheme-boundaries (%code-points->string (first case)))
+              :to-equal (second case))))
   (it "classifies ASCII exactly as SB-UNICODE:GRAPHEME-BREAK-CLASS does"
     (dotimes (code 128)
       (let ((char (code-char code)))
@@ -181,8 +492,8 @@ congruential generator, so every run checks the same corpus."
         (expect (coerce into 'list) :to-equal (grapheme-boundaries string))))))
 
 (describe "string-display-width and grapheme-count"
-  (it "is the sum of GRAPHEME-WIDTH over STRING-GRAPHEMES on the corpus"
-    (dolist (string *grapheme-corpus*)
+  (it "is the sum of GRAPHEME-WIDTH over STRING-GRAPHEMES on the corpus without a Linker"
+    (dolist (string *grapheme-runtime-corpus*)
       (expect (string-display-width string)
               :to-be (reduce #'+ (mapcar #'grapheme-width (string-graphemes string))))))
   (it "equals STRING-WIDTH on ASCII and CJK text"
@@ -197,9 +508,13 @@ congruential generator, so every run checks the same corpus."
     (let ((string (%code-points->string '(#x61 #x4E00 #x65 #x301 #x62))))
       (expect (string-display-width string :start 1 :end 4) :to-be 3)
       (expect (string-display-width string :start 5) :to-be 0)))
-  (it "keeps GRAPHEME-COUNT equal to the length of STRING-GRAPHEMES"
+  (it "keeps STRING-GRAPHEMES equal to the GRAPHEME-BOUNDARIES clusters, Linkers included"
     (dolist (string *grapheme-corpus*)
-      (expect (grapheme-count string) :to-be (length (string-graphemes string))))
+      (expect (grapheme-count string) :to-be (length (string-graphemes string)))
+      (expect (mapcar #'length (string-graphemes string))
+              :to-equal (%boundaries->lengths (grapheme-boundaries string))))
+    (expect (string-graphemes (%code-points->string '(#x915 #x94D #x937)))
+            :to-equal (list (%code-points->string '(#x915 #x94D #x937))))
     (expect (string-graphemes "") :to-equal '())
     (expect (grapheme-count "") :to-be 0)))
 

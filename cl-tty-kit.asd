@@ -86,6 +86,7 @@
                (:file "src/utf8")
                (:file "src/char-width-data")
                (:file "src/char-width")
+               (:file "src/grapheme-data")
                (:file "src/grapheme")
                (:file "src/text-layout")
                (:file "src/text-wrap")
